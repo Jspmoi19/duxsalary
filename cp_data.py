@@ -26,20 +26,28 @@ CP_DATABASE = {
             'regime': '5 jours/semaine',
         },
         'baremes': {
-            'Minimum sectoriel (employé standard)': {
-                'mensuel': 2210.10,
-                'horaire': round(2210.10 / (38 * 52 / 12), 4),
-                'note': 'Minimum sectoriel au 01/04/2026 (aligné RMMMG)',
+            # Source : SSN (Secrétariat Social des Notaires) — barème 01/03/2026
+            # Indexation +2% au 01/03/2026 (indice santé)
+            # Au 01/04/2026 : alignement sur RMMMG (2 233,61 €) comme plancher
+            'Minimum sectoriel (au 01/03/2026)': {
+                'mensuel': 2174.42,
+                'horaire': round(2174.42 / (38 * 52 / 12), 4),
+                'note': 'Barème SSN au 01/03/2026 (+2% indexation mars 2026)',
             },
-            'Salaire d\'entrée (nouveau professionnel libéral salarié)': {
-                'mensuel': 2276.40,
-                'horaire': round(2276.40 / (38 * 52 / 12), 4),
-                'note': '103% du minimum sectoriel — dès 01/01/2026',
+            'Salaire d\'entrée professionnel libéral (103%)': {
+                'mensuel': 2239.65,
+                'horaire': round(2239.65 / (38 * 52 / 12), 4),
+                'note': '103% du minimum sectoriel — dès 01/01/2026 (= 2174.42 × 1.03)',
             },
-            'Étudiant / alternant': {
-                'mensuel': 2099.60,
-                'horaire': round(2099.60 / (38 * 52 / 12), 4),
+            'Étudiant / alternant (95%)': {
+                'mensuel': 2065.70,
+                'horaire': round(2065.70 / (38 * 52 / 12), 4),
                 'note': '95% du minimum sectoriel — barème unique depuis 01/01/2026',
+            },
+            'Plancher RMMMG (depuis 01/04/2026)': {
+                'mensuel': 2233.61,
+                'horaire': round(2233.61 / (38 * 52 / 12), 4),
+                'note': 'RMMMG national — plancher absolu si supérieur au minimum sectoriel',
             },
         },
         'avantages': [
@@ -234,7 +242,7 @@ CP_DATABASE = {
             'type_travailleur': 'ouvrier',
             'secteurs': ['Bâtiment', 'Gros œuvre', 'Parachèvement', 'Génie civil',
                          'Isolation', 'Toiture', 'Peinture', 'Carrelage', 'Menuiserie chantier'],
-            'source': 'FGTB Centrale Générale / Constructiv — barème 01/04/2026 — vérifié 06/08/2026',
+            'source': 'FGTB Centrale Générale — PDF barème 01/04/2026 (01/01/2026 au 31/03/2026) — vérifié 06/08/2026',
             'derniere_indexation': '01/04/2026 — indexation trimestrielle',
             'note_indexation': 'Les barèmes CP 124 sont indexés chaque trimestre (jan/avr/juil/oct)',
         },
