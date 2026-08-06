@@ -4,36 +4,35 @@
 
 <div class="page-header">
   <div class="page-header-left">
+    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
     <h2>{{ travailleur.prenom }} {{ travailleur.nom }}</h2>
-    <div class="breadcrumb">
-      <a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> · Fiche travailleur
-    </div>
+    <div class="breadcrumb">Fiche travailleur</div>
   </div>
   <div class="page-actions">
     <a href="/travailleur/{{ travailleur.id }}/modifier" class="btn btn-secondary">Modifier</a>
+    <a href="/travailleur/{{ travailleur.id }}/supprimer" class="btn btn-danger btn-sm" onclick="return confirm('Supprimer ce travailleur ?')">Supprimer</a>
   </div>
 </div>
 
-<!-- INFO TRAVAILLEUR -->
 <div class="card">
   <div class="worker-header" style="display:flex;align-items:center;gap:16px;padding:18px;">
     <div class="worker-avatar" style="width:52px;height:52px;font-size:20px;">{{ travailleur.prenom[0] }}{{ travailleur.nom[0] }}</div>
     <div>
       <div style="font-size:18px;font-weight:600">{{ travailleur.prenom }} {{ travailleur.nom }}</div>
       <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
-        NISS : {{ travailleur.niss or '—' }} · 
+        NISS : {{ travailleur.niss or '—' }} ·
         Né(e) le : {{ travailleur.date_naissance.strftime('%d/%m/%Y') if travailleur.date_naissance else '—' }}
       </div>
     </div>
   </div>
 
-  <!-- ACTIONS RAPIDES depuis la fiche -->
-  <div style="display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--border);background:#fafbfc;">
-    <a href="/dossier/{{ dossier.id }}/contrat/nouveau?travailleur_id={{ travailleur.id }}" class="btn btn-primary btn-sm">+ Contrat</a>
+  <!-- ACTIONS depuis la fiche travailleur -->
+  <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 18px;border-top:1px solid var(--border);background:#fafbfc;">
+    <a href="/dossier/{{ dossier.id }}/contrat/nouveau?travailleur_id={{ travailleur.id }}" class="btn btn-primary btn-sm">+ Contrat CDI/CDD</a>
+    <a href="/contrat/etudiant/nouveau?dossier_id={{ dossier.id }}&travailleur_id={{ travailleur.id }}" class="btn btn-primary btn-sm">+ Contrat étudiant</a>
     <a href="/travailleur/{{ travailleur.id }}/dimona" class="btn btn-secondary btn-sm">Dimona / Prestations</a>
     <a href="/dossier/{{ dossier.id }}/fiche/nouvelle?travailleur_id={{ travailleur.id }}" class="btn btn-secondary btn-sm">+ Fiche de paie</a>
     <a href="/travailleur/{{ travailleur.id }}/document/ajouter" class="btn btn-secondary btn-sm">+ Document</a>
-    <a href="/travailleur/{{ travailleur.id }}/modifier" class="btn btn-secondary btn-sm">Modifier</a>
   </div>
 
   <!-- TABS -->
@@ -44,9 +43,8 @@
     <a href="?tab=documents" class="tab-link {% if tab == 'documents' %}active{% endif %}">Documents ({{ documents|length }})</a>
   </div>
 
-  <!-- TAB CONTENT -->
   {% if tab == 'info' %}
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:20px;gap:20px;">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:20px;">
     <div>
       <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:12px">Informations personnelles</div>
       {% for label, val in [
@@ -66,21 +64,20 @@
     </div>
     <div>
       <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:12px">Données bancaires</div>
-      {% for label, val in [
-        ('IBAN', travailleur.iban or '—'),
-      ] %}
       <div style="display:flex;padding:7px 0;border-bottom:1px solid #f0f2f5;font-size:13px;">
-        <span style="color:var(--text-muted);width:140px;flex-shrink:0">{{ label }}</span>
-        <span style="font-weight:500">{{ val }}</span>
+        <span style="color:var(--text-muted);width:140px;flex-shrink:0">IBAN</span>
+        <span style="font-weight:500">{{ travailleur.iban or '—' }}</span>
       </div>
-      {% endfor %}
     </div>
   </div>
 
   {% elif tab == 'contrats' %}
   <div class="section-header">
     <h4>Contrats</h4>
-    <a href="/dossier/{{ dossier.id }}/contrat/nouveau?travailleur_id={{ travailleur.id }}" class="btn btn-primary btn-sm">+ Nouveau contrat</a>
+    <div style="display:flex;gap:8px;">
+      <a href="/dossier/{{ dossier.id }}/contrat/nouveau?travailleur_id={{ travailleur.id }}" class="btn btn-primary btn-sm">+ CDI/CDD</a>
+      <a href="/contrat/etudiant/nouveau?dossier_id={{ dossier.id }}&travailleur_id={{ travailleur.id }}" class="btn btn-secondary btn-sm">+ Étudiant</a>
+    </div>
   </div>
   <table class="data-table">
     <thead><tr><th>Type</th><th>CP</th><th>Fonction</th><th>Salaire</th><th>Début</th><th>Fin</th><th>PDF</th></tr></thead>
@@ -96,7 +93,7 @@
       <td>{% if c.pdf_path %}<a href="/download/{{ c.pdf_path|basename }}" class="btn btn-secondary btn-xs">⬇ PDF</a>{% else %}—{% endif %}</td>
     </tr>
     {% else %}
-    <tr class="empty"><td colspan="7">Aucun contrat — <a href="/dossier/{{ dossier.id }}/contrat/nouveau?travailleur_id={{ travailleur.id }}" style="color:var(--accent)">Créer un contrat</a></td></tr>
+    <tr class="empty"><td colspan="7">Aucun contrat</td></tr>
     {% endfor %}
     </tbody>
   </table>

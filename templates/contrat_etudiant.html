@@ -1,284 +1,143 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <title>PayrollTool – Nouveau contrat étudiant</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #333; }
-        header { background: #1F4E79; color: white; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; }
-        header h1 { font-size: 18px; font-weight: 700; }
-        header a { color: #90caf9; font-size: 13px; text-decoration: none; }
-        .container { max-width: 920px; margin: 24px auto; padding: 0 20px; }
-        .card { background: white; border-radius: 10px; padding: 24px 28px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
-        .card h2 { font-size: 13px; font-weight: 700; color: #1F4E79; border-left: 4px solid #1F4E79; padding-left: 10px; margin-bottom: 18px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-        .full { grid-column: 1 / -1; }
-        label { display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
-        input, select { width: 100%; padding: 8px 11px; border: 1.5px solid #dde3ea; border-radius: 6px; font-size: 13px; }
-        input:focus, select:focus { outline: none; border-color: #1F4E79; }
-        .hint { font-size: 10.5px; color: #999; margin-top: 3px; }
-        .preview { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-top: 14px; display: none; }
-        .preview h3 { font-size: 12px; color: #1F4E79; margin-bottom: 10px; font-weight: 700; text-transform: uppercase; }
-        .prev-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px solid #eee; }
-        .prev-row:last-child { border: none; font-weight: 700; color: #1F4E79; font-size: 14px; }
-        .prev-row.green { color: #0F6E56; font-weight: 700; border: none; }
-        .btn { width: 100%; padding: 14px; background: #1F4E79; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px; }
-        .btn:hover { background: #163d60; }
-        .section-divider { height: 1px; background: #eee; margin: 6px 0 16px; }
-    </style>
-</head>
-<body>
-<header>
-    <h1>{{ profil.icon }} {{ profil.nom }} – Nouveau contrat étudiant STU</h1>
-    <a href="/profil/{{ profil_id }}">← Dashboard</a>
-</header>
+{% extends "base.html" %}
+{% block title %}Contrat étudiant — DuxSalary{% endblock %}
+{% block content %}
 
-<div class="container">
-<form action="/generer" method="POST">
-
-    <!-- EMPLOYEUR -->
-    <div class="card">
-        <h2>Employeur</h2>
-        <div class="grid">
-            <div>
-                <label>Nom de la société</label>
-                <input type="text" name="nom_societe" value="{{ profil.nom }}" required>
-            </div>
-            <div>
-                <label>BCE</label>
-                <input type="text" name="bce_societe" value="{{ profil.bce }}" required>
-            </div>
-            <div class="full">
-                <label>Adresse siège social</label>
-                <input type="text" name="adresse_societe" value="{{ profil.adresse }}" required>
-            </div>
-            <div>
-                <label>N° RSZ</label>
-                <input type="text" name="rsz_societe" value="{{ profil.rsz }}" required>
-            </div>
-            <div>
-                <label>Représentant légal</label>
-                <input type="text" name="representant" value="{{ profil.representant }}" required>
-            </div>
-            <div class="full">
-                <label>Assurance accidents du travail (assureur + n° police)</label>
-                <input type="text" name="assurance_at" placeholder="Ex: Ethias – Police n° 45.678.901">
-                <div class="hint">Obligatoire légalement – loi du 10 avril 1971</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ÉTUDIANT -->
-    <div class="card">
-        <h2>Étudiant(e)</h2>
-        <div class="grid">
-            <div>
-                <label>Nom et prénom</label>
-                <input type="text" name="nom_etudiant" placeholder="Prénom NOM" required>
-            </div>
-            <div>
-                <label>NISS (registre national)</label>
-                <input type="text" name="niss_etudiant" placeholder="XX.XX.XX-XXX.XX" required>
-                <div class="hint">Sur la carte d'identité</div>
-            </div>
-            <div class="full">
-                <label>Adresse complète</label>
-                <input type="text" name="adresse_etudiant" placeholder="Rue, N°, Code postal, Commune" required>
-            </div>
-            <div>
-                <label>Date de naissance</label>
-                <input type="text" name="ddn_etudiant" placeholder="JJ/MM/AAAA" required>
-            </div>
-            <div>
-                <label>Établissement d'enseignement</label>
-                <input type="text" name="ecole_etudiant" placeholder="Ex: EPHEC, ULB, HEH..." required>
-            </div>
-            <div>
-                <label>État civil</label>
-                <select name="etat_civil">
-                    <option value="célibataire">Célibataire</option>
-                    <option value="marié(e)">Marié(e)</option>
-                    <option value="cohabitant(e) légal(e)">Cohabitant(e) légal(e)</option>
-                    <option value="divorcé(e)">Divorcé(e)</option>
-                </select>
-            </div>
-            <div>
-                <label>Personnes à charge</label>
-                <input type="text" name="personnes_charge" value="aucune" placeholder="Ex: aucune, 1 enfant...">
-            </div>
-        </div>
-    </div>
-
-    <!-- CONTRAT -->
-    <div class="card">
-        <h2>Contrat</h2>
-        <div class="grid">
-            <div>
-                <label>Date de début</label>
-                <input type="text" name="date_debut" placeholder="JJ/MM/AAAA" required>
-            </div>
-            <div>
-                <label>Date de fin</label>
-                <input type="text" name="date_fin" placeholder="JJ/MM/AAAA" required>
-            </div>
-        </div>
-        <br>
-        <div class="grid3">
-            <div>
-                <label>Jours ouvrables prestés</label>
-                <input type="number" name="nb_jours" placeholder="Ex: 13" min="1" oninput="calc()" required>
-                <div class="hint">2 sem. + 3 jours = 13 jours</div>
-            </div>
-            <div>
-                <label>Heures par jour</label>
-                <input type="number" name="heures_jour" value="7.6" step="0.1" oninput="calc()" required>
-                <div class="hint">7h36 = 7.6</div>
-            </div>
-            <div>
-                <label>Horaire journalier</label>
-                <input type="text" name="horaire_journalier" value="08h00 – 16h36" required>
-            </div>
-        </div>
-        <br>
-        <div class="grid">
-            <div>
-                <label>Fonction</label>
-                <input type="text" name="fonction" value="Aide-comptable" required>
-            </div>
-            <div>
-                <label>Commission paritaire</label>
-                <select name="commission_paritaire_key" id="cp_select" onchange="updateCP()">
-                    {% for cp_key, cp_val in cp_data.items() %}
-                    <option value="{{ cp_key }}">{{ cp_key }} – {{ cp_val.nom_complet.split('–')[1].strip() if '–' in cp_val.nom_complet else cp_val.nom_complet }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="full">
-                <label>Lieu de travail</label>
-                <input type="text" name="lieu_travail" value="{{ profil.adresse }}" required>
-            </div>
-            <div>
-                <label>Lieu de signature</label>
-                <input type="text" name="lieu_signature" value="Vilvoorde" required>
-            </div>
-        </div>
-    </div>
-
-    <!-- TRANSPORT -->
-    <div class="card">
-        <h2>Transport domicile – lieu de travail <span style="font-size:11px;color:#888;font-weight:400;text-transform:none;">(CP 336 – obligations employeur)</span></h2>
-        <div class="grid">
-            <div>
-                <label>Moyen de transport utilisé</label>
-                <select name="moyen_transport" id="moyen_transport" onchange="toggleTransport()">
-                    <option value="aucun">Aucun / Non précisé</option>
-                    <option value="train">Train (SNCB)</option>
-                    <option value="bus_tram_metro">Bus / Tram / Métro</option>
-                    <option value="velo">Vélo</option>
-                    <option value="voiture">Voiture personnelle (facultatif CP 336)</option>
-                </select>
-            </div>
-            <div id="bloc_distance" style="display:none">
-                <label>Distance domicile → travail (km, 1 sens)</label>
-                <input type="number" name="distance_km" id="distance_km" value="0" step="0.5" min="0" oninput="calc()">
-                <div class="hint">Entrez la distance aller uniquement – l'aller-retour est calculé automatiquement</div>
-            </div>
-            <div id="bloc_abonnement" style="display:none">
-                <label>Coût total abonnement pour la période (€)</label>
-                <input type="number" name="cout_abonnement" id="cout_abonnement" value="0" step="0.01" min="0" oninput="calc()">
-                <div class="hint">Montant total de l'abonnement pour toute la durée du contrat</div>
-            </div>
-        </div>
-        <div id="transport_info" style="display:none;margin-top:12px;background:#e8f4f8;border-radius:6px;padding:10px 14px;font-size:12px;color:#1F4E79;">
-            <span id="transport_regle"></span>
-        </div>
-    </div>
-
-    <!-- RÉMUNÉRATION -->
-    <div class="card">
-        <h2>Rémunération</h2>
-        <div class="grid">
-            <div>
-                <label>Salaire horaire brut (€)</label>
-                <input type="number" name="salaire_horaire" value="13.00" step="0.01" oninput="calc()" required>
-                <div class="hint" id="min_hint">Minimum légal CP 336 étudiant : 12,54 €/h (01/01/2026)</div>
-            </div>
-        </div>
-
-        <div class="preview" id="preview">
-            <h3>📊 Calcul en temps réel</h3>
-            <div class="prev-row"><span>Jours ouvrables</span><span id="pj">—</span></div>
-            <div class="prev-row"><span>Heures totales</span><span id="ph">—</span></div>
-            <div class="prev-row"><span>Salaire brut</span><span id="pb">—</span></div>
-            <div class="prev-row"><span>Cotisation solidarité ONSS (– 2,71%)</span><span id="po">—</span></div>
-            <div class="prev-row"><span>Précompte professionnel</span><span>0,00 €</span></div>
-            <div class="prev-row"><span>💶 Net étudiant</span><span id="pn">—</span></div>
-            <div class="prev-row green"><span>💼 Coût employeur (brut + 5,42% ONSS)</span><span id="pc">—</span></div>
-            <div class="prev-row green"><span>💳 Total ONSS à verser</span><span id="ponss">—</span></div>
-        </div>
-    </div>
-
-    <button type="submit" class="btn">🚀 Générer contrat + fiche de paie + avis ONSS</button>
-</form>
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="/travailleur/{{ travailleur.id }}" class="btn-back">← {{ travailleur.prenom }} {{ travailleur.nom }}</a>
+    <h2>Contrat étudiant</h2>
+    <div class="breadcrumb"><a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> · {{ travailleur.prenom }} {{ travailleur.nom }}</div>
+  </div>
 </div>
 
-<script>
-function toggleTransport() {
-    const moyen = document.getElementById('moyen_transport').value;
-    document.getElementById('bloc_distance').style.display = ['velo','voiture'].includes(moyen) ? 'block' : 'none';
-    document.getElementById('bloc_abonnement').style.display = ['train','bus_tram_metro'].includes(moyen) ? 'block' : 'none';
-    document.getElementById('transport_info').style.display = moyen !== 'aucun' ? 'block' : 'none';
+<form method="POST">
+<div class="two-col">
+  <div class="card">
+    <div class="card-header"><h3>Données employeur</h3></div>
+    <div class="card-body form-grid">
+      <div class="form-group">
+        <label>Société</label>
+        <input type="text" name="nom_societe" value="{{ dossier.nom }}" required>
+      </div>
+      <div class="form-group">
+        <label>Adresse</label>
+        <input type="text" name="adresse_societe" value="{{ dossier.adresse or '' }}">
+      </div>
+      <div class="form-group">
+        <label>BCE</label>
+        <input type="text" name="bce_societe" value="{{ dossier.bce or '' }}">
+      </div>
+      <div class="form-group">
+        <label>N° RSZ</label>
+        <input type="text" name="rsz_societe" value="{{ dossier.rsz or '' }}">
+      </div>
+      <div class="form-group">
+        <label>Représentant</label>
+        <input type="text" name="representant" value="{{ dossier.representant or '' }}">
+      </div>
+      <div class="form-group">
+        <label>Assurance AT</label>
+        <input type="text" name="assurance_at" value="{{ dossier.assurance_at or '' }}" placeholder="Nom assureur">
+      </div>
+    </div>
+  </div>
 
-    const regles = {
-        'train': '🚂 CP 336 : Remboursement obligatoire de 80% du prix de l\'abonnement train 2e classe (depuis 01/01/2026). Exonéré ONSS et précompte.',
-        'bus_tram_metro': '🚌 Remboursement de l\'abonnement transports publics selon CCT n°19/11. Exonéré ONSS et précompte.',
-        'velo': '🚴 CP 336 : 0,10 €/km (jusqu\'au 30/09/2026), puis 0,32 €/km (dès 01/10/2026). Max 12,80 €/jour. Exonéré ONSS.',
-        'voiture': '🚗 CP 336 : Non obligatoire, mais si accordé → max 0,4449 €/km exonéré ONSS (tarif annuel jul/25–jun/26). Aller-retour calculé.'
-    };
-    if (regles[moyen]) document.getElementById('transport_regle').textContent = regles[moyen];
-    calc();
-}
+  <div class="card">
+    <div class="card-header"><h3>Données étudiant</h3></div>
+    <div class="card-body form-grid">
+      <div class="form-group">
+        <label>Nom complet</label>
+        <input type="text" name="nom_etudiant" value="{{ travailleur.prenom }} {{ travailleur.nom }}" required>
+      </div>
+      <div class="form-group">
+        <label>Adresse</label>
+        <input type="text" name="adresse_etudiant" value="{{ travailleur.adresse or '' }}">
+      </div>
+      <div class="form-group">
+        <label>Date de naissance</label>
+        <input type="text" name="ddn_etudiant" value="{{ travailleur.date_naissance.strftime('%d/%m/%Y') if travailleur.date_naissance else '' }}" placeholder="JJ/MM/AAAA">
+      </div>
+      <div class="form-group">
+        <label>NISS</label>
+        <input type="text" name="niss_etudiant" value="{{ travailleur.niss or '' }}">
+      </div>
+      <div class="form-group">
+        <label>École / établissement</label>
+        <input type="text" name="ecole_etudiant" placeholder="Nom de l'école">
+      </div>
+      <div class="form-group">
+        <label>État civil</label>
+        <select name="etat_civil">
+          <option value="célibataire">Célibataire</option>
+          <option value="marié(e)">Marié(e)</option>
+          <option value="cohabitant(e) légal(e)">Cohabitant(e) légal(e)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
 
-function calcTransport() {
-    const moyen = document.getElementById('moyen_transport').value;
-    const j = parseInt(document.querySelector('[name=nb_jours]').value) || 0;
-    const dist = parseFloat(document.getElementById('distance_km')?.value) || 0;
-    const abo = parseFloat(document.getElementById('cout_abonnement')?.value) || 0;
-    let t = 0;
-    if (moyen === 'train') t = abo * 0.80;
-    else if (moyen === 'bus_tram_metro') t = abo;
-    else if (moyen === 'velo') t = 0.10 * dist * 2 * j;
-    else if (moyen === 'voiture') t = 0.4449 * dist * 2 * j;
-    return t;
-}
+<div class="two-col">
+  <div class="card">
+    <div class="card-header"><h3>Conditions du contrat</h3></div>
+    <div class="card-body form-grid">
+      <div class="form-group">
+        <label>Commission paritaire</label>
+        <select name="commission_paritaire_key" required>
+          {% for cp_key in cp_keys %}
+          <option value="{{ cp_key }}" {% if dossier.cp_principale == cp_key %}selected{% endif %}>{{ cp_key }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Fonction</label>
+        <input type="text" name="fonction" placeholder="Ex: Assistant administratif" required>
+      </div>
+      <div class="form-group">
+        <label>Lieu de travail</label>
+        <input type="text" name="lieu_travail" value="{{ dossier.adresse or '' }}">
+      </div>
+      <div class="form-group">
+        <label>Date de début</label>
+        <input type="text" name="date_debut" placeholder="JJ/MM/AAAA" required>
+      </div>
+      <div class="form-group">
+        <label>Date de fin</label>
+        <input type="text" name="date_fin" placeholder="JJ/MM/AAAA" required>
+      </div>
+      <div class="form-group">
+        <label>Nombre de jours ouvrables</label>
+        <input type="number" name="nb_jours" min="1" placeholder="Ex: 10" required>
+      </div>
+    </div>
+  </div>
 
-function calc() {
-    const t = parseFloat(document.querySelector('[name=salaire_horaire]').value) || 0;
-    const h = parseFloat(document.querySelector('[name=heures_jour]').value) || 0;
-    const j = parseInt(document.querySelector('[name=nb_jours]').value) || 0;
-    if (t && h && j) {
-        const th = h * j;
-        const br = t * th;
-        const op = br * 0.0271;
-        const net_base = br - op;
-        const opc = br * 0.0542;
-        const transp = calcTransport();
-        const net = net_base + transp;
-        const cout = br + opc + transp;
-        const tonss = op + opc;
-        document.getElementById('pj').textContent = j + ' jours';
-        document.getElementById('ph').textContent = th.toFixed(2) + ' h';
-        document.getElementById('pb').textContent = br.toFixed(2) + ' €';
-        document.getElementById('po').textContent = '– ' + op.toFixed(2) + ' €';
-        document.getElementById('pn').textContent = net.toFixed(2) + ' € ' + (transp > 0 ? '(dont ' + transp.toFixed(2) + ' € transport)' : '');
-        document.getElementById('pc').textContent = cout.toFixed(2) + ' €';
-        document.getElementById('ponss').textContent = tonss.toFixed(2) + ' €';
-        document.getElementById('preview').style.display = 'block';
-    }
-}
-calc();
-</script>
-</body>
-</html>
+  <div class="card">
+    <div class="card-header"><h3>Rémunération</h3></div>
+    <div class="card-body form-grid">
+      <div class="form-group">
+        <label>Heures par jour</label>
+        <input type="number" name="heures_jour" step="0.1" value="7.6" required>
+      </div>
+      <div class="form-group">
+        <label>Horaire journalier</label>
+        <input type="text" name="horaire_journalier" placeholder="Ex: 08h00-16h00">
+      </div>
+      <div class="form-group">
+        <label>Salaire horaire brut (€)</label>
+        <input type="number" name="salaire_horaire" step="0.01" placeholder="Ex: 13.50" required>
+      </div>
+      <div class="form-group">
+        <label>Lieu de signature</label>
+        <input type="text" name="lieu_signature" value="Bruxelles">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:right;margin-top:16px;display:flex;gap:10px;justify-content:flex-end;">
+  <a href="/travailleur/{{ travailleur.id }}" class="btn btn-secondary">Annuler</a>
+  <button type="submit" class="btn btn-primary">Générer le contrat étudiant + fiche de paie</button>
+</div>
+</form>
+{% endblock %}

@@ -712,3 +712,182 @@ Statut unique depuis loi 26/12/2013. Réponds en français, de manière précise
 if __name__ == '__main__':
     init_db()
     app.run(debug=False, host='0.0.0.0')
+
+# ── CONTRAT ÉTUDIANT ──────────────────────────────────────────────────
+from contrats import generer_contrat_cdi, generer_contrat_cdd
+
+def generer_contrat_etudiant_pdf(data, cp_info):
+    """Génère contrat étudiant + fiche de paie."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    import os
+    from datetime import datetime
+
+    filename = f"contrat_etudiant_{data['nom_etudiant'].replace(' ','_')}_{data['date_debut'].replace('/','')}.pdf"
+    filepath = os.path.join('outputs', filename)
+
+    BLUE = colors.HexColor('#1F4E79')
+    sN = ParagraphStyle('N', fontName='Helvetica', fontSize=10, leading=14)
+    sB = ParagraphStyle('B', fontName='Helvetica-Bold', fontSize=10, leading=14)
+    sT = ParagraphStyle('T', fontName='Helvetica-Bold', fontSize=14, leading=20, alignment=TA_CENTER)
+    sSub = ParagraphStyle('S', fontName='Helvetica-Bold', fontSize=11, leading=16, textColor=BLUE)
+    sJ = ParagraphStyle('J', fontName='Helvetica', fontSize=10, leading=14, alignment=TA_JUSTIFY)
+    sC = ParagraphStyle('C', fontName='Helvetica', fontSize=10, leading=14, alignment=TA_CENTER)
+
+    doc = SimpleDocTemplate(filepath, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm, leftMargin=2.5*cm, rightMargin=2.5*cm)
+    e = []
+
+    e.append(Paragraph(f"<b>{data['nom_societe']}</b>", sB))
+    e.append(Paragraph(data['adresse_societe'], sN))
+    e.append(Paragraph(f"BCE : {data['bce_societe']}  |  N° RSZ : {data['rsz_societe']}", sN))
+    e.append(Spacer(1, 0.4*cm))
+    e.append(HRFlowable(width='100%', thickness=2, color=BLUE))
+    e.append(Spacer(1, 0.5*cm))
+    e.append(Paragraph("CONTRAT D'OCCUPATION D'ÉTUDIANT", sT))
+    e.append(Paragraph("Article 121 de la loi du 3 juillet 1978 relative aux contrats de travail", sC))
+    e.append(Spacer(1, 0.6*cm))
+
+    e.append(Paragraph("ENTRE LES SOUSSIGNÉS :", sSub))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(Paragraph("<b>L'EMPLOYEUR :</b>", sB))
+    e.append(Paragraph(
+        f"{data['nom_societe']}, société, dont le siège social est établi à {data['adresse_societe']}, "
+        f"inscrite à la BCE sous le numéro {data['bce_societe']}, identifiée à l'ONSS sous le numéro "
+        f"{data['rsz_societe']}, représentée par {data['representant']}, ci-après dénommé « l'employeur »,", sJ))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(Paragraph("<b>ET L'ÉTUDIANT(E) :</b>", sB))
+    for label, val in [
+        ("Nom et prénom :", f"<b>{data['nom_etudiant']}</b>"),
+        ("Adresse :", data['adresse_etudiant']),
+        ("Date de naissance :", data['ddn_etudiant']),
+        ("N° NISS :", data['niss_etudiant']),
+        ("Établissement d'enseignement :", data['ecole_etudiant']),
+    ]:
+        e.append(Paragraph(f"{label} {val}", sN))
+    e.append(Spacer(1, 0.4*cm))
+    e.append(HRFlowable(width='100%', thickness=0.5, color=colors.grey))
+    e.append(Spacer(1, 0.3*cm))
+
+    nb_jours = data['nb_jours']
+    heures_j = data['heures_jour']
+    sal_h = float(data['salaire_horaire'])
+    heures_tot = round(heures_j * nb_jours, 2)
+    brut = round(sal_h * heures_tot, 2)
+    onss = round(brut * 0.0271, 2)
+    net = round(brut - onss, 2)
+
+    articles = [
+        ("Article 1 – Nature et durée du contrat",
+         f"Le présent contrat est un contrat d'occupation d'étudiant conclu conformément à l'article 121 "
+         f"de la loi du 3 juillet 1978. Il est conclu pour une durée déterminée du <b>{data['date_debut']}</b> "
+         f"au <b>{data['date_fin']}</b> inclus, soit <b>{nb_jours} jours ouvrables</b>."),
+        ("Article 2 – Temps de travail",
+         f"L'étudiant(e) est occupé(e) à raison de <b>{heures_j}h par jour</b> "
+         f"({data['horaire_journalier']}), conformément aux dispositions de la {data['commission_paritaire']}."),
+        ("Article 3 – Fonction et lieu de travail",
+         f"L'étudiant(e) est engagé(e) en qualité de <b>{data['fonction']}</b>. "
+         f"Lieu de travail : <b>{data['lieu_travail']}</b>."),
+        ("Article 4 – Rémunération",
+         f"La rémunération brute est fixée à <b>{sal_h} € de l'heure</b>. "
+         f"Cotisation ONSS étudiant : 2,71% à charge de l'étudiant(e). "
+         f"Salaire brut total : {brut} € — Net estimé : {net} €."),
+        ("Article 5 – Commission paritaire",
+         f"Le présent contrat est régi par la <b>{cp_info.get('meta', {}).get('nom', data['commission_paritaire'])}</b>."),
+        ("Article 6 – Dimona",
+         "L'employeur déclare avoir effectué la déclaration Dimona de type STU auprès de l'ONSS avant l'entrée en service."),
+        ("Article 7 – Quota 650h",
+         "L'étudiant(e) déclare avoir vérifié son quota d'heures disponible sur Student@work (studentatwork.be)."),
+    ]
+
+    for titre, texte in articles:
+        e.append(Paragraph(f"<b>{titre}</b>", sSub))
+        e.append(Spacer(1, 0.1*cm))
+        e.append(Paragraph(texte, sJ))
+        e.append(Spacer(1, 0.3*cm))
+
+    e.append(HRFlowable(width='100%', thickness=0.5, color=colors.grey))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(Paragraph(
+        f"Fait à <b>{data['lieu_signature']}</b>, le <b>{datetime.now().strftime('%d/%m/%Y')}</b>, "
+        f"en deux exemplaires originaux.", sN))
+    e.append(Spacer(1, 1*cm))
+    sig = Table([[
+        Paragraph("<b>L'EMPLOYEUR</b>", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)),
+        Paragraph("<b>L'ÉTUDIANT(E)</b>", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)),
+    ]], colWidths=[8.5*cm, 8.5*cm])
+    e.append(sig)
+    doc.build(e)
+    return filepath, filename
+
+
+@app.route('/contrat/etudiant/nouveau', methods=['GET', 'POST'])
+@login_required
+def nouveau_contrat_etudiant():
+    dossier_id = request.args.get('dossier_id', type=int) or request.form.get('dossier_id', type=int)
+    travailleur_id = request.args.get('travailleur_id', type=int) or request.form.get('travailleur_id', type=int)
+
+    dossier = get_dossier(dossier_id)
+    travailleur = get_travailleur(travailleur_id)
+    ctx = get_context_base()
+
+    if request.method == 'POST':
+        form = request.form
+        cp_key = form['commission_paritaire_key']
+        cp_info = CP_DATABASE.get(cp_key, {})
+
+        data = {
+            'nom_societe': form.get('nom_societe', dossier['nom']),
+            'adresse_societe': form.get('adresse_societe', dossier['adresse'] or ''),
+            'bce_societe': form.get('bce_societe', dossier['bce'] or ''),
+            'rsz_societe': form.get('rsz_societe', dossier['rsz'] or ''),
+            'representant': form.get('representant', dossier['representant'] or ''),
+            'assurance_at': form.get('assurance_at', '—'),
+            'nom_etudiant': form['nom_etudiant'],
+            'adresse_etudiant': form.get('adresse_etudiant', travailleur['adresse'] or ''),
+            'ddn_etudiant': form.get('ddn_etudiant', ''),
+            'niss_etudiant': form.get('niss_etudiant', travailleur['niss'] or ''),
+            'ecole_etudiant': form.get('ecole_etudiant', ''),
+            'etat_civil': form.get('etat_civil', 'célibataire'),
+            'date_debut': form['date_debut'],
+            'date_fin': form['date_fin'],
+            'nb_jours': int(form['nb_jours']),
+            'heures_jour': float(form['heures_jour']),
+            'horaire_journalier': form.get('horaire_journalier', ''),
+            'salaire_horaire': form['salaire_horaire'],
+            'fonction': form['fonction'],
+            'lieu_travail': form.get('lieu_travail', dossier['adresse'] or ''),
+            'lieu_signature': form.get('lieu_signature', 'Bruxelles'),
+            'commission_paritaire': cp_key,
+        }
+
+        filepath, filename = generer_contrat_etudiant_pdf(data, cp_info)
+
+        def pd(d):
+            if not d: return None
+            try: p = d.split('/'); return f"{p[2]}-{p[1]}-{p[0]}"
+            except: return None
+
+        create_contrat({'dossier_id': dossier_id, 'travailleur_id': travailleur_id,
+            'type_contrat': 'STU', 'cp_key': cp_key,
+            'fonction': form['fonction'], 'categorie': 'étudiant',
+            'salaire_horaire': float(form['salaire_horaire']),
+            'salaire_mensuel': 0,
+            'heures_semaine': get_heures_semaine(cp_key),
+            'horaire_journalier': form.get('horaire_journalier'),
+            'lieu_travail': form.get('lieu_travail'),
+            'date_debut': pd(form['date_debut']),
+            'date_fin': pd(form['date_fin']),
+            'motif_cdd': 'Contrat étudiant', 'temps_plein': True,
+            'pdf_path': filepath})
+
+        return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id, tab='contrats'))
+
+    return render_template('contrat_etudiant.html',
+                           dossier=dossier, travailleur=travailleur,
+                           dossier_actif=dossier,
+                           cp_keys=list(CP_DATABASE.keys()),
+                           **ctx)

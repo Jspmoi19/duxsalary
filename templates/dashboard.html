@@ -4,12 +4,13 @@
 
 <div class="page-header">
   <div class="page-header-left">
+    <a href="/dossiers" class="btn-back">← Retour</a>
     <h2>{{ dossier.nom }}</h2>
     <div class="breadcrumb">BCE : {{ dossier.bce or '—' }} · RSZ : {{ dossier.rsz or '—' }} · {{ dossier.cp_principale or '—' }}</div>
   </div>
   <div class="page-actions">
     <a href="/dossier/{{ dossier.id }}/travailleur/nouveau" class="btn btn-secondary">+ Travailleur</a>
-    <a href="/dossier/{{ dossier.id }}/contrat/nouveau" class="btn btn-primary">+ Contrat</a>
+    <a href="/dossier/{{ dossier.id }}/document/ajouter" class="btn btn-secondary">+ Document dossier</a>
     <a href="/dossier/{{ dossier.id }}/modifier" class="btn btn-secondary">Modifier</a>
   </div>
 </div>
@@ -30,40 +31,20 @@
   </div>
 </div>
 
-<div class="two-col">
-
-  <!-- ALERTES -->
-  <div>
-    <div class="card">
-      <div class="card-header"><h3>⚠️ Échéances et obligations</h3></div>
-      <div class="card-body">
-        {% if alertes %}
-          {% for a in alertes %}
-          <div class="alert-item alert-{{ a.niveau }}">
-            <span>{{ a.message }}</span>
-            <span class="alert-date">{{ a.date }}</span>
-          </div>
-          {% endfor %}
-        {% else %}
-          <p style="color:var(--text-muted);font-size:13px">Aucune échéance urgente.</p>
-        {% endif %}
-      </div>
+<!-- ALERTES -->
+{% if alertes %}
+<div class="card">
+  <div class="card-header"><h3>⚠️ Échéances et obligations</h3></div>
+  <div class="card-body">
+    {% for a in alertes %}
+    <div class="alert-item alert-{{ a.niveau }}">
+      <span>{{ a.message }}</span>
+      <span class="alert-date">{{ a.date }}</span>
     </div>
-  </div>
-
-  <!-- ACTIONS RAPIDES -->
-  <div>
-    <div class="card">
-      <div class="card-header"><h3>Actions rapides</h3></div>
-      <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
-        <a href="/dossier/{{ dossier.id }}/travailleur/nouveau" class="btn btn-secondary" style="justify-content:flex-start;">+ Nouveau travailleur</a>
-        <a href="/dossier/{{ dossier.id }}/contrat/nouveau" class="btn btn-secondary" style="justify-content:flex-start;">+ Nouveau contrat</a>
-        <a href="/dossier/{{ dossier.id }}/fiche/nouvelle" class="btn btn-secondary" style="justify-content:flex-start;">+ Nouvelle fiche de paie</a>
-        <a href="/dossier/{{ dossier.id }}?tab=documents" class="btn btn-secondary" style="justify-content:flex-start;">+ Ajouter un document</a>
-      </div>
-    </div>
+    {% endfor %}
   </div>
 </div>
+{% endif %}
 
 <!-- TRAVAILLEURS -->
 <div class="card">

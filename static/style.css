@@ -105,3 +105,25 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; colo
 .login-logo p { font-size: 11px; color: var(--text-muted); margin-top: 4px; letter-spacing: 1.5px; text-transform: uppercase; }
 .login-error { background: var(--danger-light); border: 1px solid #dbb; color: var(--danger); padding: 10px 12px; border-radius: var(--radius); font-size: 13px; margin-bottom: 14px; }
 .archive-notice { background: #fff8e1; border: 1px solid #e0c060; border-radius: var(--radius); padding: 10px 14px; font-size: 12px; color: #5a3e00; margin-bottom: 12px; }
+
+/* ── Bouton retour ── */
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 12px;
+  margin-bottom: 4px;
+  transition: color 0.15s;
+}
+.btn-back:hover { color: var(--accent); }
+
+/* ── Bouton danger ── */
+.btn-danger {
+  background: #dc3545;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+.btn-danger:hover { background: #c82333; }
