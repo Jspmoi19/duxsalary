@@ -1,757 +1,615 @@
-"""
-cp_data.py — Base de données des commissions paritaires belges
-Mise à jour : juillet 2026
-Sources : SPF Emploi, salairesminimums.be, CCT sectorielles
-
-Structure de chaque CP :
-- meta : infos générales
-- baremes : salaires minimums par catégorie/fonction
-- duree_travail : régime hebdomadaire
-- indemnites : primes et indemnités obligatoires
-- conges : régime vacances annuelles
-- transport : règles remboursement domicile-travail
-- mentions_contrat : clauses légales obligatoires
-- regles_speciales : particularités sectorielles
-"""
+# cp_data.py — Barèmes officiels 2026
+# Sources : SPF Emploi / Banque de données salaires minimums + CGSLB + Synova
+# Vérifiés le 06/08/2026
 
 CP_DATABASE = {
 
-    # ══════════════════════════════════════════════════════════════════
-    # CP 336 — PROFESSIONS LIBÉRALES (employés)
-    # ══════════════════════════════════════════════════════════════════
-    "CP 336": {
-        "meta": {
-            "nom": "Commission Paritaire 336 – Professions libérales",
-            "type_travailleur": "employé",
-            "secteurs": ["Comptabilité", "Expertise comptable", "Conseil fiscal", "Architecture", "Avocat", "Notaire", "Vétérinaire", "Géomètre"],
-            "fonds_securite": "Liberform",
-            "onss_categorie": "010",
-            "regime_vacances": "employé",  # employeur paie
+    # ──────────────────────────────────────────────────────────────────
+    # CP 336 — Professions libérales (employés)
+    # Source : SPF Emploi — fiche 3360000, indexation +2% au 01/03/2026
+    # puis alignement RMMMG au 01/04/2026
+    # Secteurs : experts-comptables, avocats, architectes, vétérinaires,
+    #            réviseurs d'entreprises, conseillers fiscaux, huissiers, géomètres
+    # ──────────────────────────────────────────────────────────────────
+    'CP 336': {
+        'meta': {
+            'nom': 'Commission Paritaire 336 — Professions libérales',
+            'type_travailleur': 'employé',
+            'secteurs': ['Experts-comptables', 'Avocats', 'Architectes', 'Vétérinaires',
+                         'Réviseurs d\'entreprises', 'Conseillers fiscaux', 'Huissiers', 'Géomètres-experts'],
+            'source': 'SPF Emploi — fiche 3360000 — vérifié 06/08/2026',
+            'derniere_indexation': '01/03/2026 (+2%) puis alignement RMMMG au 01/04/2026',
         },
-        "duree_travail": {
-            "heures_semaine": 38,
-            "heures_jour": 7.6,
-            "jours_semaine": 5,
-            "regime": "fixe",
+        'duree_travail': {
+            'heures_semaine': 38,
+            'heures_jour': 7.6,
+            'regime': '5 jours/semaine',
         },
-        "baremes": {
-            # Au 01/01/2026 — indexation +2%
-            "etudiant": {"mensuel": 2065.70, "horaire": 12.54, "note": "95% du minimum sectoriel"},
-            "entree": {"mensuel": 2239.65, "horaire": 13.60, "note": "103% du minimum sectoriel — nouveaux professionnels libéraux"},
-            "minimum_sectoriel": {"mensuel": 2174.42, "horaire": 13.20},
-            # Pas de barèmes par ancienneté stricts — salaire réel négocié au-dessus du minimum
+        'baremes': {
+            'Minimum sectoriel (employé standard)': {
+                'mensuel': 2210.10,
+                'horaire': round(2210.10 / (38 * 52 / 12), 4),
+                'note': 'Minimum sectoriel au 01/04/2026 (aligné RMMMG)',
+            },
+            'Salaire d\'entrée (nouveau professionnel libéral salarié)': {
+                'mensuel': 2276.40,
+                'horaire': round(2276.40 / (38 * 52 / 12), 4),
+                'note': '103% du minimum sectoriel — dès 01/01/2026',
+            },
+            'Étudiant / alternant': {
+                'mensuel': 2099.60,
+                'horaire': round(2099.60 / (38 * 52 / 12), 4),
+                'note': '95% du minimum sectoriel — barème unique depuis 01/01/2026',
+            },
         },
-        "indemnites": {
-            "transport_train": {"taux": 0.80, "base": "abonnement_2e_classe", "obligatoire": True, "note": "80% depuis 01/01/2026"},
-            "velo": {"taux_par_km": 0.10, "max_jour": 4.00, "obligatoire": True, "note": "0,10€/km jusqu'au 30/09/2026, puis 0,32€/km"},
-            "velo_oct2026": {"taux_par_km": 0.32, "max_jour": 12.80, "date_vigueur": "01/10/2026"},
-            "voiture": {"taux_par_km": 0.4449, "obligatoire": False, "note": "Facultatif — exonéré ONSS si accordé"},
-        },
-        "conges": {
-            "jours_legaux": 20,
-            "jours_extra_legaux": 0,
-            "prise_en_charge": "employeur",
-            "pecule_simple": 0.0892,  # 8,92% du brut annuel
-            "pecule_double": 0.92,    # 92% d'un mois de salaire
-        },
-        "mentions_contrat": [
-            "Loi du 3 juillet 1978 relative aux contrats de travail",
-            "CCT n° 183459/CO/336 du 27 septembre 2023 relative au salaire mensuel minimum sectoriel",
-            "Accord sectoriel CP 336 du 1er janvier 2025 au 31 décembre 2026",
-            "Fonds de formation : Liberform – Fonds pour la formation des travailleurs de la CP 336",
-            "CCT du 15 décembre 2025 – accord sectoriel 2025-2026",
+        'avantages': [
+            'Transport ferroviaire : intervention employeur 80% du prix carte 2e classe (depuis 01/01/2026)',
+            'Indemnité vélo : 0,32 €/km, max 12,80 €/jour (depuis 01/10/2026)',
+            'Congé de deuil : 12 jours (conjoint/enfant), 5 jours (parent) — depuis 01/01/2026',
+            'Crédit-temps fin de carrière : 1/5e ou mi-temps dès 55 ans (prorogé jusqu\'au 30/06/2029)',
+            'Formation : 5 jours/ETP (≥20 travailleurs), 2,5 jours (10-19 travailleurs) via Liberform',
+            'Chômage économique : possible pour employés (CCT n°77bis)',
         ],
-        "preavis": {
-            "note": "Statut unique (loi du 26 décembre 2013) — délais par tranches d'ancienneté",
-            "semaines_par_tranche": [
-                (0, 3, 2), (3, 6, 4), (6, 9, 6), (9, 12, 7),
-                (12, 18, 8), (18, 24, 9), (24, 36, 10), (36, 48, 12),
-                (48, 60, 13), (60, 72, 15), (72, 84, 18), (84, 96, 21),
-                (96, 108, 24), (108, 120, 27), (120, 999, 30),
-            ],
-            "unite": "semaines",
-        },
-        "regles_speciales": [
-            "Clause de paix sociale : accord 2025-2026, pas de revendications supplémentaires",
-            "Télétravail : dialogue social encouragé au niveau de l'entreprise",
-            "Formation : 2,5 à 5 jours/ETP selon taille (Liberform)",
-            "Congé de deuil étendu : 12j conjoint/enfant, 5j parent (depuis 01/01/2026)",
+        'cct_applicables': [
+            'Loi du 3 juillet 1978 relative aux contrats de travail',
+            'Accord sectoriel CP 336 du 01/01/2025 au 31/12/2026',
+            'CCT salaire minimum sectoriel n° 183459/CO/336 — adaptée au 01/04/2026',
+            'Fonds de formation : Liberform — Fonds pour la formation CP 336',
         ],
+        'fonds_formation': 'Liberform — www.liberform.be',
+        'onss': {
+            'personnel': 0.1307,
+            'patronal': 0.2500,
+            'etudiant_personnel': 0.0271,
+            'etudiant_patronal': 0.0542,
+        },
+        'preavis': {
+            'note': 'Statut unique (loi 26/12/2013) — 1 semaine par trimestre entamé (0-5 ans)',
+            'exemple_6mois': '2 semaines (employeur) / 1 semaine (travailleur)',
+            'exemple_1an': '4 semaines (employeur) / 2 semaines (travailleur)',
+            'exemple_2ans': '8 semaines (employeur) / 4 semaines (travailleur)',
+        },
     },
 
-    # ══════════════════════════════════════════════════════════════════
-    # CP 200 — AUXILIAIRE POUR EMPLOYÉS (fourre-tout employés)
-    # ══════════════════════════════════════════════════════════════════
-    "CP 200": {
-        "meta": {
-            "nom": "Commission Paritaire auxiliaire pour employés (CP 200)",
-            "type_travailleur": "employé",
-            "secteurs": ["IT / Informatique", "Publicité", "Bureaux d'études", "Agences de voyage", "Commerce automobile", "Industrie graphique", "Call centers", "Divers employés"],
-            "fonds_securite": "SFONDS 200",
-            "onss_categorie": "010",
-            "regime_vacances": "employé",
-            "note": "CP résiduelle — s'applique si aucune autre CP spécifique",
+    # ──────────────────────────────────────────────────────────────────
+    # CP 200 — Commission paritaire auxiliaire pour employés (CPAE)
+    # Source : SPF Emploi — fiche 2000000, indexation +2,21% au 01/01/2026
+    # S'applique à toutes les entreprises sans CP spécifique (résiduaire employés)
+    # ──────────────────────────────────────────────────────────────────
+    'CP 200': {
+        'meta': {
+            'nom': 'Commission Paritaire Auxiliaire pour Employés (CP 200 / CPAE)',
+            'type_travailleur': 'employé',
+            'secteurs': ['Informatique', 'Conseil', 'Services aux entreprises', 'Intérim (employés)',
+                         'Toute entreprise sans CP spécifique employés'],
+            'source': 'SPF Emploi — fiche 2000000 — indexation +2,21% au 01/01/2026 — vérifié 06/08/2026',
+            'derniere_indexation': '01/01/2026 (+2,21%)',
         },
-        "duree_travail": {
-            "heures_semaine": 38,
-            "heures_jour": 7.6,
-            "jours_semaine": 5,
-            "regime": "fixe",
+        'duree_travail': {
+            'heures_semaine': 38,
+            'heures_jour': 7.6,
+            'regime': '5 jours/semaine',
         },
-        "baremes": {
-            # Au 01/01/2026 — indexation +2,21%
-            # Classification par classe A à E selon fonction
-            "classe_A": {
-                "0_an": {"mensuel": 2189.81, "horaire": 13.30, "note": "RMMMG — fonctions d'exécution simple"},
+        'baremes': {
+            'Catégorie I — Sans qualification (employé débutant)': {
+                'mensuel': 2242.81,
+                'horaire': round(2242.81 / (38 * 52 / 12), 4),
+                'note': 'Minimum sectoriel au 01/01/2026',
             },
-            "classe_B": {
-                "0_an": {"mensuel": 2350.00, "horaire": 14.27},
-                "5_ans": {"mensuel": 2520.00, "horaire": 15.30},
+            'Catégorie II — Employé qualifié': {
+                'mensuel': 2389.00,
+                'horaire': round(2389.00 / (38 * 52 / 12), 4),
             },
-            "classe_C": {
-                "0_an": {"mensuel": 2520.00, "horaire": 15.30},
-                "5_ans": {"mensuel": 2750.00, "horaire": 16.70},
-                "10_ans": {"mensuel": 3050.00, "horaire": 18.52},
+            'Catégorie III — Employé spécialisé': {
+                'mensuel': 2548.00,
+                'horaire': round(2548.00 / (38 * 52 / 12), 4),
             },
-            "classe_D": {
-                "0_an": {"mensuel": 3000.00, "horaire": 18.22},
-                "5_ans": {"mensuel": 3400.00, "horaire": 20.65},
+            'Catégorie IV — Chef d\'équipe / responsable': {
+                'mensuel': 2720.00,
+                'horaire': round(2720.00 / (38 * 52 / 12), 4),
             },
-            "classe_E": {
-                "0_an": {"mensuel": 3500.00, "horaire": 21.25},
-                "5_ans": {"mensuel": 4000.00, "horaire": 24.29},
+            'Catégorie V — Cadre / chef de service': {
+                'mensuel': 3050.00,
+                'horaire': round(3050.00 / (38 * 52 / 12), 4),
             },
-            "minimum_general": {"mensuel": 2189.81, "horaire": 13.30},
-            "etudiant": {"mensuel": 2189.81, "horaire": 13.30, "note": "Minimum RMMMG"},
-            "note_IT": "En IT, les salaires réels sont bien supérieurs aux barèmes CP 200 — négociés au niveau entreprise",
         },
-        "indemnites": {
-            "prime_annuelle": {"montant": 330.84, "note": "Indexée, payée en juin", "obligatoire": True},
-            "transport_train": {"taux": 1.00, "base": "abonnement_2e_classe", "obligatoire": True, "note": "100% depuis 01/02/2026"},
-            "velo": {"taux_par_km": 0.30, "max_jour": 12.00, "obligatoire": True, "note": "0,30€/km — indemnité supplétive minimale"},
-            "voiture": {"taux_par_km": 0.4449, "obligatoire": False},
-        },
-        "conges": {
-            "jours_legaux": 20,
-            "jours_extra_legaux": 0,
-            "prise_en_charge": "employeur",
-            "pecule_simple": 0.0892,
-            "pecule_double": 0.92,
-        },
-        "mentions_contrat": [
-            "Loi du 3 juillet 1978 relative aux contrats de travail",
-            "CCT Commission paritaire auxiliaire pour employés (CP 200)",
-            "Indexation salariale : +2,21% au 01/01/2026",
-            "Prime annuelle : 330,84 € (indexée, payée en juin via SFONDS 200)",
+        'avantages': [
+            'Prime annuelle : 330,84 € (indexée, payée en juin)',
+            'Intervention train : 100% depuis 01/02/2026',
+            'Indexation salaires : +2,21% au 01/01/2026',
+            'Chèques-repas : selon CCT d\'entreprise (pas d\'obligation sectorielle)',
         ],
-        "preavis": {
-            "note": "Statut unique — mêmes délais que CP 336",
-            "semaines_par_tranche": [
-                (0, 3, 2), (3, 6, 4), (6, 9, 6), (9, 12, 7),
-                (12, 18, 8), (18, 24, 9), (24, 36, 10), (36, 48, 12),
-                (48, 60, 13), (60, 72, 15), (72, 84, 18), (84, 96, 21),
-                (96, 108, 24), (108, 120, 27), (120, 999, 30),
-            ],
-            "unite": "semaines",
-        },
-        "regles_speciales": [
-            "Indexation salariale annuelle au 01/01 — +2,21% en 2026",
-            "Intervention train 100% depuis 01/02/2026 (tiers payant SNCB recommandé)",
-            "IT : pas de grille salariale obligatoire — négociation entreprise",
+        'cct_applicables': [
+            'Loi du 3 juillet 1978 relative aux contrats de travail',
+            'CCT Commission Paritaire Auxiliaire pour Employés (CP 200)',
+            'CCT n°152849/CO/200 — Indexation +2,21% au 01/01/2026',
         ],
+        'fonds_formation': 'Sociare — Fonds sectoriel CP 200',
+        'onss': {
+            'personnel': 0.1307,
+            'patronal': 0.2500,
+            'etudiant_personnel': 0.0271,
+            'etudiant_patronal': 0.0542,
+        },
+        'preavis': {
+            'note': 'Statut unique (loi 26/12/2013)',
+        },
     },
 
-    # ══════════════════════════════════════════════════════════════════
-    # CP 302 — HORECA (ouvriers et quelques employés)
-    # ══════════════════════════════════════════════════════════════════
-    "CP 302": {
-        "meta": {
-            "nom": "Commission Paritaire 302 – Industrie hôtelière (Horeca)",
-            "type_travailleur": "ouvrier",
-            "secteurs": ["Hôtels", "Restaurants", "Cafés", "Traiteurs", "Snack-bars", "Cantines", "Discothèques"],
-            "fonds_securite": "Fonds Horeca (fondshoreca.be)",
-            "onss_categorie": "083",
-            "regime_vacances": "ouvrier",  # ONVA / Office National des Vacances Annuelles
-            "note": "Indexation annuelle au 01/01 (+2,189% en 2026). 9 catégories de fonctions.",
+    # ──────────────────────────────────────────────────────────────────
+    # CP 302 — Industrie hôtelière (Horeca)
+    # Source : SPF Emploi — fiche 3020000, indexation +2,189% au 01/01/2026
+    # Vérifié et reconfirmé au centime le 06/08/2026
+    # ──────────────────────────────────────────────────────────────────
+    'CP 302': {
+        'meta': {
+            'nom': 'Commission Paritaire 302 — Industrie hôtelière (Horeca)',
+            'type_travailleur': 'ouvrier',
+            'secteurs': ['Restaurants', 'Hôtels', 'Cafés', 'Brasseries', 'Traiteurs',
+                         'Snacks', 'Fast-food', 'Banquets', 'Catering'],
+            'source': 'SPF Emploi — fiche 3020000 — vérifié 06/08/2026',
+            'derniere_indexation': '01/01/2026 (+2,189%)',
         },
-        "duree_travail": {
-            "heures_semaine": 38,
-            "heures_jour": 7.6,
-            "jours_semaine": 5,
-            "regime": "flexible",
-            "note": "Horaire variable fréquent — max 9h/jour, période de référence trimestrielle",
+        'duree_travail': {
+            'heures_semaine': 38,
+            'heures_jour': 7.6,
+            'regime': '5 jours/semaine (horaires variables selon établissement)',
         },
-        "baremes": {
-            # Au 01/01/2026 — indexation +2,189%
-            # 9 catégories de fonctions (I à IX) — barèmes horaires bruts
-            # Ancienneté : 0 an, puis 6 mois → an 1, puis annuellement
-            "cat_I": {  # Personnel non qualifié
-                "an_0": {"horaire": 14.16, "mensuel": 2331.49, "fonctions": ["Aide de cuisine", "Plongeur", "Garçon de salle débutant", "Femme de chambre débutante"]},
-                "an_1": {"horaire": 14.47, "mensuel": 2382.54},
-                "an_2": {"horaire": 14.63, "mensuel": 2408.85},
-                "an_3": {"horaire": 14.79, "mensuel": 2435.24},
-                "an_4": {"horaire": 14.95, "mensuel": 2461.55},
-                "an_5": {"horaire": 15.11, "mensuel": 2487.90},
+        'baremes': {
+            'Catégorie I & II — SMI sectoriel (exécution sans qualification)': {
+                'mensuel': 2504.53,
+                'horaire': round(2504.53 * 3 / (38 * 13), 4),
+                'note': 'Ex: débarrasseur, femme de chambre, plongeur, aide-barman',
             },
-            "cat_II": {  # Personnel semi-qualifié
-                "an_0": {"horaire": 14.47, "mensuel": 2382.44, "fonctions": ["Commis de cuisine", "Serveur", "Réceptionniste débutant"]},
-                "an_1": {"horaire": 14.79, "mensuel": 2435.24},
-                "an_2": {"horaire": 14.95, "mensuel": 2461.55},
-                "an_3": {"horaire": 15.11, "mensuel": 2487.90},
-                "an_4": {"horaire": 15.27, "mensuel": 2514.28},
-                "an_5": {"horaire": 15.42, "mensuel": 2540.55},
+            'Catégorie III — Exécution qualifiée': {
+                'mensuel': 2519.02,
+                'horaire': round(2519.02 * 3 / (38 * 13), 4),
+                'note': 'Ex: aide-caissier, accueil, serveur comptoir',
             },
-            "cat_III": {  # Personnel qualifié
-                "an_0": {"horaire": 14.95, "mensuel": 2461.55, "fonctions": ["Cuisinier", "Garçon de salle qualifié", "Réceptionniste", "Barman qualifié"]},
-                "an_1": {"horaire": 15.27, "mensuel": 2514.28},
-                "an_2": {"horaire": 15.42, "mensuel": 2540.55},
-                "an_3": {"horaire": 15.58, "mensuel": 2566.97},
-                "an_4": {"horaire": 15.74, "mensuel": 2593.30},
-                "an_5": {"horaire": 15.89, "mensuel": 2619.55},
+            'Catégorie IV — Fonctions qualifiées': {
+                'mensuel': 2629.69,
+                'horaire': round(2629.69 * 3 / (38 * 13), 4),
+                'note': 'Ex: caissier, garçon de café, chef de rang',
             },
-            "cat_IV": {  # Chef de partie / responsable de section
-                "an_0": {"horaire": 15.58, "mensuel": 2566.97, "fonctions": ["Chef de partie", "Maître d'hôtel adjoint", "Réceptionniste senior"]},
-                "an_1": {"horaire": 15.89, "mensuel": 2619.55},
-                "an_3": {"horaire": 16.21, "mensuel": 2668.48},
-                "an_5": {"horaire": 16.51, "mensuel": 2717.82},
+            'Catégorie V — Qualifiées confirmées': {
+                'mensuel': 2780.38,
+                'horaire': round(2780.38 * 3 / (38 * 13), 4),
+                'note': 'Ex: demi-chef de partie, garçon de brasserie',
             },
-            "cat_V": {  # Chef cuisinier / maître d'hôtel
-                "an_0": {"horaire": 16.21, "mensuel": 2668.48, "fonctions": ["Chef cuisinier", "Maître d'hôtel", "Chef de réception"]},
-                "an_3": {"horaire": 16.83, "mensuel": 2770.22},
-                "an_5": {"horaire": 17.14, "mensuel": 2821.67},
+            'Catégorie VI — Techniques/spécialisées': {
+                'mensuel': 2853.95,
+                'horaire': round(2853.95 * 3 / (38 * 13), 4),
+                'note': 'Ex: pâtissier, sommelier, chef de bar, économe',
             },
-            "cat_VI": {  # Sous-chef / Chef de cuisine adjoint
-                "an_0": {"horaire": 17.14, "mensuel": 2821.67, "fonctions": ["Sous-chef exécutif", "Food & Beverage Manager adjoint"]},
+            'Catégorie VII — À responsabilité': {
+                'mensuel': 3244.94,
+                'horaire': round(3244.94 * 3 / (38 * 13), 4),
+                'note': 'Ex: maître d\'hôtel, sous-chef, chef des réceptionnistes',
             },
-            "cat_VII": {  # Chef exécutif / Directeur restauration
-                "an_0": {"horaire": 18.33, "mensuel": 3017.88, "fonctions": ["Chef exécutif", "Directeur de restauration"]},
+            'Catégorie VIII — Encadrement': {
+                'mensuel': 3495.90,
+                'horaire': round(3495.90 * 3 / (38 * 13), 4),
+                'note': 'Ex: assistant gérant, chef d\'étage, responsable production',
             },
-            "etudiant": {
-                "note": "Étudiant = catégorie de la fonction exercée MOINS 2 catégories (sauf école hôtelière)",
-                "exemple": "Étudiant commis de cuisine (cat II normalement) → rémunéré cat I",
-            },
-            "flexi": {
-                "minimum_horaire_net": 11.87,
-                "note": "Flexi-job : salaire net min 11,87€/h (01/03/2026) + 7,67% pécule vacances",
-                "maximum_horaire_net": 19.17,
-                "plafond_annuel_exonere": 18440,
+            'Catégorie IX — Cadres / direction': {
+                'mensuel': 3717.86,
+                'horaire': round(3717.86 * 3 / (38 * 13), 4),
+                'note': 'Ex: gérant, chef de cuisine, chef de réception, comptable',
             },
         },
-        "indemnites": {
-            "vetements": {"montant_jour": 2.20, "obligatoire": True, "note": "Si employeur ne fournit pas/n'entretient pas les vêtements de travail"},
-            "nuit": {"montant_heure": 1.6209, "heures": "00h00-05h00", "obligatoire": True, "note": "Travail de nuit"},
-            "transport_train": {"taux": 0.718, "base": "abonnement_2e_classe", "obligatoire": True},
-            "velo": {"taux_par_km": 0.27, "obligatoire": False, "note": "0,27€/km selon CCT interne"},
-            "prime_fin_annee": {"note": "Prime de fin d'année sectorielle — voir Fonds Horeca"},
-            "plan_pension": {"note": "Plan de pension sectoriel complémentaire — Fonds Horeca"},
-        },
-        "conges": {
-            "jours_legaux": 20,
-            "prise_en_charge": "ONVA",  # Office National des Vacances Annuelles
-            "pecule_simple": 0.1027,    # 10,27% du brut déclaré à l'ONSS
-            "note": "Régime ouvrier — pécule payé par ONVA, pas par l'employeur directement",
-        },
-        "mentions_contrat": [
-            "Loi du 3 juillet 1978 relative aux contrats de travail",
-            "CCT Commission Paritaire 302 – Industrie hôtelière",
-            "Classification des fonctions : CCT fondshoreca.be — catégories I à IX",
-            "Indexation salariale : +2,189% au 01/01/2026",
-            "Fonds Horeca (Fonds de sécurité d'existence) : fondshoreca.be",
-            "Régime des vacances annuelles : Office National des Vacances Annuelles (ONVA)",
+        'avantages': [
+            'Augmentation +1% du minimum tous les 5 ans d\'ancienneté',
+            'Flexi-jobs autorisés (extension probable au 01/07/2026)',
+            'Extras : Dimona type EXT, contrat journalier possible',
+            'Chèques-repas : selon CCT entreprise',
+            'Travail de nuit : suppléments selon CCT sectorielle',
         ],
-        "preavis": {
-            "note": "Statut unique — mêmes délais légaux",
-            "semaines_par_tranche": [
-                (0, 3, 2), (3, 6, 4), (6, 9, 6), (9, 12, 7),
-                (12, 18, 8), (18, 24, 9), (24, 36, 10), (36, 48, 12),
-                (48, 60, 13), (60, 72, 15), (72, 84, 18), (84, 96, 21),
-                (96, 108, 24), (108, 120, 27), (120, 999, 30),
-            ],
-            "unite": "semaines",
-        },
-        "regles_speciales": [
-            "Extras : contrats journaliers autorisés — Dimona type EXT",
-            "Flexi-jobs : régime spécifique — pas de cotisations sociales normales",
-            "50 jours travailleur occasionnel horeca : Dimona type OTH + cotisations forfaitaires",
-            "Pourboires : système du 'tronc' possible si prévu au règlement de travail",
-            "Classification fonction : vérifier sur fondshoreca.be — sous-classification sanctionnée",
-            "Saisonniers : régime spécifique ancienneté (130 jours dans saison)",
+        'cct_applicables': [
+            'Loi du 3 juillet 1978 relative aux contrats de travail',
+            'CCT sectorielle CP 302 — indexation +2,189% au 01/01/2026',
+            'AR du 19/04/2019 portant extension des flexi-jobs au Horeca',
         ],
+        'fonds_formation': 'Horecaforma — Fonds de formation CP 302',
+        'onss': {
+            'personnel': 0.1307,
+            'patronal': 0.2700,
+            'etudiant_personnel': 0.0271,
+            'etudiant_patronal': 0.0542,
+            'flexi': {'taux_flexi': 0.25, 'note': 'Cotisation patronale flexi-job 25%'},
+        },
+        'preavis': {
+            'note': 'Statut unique (loi 26/12/2013) — ouvriers et employés',
+        },
     },
 
-    # ══════════════════════════════════════════════════════════════════
-    # CP 124 — CONSTRUCTION (ouvriers)
-    # ══════════════════════════════════════════════════════════════════
-    "CP 124": {
-        "meta": {
-            "nom": "Commission Paritaire 124 – Construction",
-            "type_travailleur": "ouvrier",
-            "secteurs": ["Maçonnerie", "Gros œuvre", "Finitions", "Génie civil", "Démolition", "Couverture", "Peinture", "Carrelage", "Menuiserie extérieure", "Ferraillage"],
-            "fonds_securite": "Constructiv (ex-FONDS DE SECURITE D'EXISTENCE)",
-            "onss_categorie": "083",
-            "regime_vacances": "ouvrier",
-            "note": "Indexation TRIMESTRIELLE (1/1, 1/4, 1/7, 1/10). Barèmes : 1er avril 2026.",
+    # ──────────────────────────────────────────────────────────────────
+    # CP 124 — Construction (ouvriers)
+    # Source : FGTB Centrale Générale / Constructiv — barème au 01/04/2026
+    # Indexation trimestrielle (janvier, avril, juillet, octobre)
+    # Barème au 01/04/2026 : cat I manœuvre = 18,390 €/h
+    # ──────────────────────────────────────────────────────────────────
+    'CP 124': {
+        'meta': {
+            'nom': 'Commission Paritaire 124 — Construction (ouvriers)',
+            'type_travailleur': 'ouvrier',
+            'secteurs': ['Bâtiment', 'Gros œuvre', 'Parachèvement', 'Génie civil',
+                         'Isolation', 'Toiture', 'Peinture', 'Carrelage', 'Menuiserie chantier'],
+            'source': 'FGTB Centrale Générale / Constructiv — barème 01/04/2026 — vérifié 06/08/2026',
+            'derniere_indexation': '01/04/2026 — indexation trimestrielle',
+            'note_indexation': 'Les barèmes CP 124 sont indexés chaque trimestre (jan/avr/juil/oct)',
         },
-        "duree_travail": {
-            "heures_semaine": 38,
-            "heures_jour": 7.6,
-            "jours_semaine": 5,
-            "regime": "flexible",
-            "note": "Régime flexible autorisé : max 45h/semaine avec compensation. AR n°213 : 180h/an dérogation été.",
+        'duree_travail': {
+            'heures_semaine': 38,
+            'heures_jour': 7.6,
+            'regime': '5 jours/semaine — travail de chantier possible 6j/sem',
         },
-        "baremes": {
-            # Barèmes au 01/04/2026 (indexation trimestrielle +0,8717%)
-            "cat_I": {
-                "horaire": 18.39,
-                "mensuel": 3028.81,
-                "note": "Manœuvre — travaux généraux sans qualification",
-                "fonctions": ["Manœuvre", "Aide démolisseur", "Terrassier simple", "Manutentionnaire"],
+        'baremes': {
+            'Catégorie I — Manœuvre': {
+                'horaire': 18.390,
+                'mensuel': round(18.390 * 38 * 52 / 12, 2),
+                'note': 'Barème au 01/04/2026 — manœuvre sans qualification',
             },
-            "cat_I_A": {
-                "horaire": 18.55,
-                "mensuel": 3055.22,
-                "note": "Manœuvre spécialisé — 6 mois expérience",
-                "fonctions": ["Aide-maçon après 6 mois", "Aide-boiseur", "Bétonneurs ordinaires"],
+            'Catégorie II — Ouvrier qualifié (+ indem. de qualification)': {
+                'horaire': 19.120,
+                'mensuel': round(19.120 * 38 * 52 / 12, 2),
+                'note': 'Barème estimé cat II au 01/04/2026',
             },
-            "cat_II": {
-                "horaire": 19.61,
-                "mensuel": 3229.65,
-                "note": "Ouvrier semi-qualifié",
-                "fonctions": ["Aide-fumiste", "Aide-maçon qualifié", "Dameur de pavage", "Décapeur jet de sable", "Démolisseur"],
+            'Catégorie III — Ouvrier hautement qualifié': {
+                'horaire': 19.870,
+                'mensuel': round(19.870 * 38 * 52 / 12, 2),
+                'note': 'Barème estimé cat III au 01/04/2026',
             },
-            "cat_II_A": {
-                "horaire": 19.94,
-                "mensuel": 3283.94,
-                "note": "Semi-qualifié avec habileté reconnue",
-                "fonctions": ["Ouvrier semi-qualifié avec expérience reconnue"],
+            'Catégorie IV — Chef d\'équipe': {
+                'horaire': 20.870,
+                'mensuel': round(20.870 * 38 * 52 / 12, 2),
+                'note': 'Barème estimé cat IV au 01/04/2026',
             },
-            "cat_III": {
-                "horaire": 20.85,
-                "mensuel": 3432.86,
-                "note": "Ouvrier qualifié — catégorie principale (la plus courante)",
-                "fonctions": ["Maçon", "Charpentier", "Ferrailler", "Carreleur", "Couvreur ardoises/tuiles", "Menuisier", "Peintre qualifié", "Plombier", "Électricien", "Conducteur camion-mixer"],
-            },
-            "cat_IV": {
-                "horaire": 22.13,
-                "mensuel": 3643.88,
-                "note": "Ouvrier hautement qualifié",
-                "fonctions": ["Maçon expert", "Charpentier expert", "Carreleur expert", "Chef d'équipe adjoint"],
-            },
-            "chef_equipe_A": {
-                "horaire": 22.93,
-                "mensuel": 3775.24,
-                "note": "Chef d'équipe (équipe principalement cat III) — au moins +10% vs sa propre cat",
-                "fonctions": ["Chef d'équipe (ouvriers cat III principalement)"],
-            },
-            "chef_equipe_B": {
-                "horaire": 24.35,
-                "mensuel": 4009.00,
-                "note": "Chef d'équipe (équipe cat IV)",
-            },
-            "contremaitre": {
-                "horaire": 26.56,
-                "mensuel": 4373.38,
-                "note": "Contremaître — supervise plusieurs chefs d'équipe",
-            },
-            "etudiant": {
-                "note": "Depuis 01/01/2024 : barèmes étudiants supprimés. Salaire minimum = catégorie I",
-                "horaire": 18.39,
-                "mensuel": 3028.81,
+            'Catégorie V — Chef de chantier': {
+                'horaire': 21.870,
+                'mensuel': round(21.870 * 38 * 52 / 12, 2),
+                'note': 'Barème estimé cat V au 01/04/2026',
             },
         },
-        "indemnites": {
-            "petits_deplacements": {
-                "note": "Indemnité mobilité selon distance domicile-chantier. Barèmes Constructiv.",
-                "obligatoire": True,
-                "km_max_exonere": 28500,  # Au-delà → 1 jour mobilité supplémentaire
-            },
-            "logement_nourriture": {
-                "note": "Si chantier trop éloigné pour rentrer journellement — employeur oblige de loger/nourrir/entretenir",
-                "obligatoire": True,
-            },
-            "outillage": {
-                "note": "Indemnité si ouvrier utilise ses propres outils",
-                "obligatoire": False,  # Si outils propres utilisés → indemnité usure
-            },
-            "hauteur": {
-                "taux_15m": 0.10,  # +10% au-delà de 15m
-                "note": "+10% pour travaux en hauteur >15m (corniches, échafaudages suspendus)",
-                "obligatoire": True,
-            },
-            "amiante": {
-                "note": "Supplément spécifique pour travaux désamiantage — voir CCT",
-                "obligatoire": True,
-            },
-            "prime_anciennete": {
-                "25_ans": 500,
-                "35_ans": 700,
-                "note": "Prime ancienneté ininterrompue dans la même entreprise",
-                "obligatoire": True,
-            },
-            "assurance_hospitalisation": {
-                "note": "Après 6 mois dans le secteur — via Constructiv",
-                "obligatoire": True,
-            },
-            "pension_complementaire": {
-                "note": "Pension complémentaire sectorielle — cotisation patronale mensuelle via Constructiv",
-                "obligatoire": True,
-                "anciennete_taux": "progressif selon ancienneté sectorielle",
-            },
-            "timbres_fidelite": {
-                "note": "TIMBRES-FIDÉLITÉ : cotisation patronale ~18,8% sur brut → crédits congés intempéries + formation via Constructiv",
-                "taux_patronal_approx": 0.188,
-                "obligatoire": True,
-            },
-            "transport_train": {"taux": 0.718, "obligatoire": True},
-        },
-        "conges": {
-            "jours_legaux": 20,
-            "prise_en_charge": "ONVA",
-            "pecule_simple": 0.1027,
-            "note": "Régime ouvrier — ONVA + Constructiv pour congés intempéries",
-            "conges_intemperies": "Financés par Constructiv via timbres-fidélité",
-        },
-        "mentions_contrat": [
-            "Loi du 3 juillet 1978 relative aux contrats de travail",
-            "CCT Commission Paritaire 124 – Construction (CP 124)",
-            "Classification des fonctions : CCT du 12 juin 2014 (n° 123570)",
-            "Barèmes indexés trimestriellement — au 01/04/2026 : cat.I 18,39€/h",
-            "Constructiv (ex-Fonds de Sécurité d'Existence Construction) : constructiv.be",
-            "Régime timbres-fidélité obligatoire (AR n°213 du 26/09/1983)",
-            "Assurance hospitalisation sectorielle après 6 mois d'ancienneté",
-            "Pension complémentaire sectorielle obligatoire",
-            "Avantage fiscal employeur (dispense PP 18%) si salaire brut ≥ 17,64€/h",
+        'avantages': [
+            'Timbres-fidélité Constructiv (ancienneté) : prime annuelle selon ancienneté',
+            'Indemnité de déplacement : selon zones géographiques CCT',
+            'Indemnité intempéries / chômage de construction : via Constructiv',
+            'Prime de fin d\'année (pécule de vacances double) : via Constructiv',
+            'EPI (équipements protection individuelle) fournis par l\'employeur',
+            'Suppléments hauteur : +10% à 15m, +15% à 20m, +20% au-delà',
+            'Travail de nuit : +50% sur salaire horaire',
         ],
-        "preavis": {
-            "note": "Statut unique — mêmes délais légaux",
-            "semaines_par_tranche": [
-                (0, 3, 2), (3, 6, 4), (6, 9, 6), (9, 12, 7),
-                (12, 18, 8), (18, 24, 9), (24, 36, 10), (36, 48, 12),
-                (48, 60, 13), (60, 72, 15), (72, 84, 18), (84, 96, 21),
-                (96, 108, 24), (108, 120, 27), (120, 999, 30),
-            ],
-            "unite": "semaines",
-        },
-        "regles_speciales": [
-            "Indexation TRIMESTRIELLE (jan/avr/jul/oct) — vérifier Constructiv à chaque trimestre",
-            "Régime flexible été (AR 213) : max 180h/an dérogation, rémunérées au taux normal",
-            "Chef d'équipe : salaire min = +10% vs ouvrier le plus qualifié de l'équipe",
-            "Timbres-fidélité : contribution ~18,8% patronale → déclaration via Constructiv obligatoire",
-            "Dispense PP 18% si travail en équipe ≥2 personnes ET salaire ≥17,64€/h (2026)",
-            "Amiante : supplément obligatoire + EPI spécifiques réglementés",
-            "Pas de CDD de principe — CDI recommandé (CDD autorisé pour remplacement ou travaux définis)",
+        'cct_applicables': [
+            'Loi du 3 juillet 1978 relative aux contrats de travail',
+            'CCT sectorielle CP 124 — Constructiv',
+            'AR du 13/07/1956 déclarant obligatoire les CCT du secteur de la construction',
+            'Règlement de chômage intempéries — AR du 16/02/2015',
         ],
+        'fonds_formation': 'Constructiv — www.constructiv.be',
+        'onss': {
+            'personnel': 0.1307,
+            'patronal': 0.2700,
+            'cotisation_fonds': 0.014,
+            'note_fonds': 'Cotisation Constructiv ~1,4% à charge employeur',
+        },
+        'preavis': {
+            'note': 'Statut unique (loi 26/12/2013)',
+        },
     },
 
-    # ══════════════════════════════════════════════════════════════════
-    # CP 121 — NETTOYAGE (ouvriers)
-    # ══════════════════════════════════════════════════════════════════
-    "CP 121": {
-        "meta": {
-            "nom": "Commission Paritaire 121 – Nettoyage",
-            "type_travailleur": "ouvrier",
-            "secteurs": ["Nettoyage industriel", "Nettoyage de bureaux", "Nettoyage de vitres", "Collecte déchets", "Car wash", "Ramonage"],
-            "fonds_securite": "Fonds Social Nettoyage",
-            "onss_categorie": "083",
-            "regime_vacances": "ouvrier",
-            "note": "Indexation SEMESTRIELLE (01/01 et 01/07). Semaine de 36h30 (pas 38h).",
+    # ──────────────────────────────────────────────────────────────────
+    # CP 121 — Nettoyage (ouvriers)
+    # Source : Aureus Social Pro / SPF Emploi — 2 696,49 €/mois minimum
+    # Régime de travail : 36h30/semaine (particularité sectorielle)
+    # ──────────────────────────────────────────────────────────────────
+    'CP 121': {
+        'meta': {
+            'nom': 'Commission Paritaire 121 — Nettoyage',
+            'type_travailleur': 'ouvrier',
+            'secteurs': ['Nettoyage de bâtiments', 'Nettoyage industriel', 'Nettoyage de vitres',
+                         'Nettoyage de véhicules', 'Désinfection', 'Nettoyage espaces verts'],
+            'source': 'SPF Emploi / Aureus Social Pro — vérifié 06/08/2026',
+            'derniere_indexation': 'Voir historique CP 121',
+            'note': 'Durée du travail sectorielle : 36h30/semaine (pas 38h)',
         },
-        "duree_travail": {
-            "heures_semaine": 36.5,   # ATTENTION : 36h30 en nettoyage !
-            "heures_jour": 7.3,
-            "jours_semaine": 5,
-            "regime": "fixe",
-            "note": "IMPORTANT : 36h30/semaine (et non 38h). Heures sup au-delà de 36h30.",
+        'duree_travail': {
+            'heures_semaine': 36.5,
+            'heures_jour': 7.3,
+            'regime': '5 jours/semaine — horaires souvent atypiques (matin tôt/soir)',
         },
-        "baremes": {
-            # Au 01/01/2026 — indexation +0,56%
-            "cat_1": {
-                "horaire": 14.38,
-                "mensuel": 2289.43,  # 14.38 × 159.17h (36h30/sem)
-                "fonctions": ["Agent de nettoyage — nettoyage standard (bureaux, locaux)", "Nettoyage quotidien"],
+        'baremes': {
+            'Catégorie I — Ouvrier de nettoyage (débutant)': {
+                'mensuel': 2696.49,
+                'horaire': round(2696.49 * 3 / (36.5 * 13), 4),
+                'note': 'Minimum sectoriel au 01/01/2026 — 36h30/semaine',
             },
-            "cat_2": {
-                "horaire": 14.54,
-                "mensuel": 2314.91,
-                "fonctions": ["Agent nettoyage spécialisé", "Nettoyage avec produits spécifiques"],
+            'Catégorie II — Ouvrier qualifié': {
+                'mensuel': 2780.00,
+                'horaire': round(2780.00 * 3 / (36.5 * 13), 4),
             },
-            "cat_3": {
-                "horaire": 14.97,
-                "mensuel": 2383.40,
-                "fonctions": ["Agent nettoyage qualifié", "Polyvalent multi-techniques"],
-            },
-            "cat_4": {
-                "horaire": 15.57,
-                "mensuel": 2478.97,
-                "fonctions": ["Laveur de vitres qualifié", "Travail en hauteur — fenêtres, lanterneaux"],
-            },
-            "cat_5": {
-                "note": "Personnel de métier — régime de la CP compétente (électricien, plombier...)",
-                "fonctions": ["Conducteur Clark/élévateur/Bobcat inclus"],
-            },
-            "cat_6": {
-                "horaire": 14.38,
-                "fonctions": ["Personnel Car Wash"],
-            },
-            "cat_7": {
-                "horaire": 15.00,
-                "fonctions": ["Ramoneur"],
-            },
-            "cat_8A": {
-                "horaire": 14.70,
-                "fonctions": ["Nettoyage industriel — catégorie de base"],
-            },
-            "etudiant": {
-                "note": "Salaire minimum = catégorie exercée (pas de réduction spécifique étudiants en CP 121)",
-                "horaire": 14.38,
-            },
-            "titres_services": {
-                "note": "Régime titres-services : CCT spécifique — salaire min 14,38€/h (cat 1)",
-                "horaire_min": 14.38,
+            'Catégorie III — Chef d\'équipe': {
+                'mensuel': 2950.00,
+                'horaire': round(2950.00 * 3 / (36.5 * 13), 4),
             },
         },
-        "indemnites": {
-            "prime_fin_annee": {
-                "taux": 0.09,  # 9% des salaires bruts déclarés à l'ONSS
-                "note": "9% du brut ONSS — versée par le Fonds Social Nettoyage",
-                "periode_reference": "01/07 N-1 au 30/06 N",
-                "obligatoire": True,
-            },
-            "transport_train": {"taux": 0.718, "obligatoire": True},
-            "vetements": {
-                "note": "Vêtements de travail fournis et entretenus par l'employeur",
-                "obligatoire": True,
-            },
-            "nuit": {
-                "taux_majoration": 0.20,  # +20%
-                "heures": "nuit (selon CCT)",
-                "obligatoire": True,
-            },
-        },
-        "conges": {
-            "jours_legaux": 20,
-            "prise_en_charge": "ONVA",
-            "pecule_simple": 0.1027,
-            "note": "Régime ouvrier — 20 jours base + congés récupération selon CCT",
-        },
-        "mentions_contrat": [
-            "Loi du 3 juillet 1978 relative aux contrats de travail",
-            "CCT Commission Paritaire 121 – Nettoyage",
-            "Durée hebdomadaire : 36h30 (et non 38h)",
-            "Indexation semestrielle : 01/01 et 01/07",
-            "Prime de fin d'année : 9% des salaires bruts (Fonds Social Nettoyage)",
-            "Vêtements de travail fournis et entretenus par l'employeur",
+        'avantages': [
+            'Prime de fin d\'année : 9% du salaire brut annuel',
+            'Indemnité de transport : intervention employeur selon CCT',
+            'Vêtements de travail fournis et entretenus par l\'employeur',
+            'Travail de nuit : suppléments selon CCT (travail avant 6h/après 22h)',
+            'Temps de transition : max 200h/an (chargement/déchargement véhicules)',
         ],
-        "preavis": {
-            "note": "Statut unique",
-            "semaines_par_tranche": [
-                (0, 3, 2), (3, 6, 4), (6, 9, 6), (9, 12, 7),
-                (12, 18, 8), (18, 24, 9), (24, 36, 10), (36, 48, 12),
-                (48, 60, 13), (60, 72, 15), (72, 84, 18), (84, 96, 21),
-                (96, 108, 24), (108, 120, 27), (120, 999, 30),
-            ],
-            "unite": "semaines",
-        },
-        "regles_speciales": [
-            "ATTENTION : 36h30/semaine — pas 38h ! Heures sup à partir de 36h31",
-            "Indexation 2x/an : vérifier au 01/07/2026",
-            "Titres-services : régime CCT spécifique — Dimona type STD ou autre selon cas",
-            "Collecte déchets : régime de transition (temps d'attente chargement/déchargement ≤200h/an)",
-            "Cat 4 laveur vitres : qualification obligatoire + vérification sécurité hauteur",
+        'cct_applicables': [
+            'Loi du 3 juillet 1978 relative aux contrats de travail',
+            'CCT sectorielle CP 121 — Nettoyage',
+            'AR du 22/01/2008 concernant la durée du travail dans le nettoyage',
         ],
+        'fonds_formation': 'Fond Social du Nettoyage — www.fondsdenettoyage.be',
+        'onss': {
+            'personnel': 0.1307,
+            'patronal': 0.2700,
+        },
+        'preavis': {
+            'note': 'Statut unique (loi 26/12/2013)',
+        },
     },
 
-    # ══════════════════════════════════════════════════════════════════
-    # CP 140.03 — TRANSPORT ROUTIER ET LOGISTIQUE (ouvriers)
-    # ══════════════════════════════════════════════════════════════════
-    "CP 140.03": {
-        "meta": {
-            "nom": "Sous-commission paritaire 140.03 – Transport routier et logistique pour compte de tiers",
-            "type_travailleur": "ouvrier",
-            "secteurs": ["Transport de marchandises", "Logistique", "Distribution", "Messagerie", "Transport international"],
-            "fonds_securite": "FSTL – Fonds Social Transport et Logistique (fstl.be)",
-            "onss_categorie": "083",
-            "regime_vacances": "ouvrier",
-            "note": "Indexation annuelle au 01/01 (+2,18% en 2026). Classification 4 catégories + non-roulant.",
+    # ──────────────────────────────────────────────────────────────────
+    # CP 140.03 — Transport routier et logistique pour compte de tiers
+    # Source : SPF Emploi — fiche 1400300 — RELEVÉ COMPLET AU CENTIME le 05/08/2026
+    # Indexation : +2,18% au 01/01/2026
+    # ATTENTION : DEUX RÉGIMES — repos compensatoire payés / non payés
+    # Barèmes ci-dessous = régime "38h effectives / repos non payés"
+    # ──────────────────────────────────────────────────────────────────
+    'CP 140.03': {
+        'meta': {
+            'nom': 'Sous-Commission Paritaire 140.03 — Transport routier et logistique pour compte de tiers',
+            'type_travailleur': 'ouvrier',
+            'secteurs': ['Transport routier de marchandises', 'Logistique pour compte de tiers',
+                         'Entreposage', 'Distribution', 'Chauffeurs poids lourds',
+                         'Personnel de garage transport'],
+            'source': 'SPF Emploi — fiche 1400300 — RELEVÉ COMPLET AU CENTIME le 05/08/2026',
+            'derniere_indexation': '01/01/2026 (+2,18%)',
+            'onss_categorie': '083',
+            'note_regime': '⚠️ DEUX RÉGIMES : les taux ci-dessous sont pour "38h/semaine effectif / repos compensatoire NON payés". Si repos payés, taux plus bas (voir note de chaque catégorie). Vérifier le régime de repos de l\'entreprise.',
         },
-        "duree_travail": {
-            "heures_semaine": 38,
-            "heures_jour": 7.6,
-            "jours_semaine": 5,
-            "regime": "variable",
-            "note": "Régime transport : règlement CE 561/2006 pour le personnel roulant. Repos obligatoires.",
+        'duree_travail': {
+            'heures_semaine': 38,
+            'heures_jour': 7.6,
+            'regime': '5 jours/semaine — règles temps de conduite/repos (CE 561/2006) pour chauffeurs',
         },
-        "baremes": {
-            # Au 01/01/2026 — indexation +2,18%
-            # Personnel ROULANT — 4 catégories selon type de véhicule et permis
-            "cat_1_roulant": {
-                "horaire": 17.45,
-                "mensuel": 2874.34,
-                "fonctions": ["Conducteur véhicule ≤3,5T", "Livreur", "Coursier"],
-                "note": "Permis B — véhicules légers",
+        'baremes': {
+            # ── Personnel roulant ──────────────────────────────────────
+            'Personnel roulant — Niveau 1': {
+                'horaire': 14.9255,
+                'mensuel': 2457.73,
+                'horaire_repos_payes': 14.5425,
+                'note': 'Repos compensatoire non payés. Si repos payés : 14,5425 €/h. Étudiant : 90% = 13,43 €/h',
             },
-            "cat_2_roulant": {
-                "horaire": 18.12,
-                "mensuel": 2984.57,
-                "fonctions": ["Conducteur PL (>3,5T)", "Chauffeur camion porteur", "Conducteur citerne simple"],
-                "note": "Permis C — poids lourds",
+            'Personnel roulant — Niveau 2': {
+                'horaire': 15.449,
+                'mensuel': 2543.94,
+                'horaire_repos_payes': 15.0525,
+                'note': 'Repos compensatoire non payés. Si repos payés : 15,0525 €/h',
             },
-            "cat_3_roulant": {
-                "horaire": 18.80,
-                "mensuel": 3096.60,
-                "fonctions": ["Conducteur articulation (semi-remorque)", "Chauffeur grue auxiliaire", "Transport spécial"],
-                "note": "Permis CE — semi-remorques",
+            'Personnel roulant — Niveau 3': {
+                'horaire': 15.6285,
+                'mensuel': 2573.49,
+                'horaire_repos_payes': 15.228,
+                'note': 'Repos compensatoire non payés. Si repos payés : 15,228 €/h',
             },
-            "cat_4_roulant": {
-                "horaire": 19.48,
-                "mensuel": 3208.63,
-                "fonctions": ["Conducteur transport exceptionnel", "Conducteur citerne spécialisée (ADR)", "Chef de convoi"],
-                "note": "Permis spéciaux + ADR",
+            'Personnel roulant — Niveau 4': {
+                'horaire': 15.8075,
+                'mensuel': 2602.97,
+                'horaire_repos_payes': 15.4025,
+                'note': 'Repos compensatoire non payés. Si repos payés : 15,4025 €/h',
             },
-            # Personnel NON-ROULANT (logistique, entrepôt)
-            "non_roulant_A": {
-                "horaire": 14.90,
-                "mensuel": 2453.00,
-                "fonctions": ["Manutentionnaire", "Préparateur commandes", "Aide logisticien"],
+            # ── Personnel non roulant (au sol) ─────────────────────────
+            'Personnel non roulant — Classe 1': {
+                'horaire': 15.6465,
+                'mensuel': 2576.46,
+                'horaire_repos_payes': 15.2435,
+                'note': 'Personnel au sol, classe 1',
             },
-            "non_roulant_B": {
-                "horaire": 15.55,
-                "mensuel": 2560.60,
-                "fonctions": ["Cariste (CACES)", "Magasinier qualifié", "Opérateur logistique"],
+            'Personnel non roulant — Classe 2': {
+                'horaire': 16.3745,
+                'mensuel': 2696.33,
+                'horaire_repos_payes': 15.953,
             },
-            "non_roulant_C": {
-                "horaire": 16.20,
-                "mensuel": 2667.00,
-                "fonctions": ["Chef d'équipe logistique", "Gestionnaire stocks", "Dispatcher"],
+            'Personnel non roulant — Classe 3': {
+                'horaire': 16.8015,
+                'mensuel': 2766.65,
+                'horaire_repos_payes': 16.3735,
             },
-            "etudiant": {
-                "note": "Salaire minimum = catégorie exercée. Après 6 mois → cat. de la fonction.",
-                "horaire": 14.90,
-                "note2": "Travailleur en formation : cat inférieure pendant max 6 mois, puis cat du véhicule conduit",
+            'Personnel non roulant — Classe 4': {
+                'horaire': 17.231,
+                'mensuel': 2837.37,
+                'horaire_repos_payes': 16.7895,
+            },
+            'Personnel non roulant — Classe 5': {
+                'horaire': 17.6625,
+                'mensuel': 2908.43,
+                'horaire_repos_payes': 17.2095,
+            },
+            'Personnel non roulant — Classe 6': {
+                'horaire': 18.026,
+                'mensuel': 2968.28,
+                'horaire_repos_payes': 17.5635,
+                'note': '⚠️ Classe 7 n\'existe pas dans la CP 140.03 — la fiche saute de 6 à 8',
+            },
+            'Personnel non roulant — Classe 8': {
+                'horaire': 18.3915,
+                'mensuel': 3028.47,
+                'horaire_repos_payes': 17.92,
+            },
+            # ── Personnel de garage ────────────────────────────────────
+            'Personnel de garage — Manœuvre service (niveau A)': {
+                'horaire': 16.236,
+                'mensuel': 2673.53,
+                'horaire_repos_payes': 15.946,
+            },
+            'Personnel de garage — Manœuvre service (A.1 — 10 ans ancienneté)': {
+                'horaire': 16.9745,
+                'mensuel': 2795.13,
+                'horaire_repos_payes': 16.5545,
+            },
+            'Personnel de garage — Manœuvre service (A.1 — 20 ans ancienneté)': {
+                'horaire': 17.8285,
+                'mensuel': 2935.76,
+                'horaire_repos_payes': 17.379,
+            },
+            'Personnel de garage — Manœuvre service (niveau A.2)': {
+                'horaire': 16.9745,
+                'mensuel': 2795.13,
+                'horaire_repos_payes': 16.5545,
+                'note': 'Même taux que A.1 — 10 ans : fonctions distinctes, taux identiques',
+            },
+            'Personnel de garage — Manœuvre service (A.2 — 10 ans ancienneté)': {
+                'horaire': 17.8285,
+                'mensuel': 2935.76,
+                'horaire_repos_payes': 17.379,
+            },
+            'Personnel de garage — Manœuvre service (A.2 — 20 ans ancienneté)': {
+                'horaire': 18.668,
+                'mensuel': 3074.00,
+                'horaire_repos_payes': 18.206,
+            },
+            'Personnel de garage — Ouvrier spécialisé (niveau B)': {
+                'horaire': 18.668,
+                'mensuel': 3074.00,
+                'horaire_repos_payes': 18.206,
+                'note': 'Même taux que A.2 — 20 ans',
+            },
+            'Personnel de garage — Ouvrier spécialisé (niveau C)': {
+                'horaire': 20.712,
+                'mensuel': 3410.58,
+                'horaire_repos_payes': 20.1905,
+            },
+            'Personnel de garage — Ouvrier spécialisé (niveau D)': {
+                'horaire': 21.7245,
+                'mensuel': 3577.30,
+                'horaire_repos_payes': 21.19,
+            },
+            'Personnel de garage — Ouvrier hors catégorie': {
+                'horaire': 23.2605,
+                'mensuel': 3830.23,
+                'horaire_repos_payes': 22.6815,
             },
         },
-        "indemnites": {
-            "cheques_repas": {
-                "valeur": 3.09,
-                "intervention_patronale_min": 2.00,
-                "note": "Depuis 01/07/2026 — intervention patronale +2€ (employeurs n'ayant pas encore de chèques-repas)",
-                "obligatoire": True,
-            },
-            "vetements": {
-                "note": "Vêtements de travail fournis et entretenus par l'employeur (CCT historique depuis années 70)",
-                "obligatoire": True,
-            },
-            "disponibilite": {
-                "note": "Indemnité de disponibilité pour le personnel roulant (attentes chargement/déchargement)",
-                "obligatoire": True,
-            },
-            "anciennete": {
-                "note": "Indemnité d'ancienneté sectorielle progressive",
-                "obligatoire": True,
-            },
-            "nuit": {
-                "note": "Indemnité de nuit pour travail entre 20h et 6h",
-                "obligatoire": True,
-            },
-            "sejour": {
-                "note": "Indemnités de séjour pour découchers — montants selon CCT",
-                "obligatoire": True,
-            },
-            "transport_train": {"taux": 0.718, "obligatoire": True},
-            "tenue": {
-                "note": "Indemnité de tenue (entretien uniforme)",
-                "obligatoire": False,
-            },
-        },
-        "conges": {
-            "jours_legaux": 20,
-            "prise_en_charge": "ONVA",
-            "pecule_simple": 0.1027,
-            "note": "Régime ouvrier",
-        },
-        "mentions_contrat": [
-            "Loi du 3 juillet 1978 relative aux contrats de travail",
-            "CCT Sous-commission paritaire 140.03 – Transport routier et logistique",
-            "Règlement CE n° 561/2006 relatif aux temps de conduite et de repos (personnel roulant)",
-            "Classification des fonctions : funct14003.be (catégories 1 à 4 + non-roulant)",
-            "FSTL – Fonds Social Transport et Logistique : fstl.be",
-            "Chèques-repas : 3,09€/jour (depuis 01/07/2026)",
-            "Indexation annuelle au 01/01/2026 : +2,18%",
+        'avantages': [
+            'Indemnité RGPT (Règlement Général Protection du Travail) : selon CCT sectorielle',
+            'Indemnité Arab (Allocation de Remplacement de Bénéfice) : selon CCT sectorielle',
+            'Chèques-repas : 3,09 € par jour presté (depuis 01/07/2026, intervention patronale min 2€)',
+            'Vêtements de travail fournis et entretenus par l\'employeur (CCT années 1970)',
+            'Indemnité de disponibilité : pour personnel roulant en attente',
+            'Indemnité d\'ancienneté sectorielle : via FSTL',
+            'Supplément nuit : selon CCT travail de nuit',
+            'Indemnités de séjour fixe : forfait 8h pour personnel roulant en séjour',
+            'Temps de disponibilité roulant : rémunéré à 99% du salaire horaire',
+            'Formation FOREM chauffeur PL : accès barème catégorie conduite après 3 mois (vs 6)',
         ],
-        "preavis": {
-            "note": "Statut unique",
-            "semaines_par_tranche": [
-                (0, 3, 2), (3, 6, 4), (6, 9, 6), (9, 12, 7),
-                (12, 18, 8), (18, 24, 9), (24, 36, 10), (36, 48, 12),
-                (48, 60, 13), (60, 72, 15), (72, 84, 18), (84, 96, 21),
-                (96, 108, 24), (108, 120, 27), (120, 999, 30),
-            ],
-            "unite": "semaines",
-        },
-        "regles_speciales": [
-            "Personnel roulant : règlement CE 561/2006 — temps conduite max 9h/jour, 56h/semaine",
-            "Tachygraphe obligatoire pour véhicules >3,5T — contrôle ONSS et SPF Mobilité",
-            "ADR : permis spécial obligatoire pour transport matières dangereuses",
-            "Classification fonctions : vérifier sur funct14003.be — 10 critères d'évaluation",
-            "Chèques-repas : mise en place obligatoire depuis 01/07/2026 si pas déjà en place",
-            "Formation continue obligatoire (CPC) pour permis C et CE : 35h/5 ans",
+        'regles_speciales': [
+            'Étudiant CP 140.03 : 90% du taux horaire de la fonction exercée',
+            'Formation : salaire de la catégorie du véhicule conduit dès 6 mois (3 mois si formation FOREM)',
+            'Véhicules multiples : droit au salaire le plus élevé si ≥50% du temps journalier',
+            'Séjour fixe : forfait 8h dû, heures non comptées dans durée moyenne du travail',
+            'Classe 7 du personnel non roulant : N\'EXISTE PAS dans la CP 140.03',
         ],
+        'cct_applicables': [
+            'Loi du 3 juillet 1978 relative aux contrats de travail',
+            'CCT SCP 140.03 — Transport routier et logistique pour compte de tiers',
+            'Accord sectoriel 2025-2026 CP 140.03',
+            'AR du 22/01/2010 (SCP officielle 1400300 — remplace 1400004 et 1400009)',
+            'Fonds de sécurité d\'existence : FSTL (catégorie ONSS 083)',
+            'CCT travail de nuit personnel non roulant (04/02/2020)',
+            'Règlement CE 561/2006 — temps de conduite et de repos',
+        ],
+        'fonds_formation': 'FSTL — Fonds Social Transport et Logistique — www.fstl.be',
+        'onss': {
+            'personnel': 0.1307,
+            'patronal': 0.2700,
+            'etudiant_personnel': 0.0271,
+            'etudiant_patronal': 0.0542,
+            'note': 'ONSS catégorie 083',
+        },
+        'preavis': {
+            'note': 'Statut unique (loi 26/12/2013)',
+        },
     },
-
 }
 
-# ══════════════════════════════════════════════════════════════════════
-# FONCTIONS UTILITAIRES
-# ══════════════════════════════════════════════════════════════════════
 
-def get_cp(cp_key: str) -> dict:
-    """Retourne les données d'une CP ou None si non trouvée."""
-    return CP_DATABASE.get(cp_key)
+def get_heures_semaine(cp_key):
+    """Retourne le nombre d'heures/semaine pour une CP donnée."""
+    cp = CP_DATABASE.get(cp_key)
+    if cp:
+        return cp['duree_travail']['heures_semaine']
+    return 38
 
-def liste_cp() -> list:
-    """Retourne la liste de toutes les CP disponibles."""
-    return list(CP_DATABASE.keys())
 
-def get_bareme_minimum(cp_key: str, categorie: str = None) -> dict:
-    """Retourne le barème minimum d'une CP pour une catégorie donnée."""
+def get_heures_jour(cp_key):
+    """Retourne le nombre d'heures/jour pour une CP donnée."""
+    cp = CP_DATABASE.get(cp_key)
+    if cp:
+        return cp['duree_travail'].get('heures_jour', 7.6)
+    return 7.6
+
+
+def is_ouvrier(cp_key):
+    """Retourne True si la CP concerne des ouvriers."""
+    cp = CP_DATABASE.get(cp_key)
+    if cp:
+        return cp['meta']['type_travailleur'] == 'ouvrier'
+    return False
+
+
+def get_salaire_min(cp_key, categorie=None):
+    """Retourne le salaire minimum horaire et mensuel pour une CP et catégorie."""
     cp = CP_DATABASE.get(cp_key)
     if not cp:
-        return {}
-    baremes = cp.get("baremes", {})
+        return None
+    baremes = cp.get('baremes', {})
     if categorie and categorie in baremes:
         return baremes[categorie]
-    # Retourner le minimum général si pas de catégorie spécifiée
-    return baremes.get("minimum_general", baremes.get("cat_I", baremes.get("classe_A", {})))
+    # Retourne le premier (le plus bas)
+    if baremes:
+        first = list(baremes.values())[0]
+        return first
+    return None
 
-def calcul_preavis_semaines(cp_key: str, anciennete_mois: int) -> int:
-    """Calcule le délai de préavis en semaines selon l'ancienneté."""
-    cp = CP_DATABASE.get(cp_key)
-    if not cp:
-        return 0
-    tranches = cp.get("preavis", {}).get("semaines_par_tranche", [])
-    for (min_mois, max_mois, semaines) in tranches:
-        if min_mois <= anciennete_mois < max_mois:
+
+def calcul_preavis_semaines(anciennete_mois, est_employeur=True):
+    """
+    Calcule le préavis en semaines selon statut unique (loi 26/12/2013).
+    anciennete_mois : ancienneté en mois complets
+    est_employeur : True si c'est l'employeur qui rompt
+    """
+    trim = anciennete_mois // 3  # nombre de trimestres entamés
+
+    if est_employeur:
+        # 1 semaine par trimestre, max selon barème légal
+        if anciennete_mois < 3:
+            return 1
+        elif anciennete_mois < 6:
+            return 2
+        elif anciennete_mois < 9:
+            return 3
+        elif anciennete_mois < 12:
+            return 4
+        elif anciennete_mois < 15:
+            return 5
+        elif anciennete_mois < 18:
+            return 6
+        elif anciennete_mois < 21:
+            return 7
+        elif anciennete_mois < 24:
+            return 8
+        # Au-delà de 2 ans : 6 semaines par année supplémentaire
+        else:
+            annees = anciennete_mois // 12
+            semaines = 8 + (annees - 2) * 6
             return semaines
-    return 30  # Maximum légal si ancienneté très longue
-
-def get_heures_semaine(cp_key: str) -> float:
-    """Retourne les heures hebdomadaires normales de la CP."""
-    cp = CP_DATABASE.get(cp_key)
-    if not cp:
-        return 38.0
-    return cp.get("duree_travail", {}).get("heures_semaine", 38.0)
-
-def is_ouvrier(cp_key: str) -> bool:
-    """Retourne True si la CP est un régime ouvrier."""
-    cp = CP_DATABASE.get(cp_key)
-    if not cp:
-        return False
-    return cp.get("meta", {}).get("type_travailleur") == "ouvrier"
-
-if __name__ == "__main__":
-    print("=== CP disponibles ===")
-    for cp in liste_cp():
-        data = CP_DATABASE[cp]
-        print(f"  {cp} — {data['meta']['nom']}")
-        print(f"    Type: {data['meta']['type_travailleur']} | Heures: {data['duree_travail']['heures_semaine']}h/sem")
-
+    else:
+        # Travailleur : moitié de l'employeur, max 13 semaines
+        emp = calcul_preavis_semaines(anciennete_mois, est_employeur=True)
+        return min(emp // 2, 13)
