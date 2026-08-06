@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Dimona — {{ travailleur.prenom }} {{ travailleur.nom }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Dimona — {{ travailleur.prenom }} {{ travailleur.nom }}</h2>
+    <div class="breadcrumb">
+      <a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> ·
+      <a href="/travailleur/{{ travailleur.id }}">{{ travailleur.prenom }} {{ travailleur.nom }}</a> ·
+      Dimona
+    </div>
+  </div>
+  <div class="page-actions">
+    <a href="/travailleur/{{ travailleur.id }}/dimona/nouvelle" class="btn btn-primary">+ Enregistrer une Dimona</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3>Périodes Dimona enregistrées</h3></div>
+  <table class="data-table">
+    <thead>
+      <tr><th>Type</th><th>Début</th><th>Fin</th><th>Statut</th><th>Réf.</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+    {% for d in dimona_list %}
+    <tr>
+      <td><span class="badge badge-blue">{{ d.type_dimona }}</span></td>
+      <td>{{ d.date_debut.strftime('%d/%m/%Y') }}</td>
+      <td>{{ d.date_fin.strftime('%d/%m/%Y') if d.date_fin else 'En cours' }}</td>
+      <td><span class="badge badge-{% if d.statut == 'active' %}green{% else %}gray{% endif %}">{{ d.statut }}</span></td>
+      <td style="font-size:11px;color:var(--text-muted)">{{ d.numero_reference or '—' }}</td>
+      <td>
+        <a href="/dimona/{{ d.id }}/prestations" class="btn btn-secondary btn-xs">Prestations →</a>
+      </td>
+    </tr>
+    {% else %}
+    <tr class="empty"><td colspan="6">Aucune Dimona enregistrée — <a href="/travailleur/{{ travailleur.id }}/dimona/nouvelle" style="color:var(--accent)">Enregistrer la première</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

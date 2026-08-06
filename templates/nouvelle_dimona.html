@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Nouvelle Dimona — DuxSalary{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Enregistrer une Dimona</h2>
+    <div class="breadcrumb">
+      <a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> ·
+      <a href="/travailleur/{{ travailleur.id }}">{{ travailleur.prenom }} {{ travailleur.nom }}</a> ·
+      Nouvelle Dimona
+    </div>
+  </div>
+</div>
+
+<div class="card" style="max-width:600px">
+  <div class="card-header"><h3>Dimona pour {{ travailleur.prenom }} {{ travailleur.nom }}</h3></div>
+  <div class="card-body">
+    <div class="archive-notice">
+      ℹ️ Cette Dimona doit avoir été préalablement déclarée sur <strong>socialsecurity.be</strong>. Vous enregistrez ici une copie dans DuxSalary pour ouvrir la période de prestations.
+    </div>
+    <br>
+    <form method="POST">
+      <div class="form-grid">
+        <div>
+          <div class="form-group">
+            <label class="form-label">Type de Dimona *</label>
+            <select name="type_dimona" class="form-control" required>
+              <option value="CDI">CDI — Contrat à durée indéterminée</option>
+              <option value="CDD">CDD — Contrat à durée déterminée</option>
+              <option value="STU">STU — Étudiant jobiste</option>
+              <option value="FLX">FLX — Flexi-job</option>
+              <option value="OTH">OTH — Travailleur occasionnel</option>
+              <option value="EXT">EXT — Extra (horeca)</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">N° de référence Dimona</label>
+            <input type="text" name="numero_reference" class="form-control" placeholder="Référence ONSS (facultatif)">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Date de début *</label>
+            <input type="date" name="date_debut" class="form-control" required>
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Date de fin</label>
+            <input type="date" name="date_fin" class="form-control">
+            <div class="form-hint">Laisser vide pour CDI</div>
+          </div>
+        </div>
+        <div class="full">
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <input type="text" name="notes" class="form-control" placeholder="Informations complémentaires...">
+          </div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Enregistrer la Dimona</button>
+        <a href="/travailleur/{{ travailleur.id }}" class="btn btn-secondary">Annuler</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

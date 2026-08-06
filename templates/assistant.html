@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Assistant Juridique — DuxSalary{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Assistant Juridique</h2>
+    <div class="breadcrumb">Droit social belge — Commissions paritaires</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:220px 1fr;gap:16px;height:calc(100vh - 160px)">
+
+  <!-- Sidebar CP -->
+  <div class="card" style="padding:14px;overflow-y:auto">
+    <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Commission paritaire</div>
+    {% for cp in cps %}
+    <div onclick="setCP('{{ cp.key }}')" id="btn_{{ cp.key|replace(' ','_')|replace('.','_') }}"
+         style="padding:8px 10px;border-radius:6px;cursor:pointer;margin-bottom:4px;font-size:12px;border:1px solid transparent;transition:all 0.15s">
+      <div style="font-weight:600;color:var(--primary)">{{ cp.key }}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:1px">{{ cp.secteur }}</div>
+    </div>
+    {% endfor %}
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Thèmes rapides</div>
+      {% for theme in themes %}
+      <div onclick="addTheme('{{ theme }}')"
+           style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text-muted);transition:all 0.15s"
+           onmouseover="this.style.background='var(--neutral)'" onmouseout="this.style.background=''">
+        {{ theme }}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Chat -->
+  <div class="card" style="display:flex;flex-direction:column;padding:0;overflow:hidden">
+    <div id="messages" style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px">
+      <div style="background:var(--accent-light);border-radius:10px;padding:14px 16px;max-width:85%;font-size:13px;line-height:1.6">
+        <b>Assistant DuxSalary</b><br><br>
+        Bonjour ! Je suis votre assistant en droit social belge.<br><br>
+        Je peux vous aider sur : salaires minimums, barèmes CP, calcul ONSS et précompte, règles CDI/CDD, indemnités et primes, obligations légales employeur, Dimona, DmfA, Belcotax.<br><br>
+        Sélectionnez une CP à gauche ou posez directement votre question.
+      </div>
+    </div>
+    <div style="padding:14px 16px;border-top:1px solid var(--border);display:flex;gap:10px;background:#fafbfc">
+      <input id="question" type="text" placeholder="Posez votre question juridique..."
+             style="flex:1;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"
+             onkeydown="if(event.key==='Enter')envoyer()">
+      <button onclick="envoyer()"
+              style="padding:10px 20px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+        Envoyer
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+let cpActif = '';
+
+function setCP(key) {
+  cpActif = key;
+  document.querySelectorAll('[id^="btn_"]').forEach(el => {
+    el.style.background = '';
+    el.style.borderColor = 'transparent';
+  });
+  const id = 'btn_' + key.replace(/ /g,'_').replace(/\./g,'_');
+  const btn = document.getElementById(id);
+  if (btn) { btn.style.background='var(--accent-light)'; btn.style.borderColor='var(--accent)'; }
+  document.getElementById('question').placeholder = `Question sur ${key}...`;
+  document.getElementById('question').focus();
+}
+
+function addTheme(theme) {
+  const q = document.getElementById('question');
+  q.value = theme + (cpActif ? ` (${cpActif})` : '') + ' : ';
+  q.focus();
+}
+
+function addMessage(text, isUser) {
+  const div = document.createElement('div');
+  div.style.cssText = isUser
+    ? 'background:#1F4E79;color:white;border-radius:10px;padding:12px 16px;max-width:80%;align-self:flex-end;font-size:13px;line-height:1.6;margin-left:auto'
+    : 'background:var(--accent-light);border-radius:10px;padding:14px 16px;max-width:88%;font-size:13px;line-height:1.6';
+  div.innerHTML = text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>');
+  document.getElementById('messages').appendChild(div);
+  div.scrollIntoView({behavior:'smooth'});
+  return div;
+}
+
+function envoyer() {
+  const q = document.getElementById('question');
+  const question = q.value.trim();
+  if (!question) return;
+  addMessage(question, true);
+  q.value = '';
+  const loading = addMessage('⏳ Analyse en cours...', false);
+  fetch('/assistant/question', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({question, cp: cpActif})
+  })
+  .then(r => r.json())
+  .then(data => { loading.remove(); addMessage(data.reponse, false); })
+  .catch(() => { loading.innerHTML = 'Erreur. Veuillez réessayer.'; });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Nouveau dossier — DuxSalary{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Nouveau dossier client</h2>
+    <div class="breadcrumb"><a href="/dossiers">Dossiers</a> · Nouveau</div>
+  </div>
+</div>
+
+<div class="card" style="max-width:700px">
+  <div class="card-header"><h3>Informations du dossier</h3></div>
+  <div class="card-body">
+    <form method="POST">
+      <div class="form-grid">
+        <div class="full">
+          <div class="form-group">
+            <label class="form-label">Nom de la société *</label>
+            <input type="text" name="nom" class="form-control" required>
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Numéro BCE</label>
+            <input type="text" name="bce" class="form-control" placeholder="0XXX.XXX.XXX">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">N° RSZ / ONSS</label>
+            <input type="text" name="rsz" class="form-control" placeholder="XXXXXXX-XX">
+          </div>
+        </div>
+        <div class="full">
+          <div class="form-group">
+            <label class="form-label">Adresse siège social</label>
+            <input type="text" name="adresse" class="form-control" placeholder="Rue, N°, Code postal, Commune">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Téléphone</label>
+            <input type="text" name="telephone" class="form-control" placeholder="+32...">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Commission paritaire principale</label>
+            <select name="cp_principale" class="form-control">
+              <option value="CP 336">CP 336 – Professions libérales</option>
+              <option value="CP 200">CP 200 – Auxiliaire employés / IT</option>
+              <option value="CP 302">CP 302 – Horeca</option>
+              <option value="CP 124">CP 124 – Construction</option>
+              <option value="CP 121">CP 121 – Nettoyage</option>
+              <option value="CP 140.03">CP 140.03 – Transport</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Représentant légal</label>
+            <input type="text" name="representant" class="form-control" placeholder="Prénom NOM, fonction">
+          </div>
+        </div>
+        <div class="full">
+          <div class="form-group">
+            <label class="form-label">Assurance accidents du travail</label>
+            <input type="text" name="assurance_at" class="form-control" placeholder="Ex: Ethias – Police n° 45.678.901">
+          </div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Créer le dossier</button>
+        <a href="/dossiers" class="btn btn-secondary">Annuler</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

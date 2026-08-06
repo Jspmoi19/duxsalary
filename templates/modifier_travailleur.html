@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Modifier travailleur — DuxSalary{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Modifier — {{ travailleur.prenom }} {{ travailleur.nom }}</h2>
+    <div class="breadcrumb"><a href="/dossier/{{ travailleur.dossier_id }}">Dossier</a> · <a href="/travailleur/{{ travailleur.id }}">{{ travailleur.prenom }} {{ travailleur.nom }}</a> · Modifier</div>
+  </div>
+</div>
+
+<div class="card" style="max-width:700px">
+  <div class="card-header"><h3>Informations du travailleur</h3></div>
+  <div class="card-body">
+    <form method="POST">
+      <div class="form-grid">
+        <div>
+          <div class="form-group">
+            <label class="form-label">Prénom *</label>
+            <input type="text" name="prenom" class="form-control" value="{{ travailleur.prenom }}" required>
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Nom *</label>
+            <input type="text" name="nom" class="form-control" value="{{ travailleur.nom }}" required>
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">NISS</label>
+            <input type="text" name="niss" class="form-control" value="{{ travailleur.niss or '' }}">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Date de naissance</label>
+            <input type="text" name="date_naissance" class="form-control" value="{{ travailleur.date_naissance.strftime('%d/%m/%Y') if travailleur.date_naissance else '' }}">
+          </div>
+        </div>
+        <div class="full">
+          <div class="form-group">
+            <label class="form-label">Adresse</label>
+            <input type="text" name="adresse" class="form-control" value="{{ travailleur.adresse or '' }}">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">IBAN</label>
+            <input type="text" name="iban" class="form-control" value="{{ travailleur.iban or '' }}">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control" value="{{ travailleur.email or '' }}">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Téléphone</label>
+            <input type="text" name="telephone" class="form-control" value="{{ travailleur.telephone or '' }}">
+          </div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+        <a href="/travailleur/{{ travailleur.id }}" class="btn btn-secondary">Annuler</a>
+        <form method="POST" action="/travailleur/{{ travailleur.id }}/supprimer" style="margin-left:auto" onsubmit="return confirm('Supprimer ce travailleur ?')">
+          <button type="submit" class="btn btn-danger">Supprimer</button>
+        </form>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

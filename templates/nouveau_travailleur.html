@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Nouveau travailleur — DuxSalary{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Nouveau travailleur</h2>
+    <div class="breadcrumb"><a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> · Nouveau travailleur</div>
+  </div>
+</div>
+
+<div class="card" style="max-width:700px">
+  <div class="card-header"><h3>Informations du travailleur</h3></div>
+  <div class="card-body">
+    <form method="POST">
+      <div class="form-grid">
+        <div>
+          <div class="form-group">
+            <label class="form-label">Prénom *</label>
+            <input type="text" name="prenom" class="form-control" required {% if prefill_prenom %}value="{{ prefill_prenom }}"{% endif %}>
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Nom *</label>
+            <input type="text" name="nom" class="form-control" required {% if prefill_nom %}value="{{ prefill_nom }}"{% endif %}>
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">N° Registre national (NISS)</label>
+            <input type="text" name="niss" class="form-control" placeholder="XX.XX.XX-XXX.XX">
+            <div class="form-hint">Sur la carte d'identité</div>
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Date de naissance</label>
+            <input type="text" name="date_naissance" class="form-control" placeholder="JJ/MM/AAAA">
+          </div>
+        </div>
+        <div class="full">
+          <div class="form-group">
+            <label class="form-label">Adresse complète</label>
+            <input type="text" name="adresse" class="form-control" placeholder="Rue, N°, Code postal, Commune">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">IBAN</label>
+            <input type="text" name="iban" class="form-control" placeholder="BE...">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Téléphone</label>
+            <input type="text" name="telephone" class="form-control" placeholder="+32...">
+          </div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+        <a href="/dossier/{{ dossier.id }}" class="btn btn-secondary">Annuler</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

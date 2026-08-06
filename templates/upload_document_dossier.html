@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Ajouter un document — {{ dossier.nom }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Ajouter un document au dossier</h2>
+    <div class="breadcrumb"><a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> · Documents</div>
+  </div>
+</div>
+
+<div class="card" style="max-width:600px">
+  <div class="card-header"><h3>Document général — {{ dossier.nom }}</h3></div>
+  <div class="card-body">
+    <form method="POST" enctype="multipart/form-data">
+      <div class="form-group">
+        <label class="form-label">Type de document</label>
+        <select name="type_document" class="form-control">
+          <option value="statuts">Statuts de la société</option>
+          <option value="bce_extrait">Extrait BCE</option>
+          <option value="rsz_document">Document RSZ/ONSS</option>
+          <option value="contrat_general">Contrat général</option>
+          <option value="police_at">Police assurance accidents travail</option>
+          <option value="reglement_travail">Règlement de travail</option>
+          <option value="onss_avis">Avis de paiement ONSS</option>
+          <option value="autre">Autre</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nom du document *</label>
+        <input type="text" name="nom" class="form-control" placeholder="Ex: Statuts SPRL Dupont (2024)" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fichier *</label>
+        <label class="upload-zone" for="file_input">
+          <div style="font-size:32px;margin-bottom:8px;color:var(--text-muted)">📎</div>
+          <p>Cliquez pour sélectionner un fichier</p>
+          <p style="font-size:11px;margin-top:4px;color:var(--text-muted)">PDF, JPG, PNG — max 10 MB</p>
+          <input type="file" id="file_input" name="fichier" accept=".pdf,.jpg,.jpeg,.png" required
+                 onchange="document.getElementById('fname').textContent = this.files[0]?.name || ''">
+        </label>
+        <div id="fname" style="font-size:12px;color:var(--accent);margin-top:6px;font-weight:500"></div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+        <a href="/dossier/{{ dossier.id }}" class="btn btn-secondary">Annuler</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

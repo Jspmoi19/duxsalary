@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}DuxSalary{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+{% if session.user_id %}
+<header class="app-header">
+  <a href="/dossiers" class="app-logo">Dux<span>Salary</span></a>
+  
+  <div class="dossier-select-wrap">
+    <select class="dossier-select" onchange="naviguerDossier(this.value)">
+      <option value="">— Sélectionner un dossier —</option>
+      {% for d in tous_les_dossiers %}
+        {% if d.statut != 'archive' %}
+        <option value="{{ d.id }}" {% if dossier_actif and dossier_actif.id == d.id %}selected{% endif %}>
+          {{ d.nom }}
+        </option>
+        {% endif %}
+      {% endfor %}
+      {% if dossiers_archives %}
+      <option disabled>──────────────</option>
+      <option disabled>📁 ARCHIVÉS</option>
+      {% for d in dossiers_archives %}
+      <option value="{{ d.id }}">  {{ d.nom }}</option>
+      {% endfor %}
+      {% endif %}
+    </select>
+  </div>
+
+  <div class="header-spacer"></div>
+
+  <div class="header-user">
+    <span>{{ session.user_nom }}</span>
+    <a href="/logout">Déconnexion</a>
+  </div>
+</header>
+{% endif %}
+
+<div class="app-body">
+  {% block content %}{% endblock %}
+</div>
+
+<script>
+function naviguerDossier(id) {
+  if (id) window.location.href = '/dossier/' + id;
+}
+{% block scripts %}{% endblock %}
+</script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>PayrollTool – Contrat généré</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #333; }
+header { background: #1F4E79; color: white; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; }
+header h1 { font-size: 18px; font-weight: 700; }
+header a { color: #90caf9; font-size: 13px; text-decoration: none; }
+.container { max-width: 820px; margin: 24px auto; padding: 0 20px; }
+.banner { background: #0F6E56; color: white; padding: 18px 24px; border-radius: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 14px; }
+.banner .icon { font-size: 28px; }
+.banner h2 { font-size: 16px; margin-bottom: 3px; }
+.banner p { font-size: 12px; opacity: 0.85; }
+.card { background: white; border-radius: 10px; padding: 22px 26px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+.card h2 { font-size: 13px; font-weight: 700; color: #1F4E79; border-left: 4px solid #1F4E79; padding-left: 10px; margin-bottom: 16px; text-transform: uppercase; }
+.dl-btn { display: flex; align-items: center; gap: 12px; padding: 13px 18px; background: #1F4E79; color: white; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+.dl-btn:hover { background: #163d60; }
+.dl-btn .sub { font-size: 11px; opacity: 0.8; font-weight: 400; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+tr { border-bottom: 1px solid #f0f0f0; }
+td { padding: 7px 4px; }
+td:first-child { color: #666; width: 50%; }
+td:last-child { font-weight: 600; }
+ul { list-style: none; }
+li { padding: 7px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; display: flex; align-items: center; gap: 10px; }
+li:last-child { border: none; }
+.check { color: #0F6E56; }
+.todo { color: #e67e22; }
+.back { display: inline-block; padding: 10px 18px; background: white; color: #1F4E79; text-decoration: none; border-radius: 8px; font-size: 13px; font-weight: 600; border: 1.5px solid #1F4E79; margin-top: 6px; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+.badge-cdi { background: #e3f2fd; color: #1F4E79; }
+.badge-cdd { background: #fff3e0; color: #e65100; }
+.badge-ouvrier { background: #fce4ec; color: #880e4f; }
+.badge-employe { background: #e8f5e9; color: #1b5e20; }
+</style>
+</head>
+<body>
+<header>
+    <h1>{{ profil.icon }} {{ profil.nom }} – Contrat généré</h1>
+    <a href="/profil/{{ profil_id }}">← Dashboard</a>
+</header>
+<div class="container">
+
+    <div class="banner">
+        <div class="icon">✅</div>
+        <div>
+            <h2>Contrat {{ type_contrat }} généré avec succès</h2>
+            <p>{{ data.nom_travailleur }} — {{ data.fonction }} — {{ data.cp_key }} — depuis le {{ data.date_debut }}</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📄 Télécharger</h2>
+        <a href="/download/{{ filename }}" class="dl-btn">
+            <span>⬇️</span>
+            <div>Contrat {{ type_contrat }} – {{ data.nom_travailleur }}<div class="sub">{{ data.cp_key }} | {{ data.fonction }} | {{ data.salaire_horaire }} €/h</div></div>
+        </a>
+    </div>
+
+    <div class="card">
+        <h2>📊 Récapitulatif</h2>
+        <table>
+            <tr><td>Type de contrat</td><td><span class="badge badge-{{ type_contrat|lower }}">{{ type_contrat }}</span></td></tr>
+            <tr><td>Statut</td><td><span class="badge badge-{{ 'ouvrier' if ouvrier else 'employe' }}">{{ 'Ouvrier' if ouvrier else 'Employé(e)' }}</span></td></tr>
+            <tr><td>Commission paritaire</td><td>{{ data.cp_key }}</td></tr>
+            <tr><td>Travailleur</td><td>{{ data.nom_travailleur }}</td></tr>
+            <tr><td>Fonction / Catégorie</td><td>{{ data.fonction }} — {{ data.categorie }}</td></tr>
+            <tr><td>Salaire horaire brut</td><td>{{ data.salaire_horaire }} €/h</td></tr>
+            {% if data.salaire_mensuel %}<tr><td>Salaire mensuel brut</td><td>{{ data.salaire_mensuel }} €/mois</td></tr>{% endif %}
+            <tr><td>Durée hebdomadaire</td><td>{{ heures_sem }}h/semaine</td></tr>
+            <tr><td>Date d'entrée</td><td>{{ data.date_debut }}</td></tr>
+            {% if data.date_fin and type_contrat == 'CDD' %}<tr><td>Date de fin (CDD)</td><td>{{ data.date_fin }}</td></tr>{% endif %}
+            <tr><td>Préavis initial (0-3 mois)</td><td>{{ preavis }} semaines (employeur)</td></tr>
+            <tr><td>Pécule vacances</td><td>{{ 'ONVA (~10,27% brut déclaré)' if ouvrier else 'À charge employeur (8,92% simple + double mois)' }}</td></tr>
+        </table>
+    </div>
+
+    {% if cp_info.regles_speciales %}
+    <div class="card">
+        <h2>⚠️ Points d'attention — {{ data.cp_key }}</h2>
+        <ul>
+        {% for regle in cp_info.regles_speciales[:5] %}
+            <li><span class="todo">!</span> {{ regle }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <h2>✅ Checklist post-signature</h2>
+        <ul>
+            <li><span class="check">✅</span> Contrat signé en 2 exemplaires — 1 pour l'employeur, 1 pour le travailleur</li>
+            <li><span class="todo">⏳</span> Dimona entrée → déclarer AVANT le premier jour de travail (socialsecurity.be)</li>
+            <li><span class="todo">⏳</span> Règlement de travail → remettre un exemplaire signé au travailleur</li>
+            {% if ouvrier %}
+            <li><span class="todo">⏳</span> Constructiv / ONVA → vérifier affiliations si secteur construction ou nettoyage</li>
+            {% endif %}
+            {% if '124' in data.cp_key %}
+            <li><span class="todo">⏳</span> Constructiv → déclaration timbres-fidélité obligatoire (constructiv.be)</li>
+            {% endif %}
+            {% if '302' in data.cp_key %}
+            <li><span class="todo">⏳</span> Fonds Horeca → vérifier affiliation (fondshoreca.be)</li>
+            {% endif %}
+            <li><span class="todo">⏳</span> Assurance accidents du travail → confirmer couverture avec {{ data.assurance_at }}</li>
+            <li><span class="todo">⏳</span> DmfA → déclaration trimestrielle à l'ONSS (dernier jour du mois suivant le trimestre)</li>
+        </ul>
+    </div>
+
+    <a href="/nouveau-contrat-cdi-cdd" class="back">← Nouveau contrat</a>
+    &nbsp;
+    <a href="/profil/{{ profil_id }}" class="back">🏠 Dashboard</a>
+</div>
+</body>
+</html>

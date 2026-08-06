@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ travailleur.prenom }} {{ travailleur.nom }} — DuxSalary{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>{{ travailleur.prenom }} {{ travailleur.nom }}</h2>
+    <div class="breadcrumb">
+      <a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> · Fiche travailleur
+    </div>
+  </div>
+  <div class="page-actions">
+    <a href="/travailleur/{{ travailleur.id }}/modifier" class="btn btn-secondary">Modifier</a>
+  </div>
+</div>
+
+<!-- INFO TRAVAILLEUR -->
+<div class="card">
+  <div class="worker-header" style="display:flex;align-items:center;gap:16px;padding:18px;">
+    <div class="worker-avatar" style="width:52px;height:52px;font-size:20px;">{{ travailleur.prenom[0] }}{{ travailleur.nom[0] }}</div>
+    <div>
+      <div style="font-size:18px;font-weight:600">{{ travailleur.prenom }} {{ travailleur.nom }}</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+        NISS : {{ travailleur.niss or '—' }} · 
+        Né(e) le : {{ travailleur.date_naissance.strftime('%d/%m/%Y') if travailleur.date_naissance else '—' }}
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIONS RAPIDES depuis la fiche -->
+  <div style="display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--border);background:#fafbfc;">
+    <a href="/dossier/{{ dossier.id }}/contrat/nouveau?travailleur_id={{ travailleur.id }}" class="btn btn-primary btn-sm">+ Contrat</a>
+    <a href="/travailleur/{{ travailleur.id }}/dimona" class="btn btn-secondary btn-sm">Dimona / Prestations</a>
+    <a href="/dossier/{{ dossier.id }}/fiche/nouvelle?travailleur_id={{ travailleur.id }}" class="btn btn-secondary btn-sm">+ Fiche de paie</a>
+    <a href="/travailleur/{{ travailleur.id }}/document/ajouter" class="btn btn-secondary btn-sm">+ Document</a>
+    <a href="/travailleur/{{ travailleur.id }}/modifier" class="btn btn-secondary btn-sm">Modifier</a>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs" style="padding:0 18px;border-top:1px solid var(--border);">
+    <a href="?tab=info" class="tab-link {% if tab == 'info' %}active{% endif %}">Informations</a>
+    <a href="?tab=contrats" class="tab-link {% if tab == 'contrats' %}active{% endif %}">Contrats ({{ contrats|length }})</a>
+    <a href="?tab=fiches" class="tab-link {% if tab == 'fiches' %}active{% endif %}">Fiches de paie ({{ fiches|length }})</a>
+    <a href="?tab=documents" class="tab-link {% if tab == 'documents' %}active{% endif %}">Documents ({{ documents|length }})</a>
+  </div>
+
+  <!-- TAB CONTENT -->
+  {% if tab == 'info' %}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:20px;gap:20px;">
+    <div>
+      <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:12px">Informations personnelles</div>
+      {% for label, val in [
+        ('Prénom', travailleur.prenom),
+        ('Nom', travailleur.nom),
+        ('NISS', travailleur.niss or '—'),
+        ('Date de naissance', travailleur.date_naissance.strftime('%d/%m/%Y') if travailleur.date_naissance else '—'),
+        ('Adresse', travailleur.adresse or '—'),
+        ('Email', travailleur.email or '—'),
+        ('Téléphone', travailleur.telephone or '—'),
+      ] %}
+      <div style="display:flex;padding:7px 0;border-bottom:1px solid #f0f2f5;font-size:13px;">
+        <span style="color:var(--text-muted);width:140px;flex-shrink:0">{{ label }}</span>
+        <span style="font-weight:500">{{ val }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:12px">Données bancaires</div>
+      {% for label, val in [
+        ('IBAN', travailleur.iban or '—'),
+      ] %}
+      <div style="display:flex;padding:7px 0;border-bottom:1px solid #f0f2f5;font-size:13px;">
+        <span style="color:var(--text-muted);width:140px;flex-shrink:0">{{ label }}</span>
+        <span style="font-weight:500">{{ val }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% elif tab == 'contrats' %}
+  <div class="section-header">
+    <h4>Contrats</h4>
+    <a href="/dossier/{{ dossier.id }}/contrat/nouveau?travailleur_id={{ travailleur.id }}" class="btn btn-primary btn-sm">+ Nouveau contrat</a>
+  </div>
+  <table class="data-table">
+    <thead><tr><th>Type</th><th>CP</th><th>Fonction</th><th>Salaire</th><th>Début</th><th>Fin</th><th>PDF</th></tr></thead>
+    <tbody>
+    {% for c in contrats %}
+    <tr>
+      <td><span class="badge badge-{% if c.type_contrat == 'CDI' %}blue{% elif c.type_contrat == 'CDD' %}orange{% else %}purple{% endif %}">{{ c.type_contrat }}</span></td>
+      <td>{{ c.cp_key }}</td>
+      <td>{{ c.fonction or '—' }}</td>
+      <td>{{ c.salaire_horaire }} €/h</td>
+      <td>{{ c.date_debut }}</td>
+      <td>{{ c.date_fin or 'En cours' }}</td>
+      <td>{% if c.pdf_path %}<a href="/download/{{ c.pdf_path|basename }}" class="btn btn-secondary btn-xs">⬇ PDF</a>{% else %}—{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr class="empty"><td colspan="7">Aucun contrat — <a href="/dossier/{{ dossier.id }}/contrat/nouveau?travailleur_id={{ travailleur.id }}" style="color:var(--accent)">Créer un contrat</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  {% elif tab == 'fiches' %}
+  <div class="section-header">
+    <h4>Fiches de paie</h4>
+    <a href="/dossier/{{ dossier.id }}/fiche/nouvelle?travailleur_id={{ travailleur.id }}" class="btn btn-primary btn-sm">+ Nouvelle fiche</a>
+  </div>
+  <table class="data-table">
+    <thead><tr><th>Période</th><th>Brut</th><th>Net</th><th>ONSS</th><th>PDF</th></tr></thead>
+    <tbody>
+    {% for f in fiches %}
+    <tr>
+      <td>{{ f.periode_debut }} → {{ f.periode_fin }}</td>
+      <td>{{ f.salaire_brut }} €</td>
+      <td>{{ f.salaire_net }} €</td>
+      <td>{{ f.total_onss }} €</td>
+      <td>{% if f.pdf_path %}<a href="/download/{{ f.pdf_path|basename }}" class="btn btn-secondary btn-xs">⬇ PDF</a>{% else %}—{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr class="empty"><td colspan="5">Aucune fiche de paie</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  {% elif tab == 'documents' %}
+  <div class="section-header">
+    <h4>Documents</h4>
+    <a href="/travailleur/{{ travailleur.id }}/document/ajouter" class="btn btn-primary btn-sm">+ Ajouter</a>
+  </div>
+  {% if documents %}
+    {% for doc in documents %}
+    <div class="doc-row">
+      <span style="font-size:20px">📄</span>
+      <span class="doc-name">{{ doc.nom }}</span>
+      <span class="doc-meta">{{ doc.type_document or '—' }} · {{ doc.uploaded_at.strftime('%d/%m/%Y') }}</span>
+      <a href="/document/{{ doc.id }}/download" class="btn btn-secondary btn-xs">⬇ Télécharger</a>
+    </div>
+    {% endfor %}
+  {% else %}
+  <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
+    Aucun document — <a href="/travailleur/{{ travailleur.id }}/document/ajouter" style="color:var(--accent)">Ajouter le premier</a>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Dossiers — DuxSalary{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Dossiers clients</h2>
+    <div class="breadcrumb">{{ dossiers|length }} dossier(s) actif(s)</div>
+  </div>
+  <div class="page-actions">
+    <a href="/dossier/nouveau" class="btn btn-primary">+ Nouveau dossier</a>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
+  {% for d in dossiers %}
+  <a href="/dossier/{{ d.id }}" style="text-decoration:none">
+    <div class="card" style="padding:18px;transition:box-shadow 0.15s;cursor:pointer;" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)'" onmouseout="this.style.boxShadow=''">
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">{{ d.nom }}</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">BCE : {{ d.bce or '—' }} · {{ d.cp_principale or '—' }}</div>
+      <div style="display:flex;gap:8px;">
+        <span class="badge badge-blue">{{ d.nb_travailleurs }} travailleur(s)</span>
+        <span class="badge badge-gray">{{ d.nb_contrats_actifs }} contrat(s)</span>
+      </div>
+    </div>
+  </a>
+  {% else %}
+  <div class="card" style="padding:48px;text-align:center;grid-column:1/-1">
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Aucun dossier client pour le moment.</div>
+    <a href="/dossier/nouveau" class="btn btn-primary">Créer le premier dossier</a>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

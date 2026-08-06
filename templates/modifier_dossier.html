@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Modifier dossier — DuxSalary{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Modifier — {{ dossier.nom }}</h2>
+    <div class="breadcrumb"><a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> · Modifier</div>
+  </div>
+</div>
+
+<div class="card" style="max-width:700px">
+  <div class="card-header"><h3>Informations du dossier</h3></div>
+  <div class="card-body">
+    <form method="POST">
+      <div class="form-grid">
+        <div class="full">
+          <div class="form-group">
+            <label class="form-label">Nom de la société *</label>
+            <input type="text" name="nom" class="form-control" value="{{ dossier.nom }}" required>
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">BCE</label>
+            <input type="text" name="bce" class="form-control" value="{{ dossier.bce or '' }}">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">N° RSZ</label>
+            <input type="text" name="rsz" class="form-control" value="{{ dossier.rsz or '' }}">
+          </div>
+        </div>
+        <div class="full">
+          <div class="form-group">
+            <label class="form-label">Adresse</label>
+            <input type="text" name="adresse" class="form-control" value="{{ dossier.adresse or '' }}">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control" value="{{ dossier.email or '' }}">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Téléphone</label>
+            <input type="text" name="telephone" class="form-control" value="{{ dossier.telephone or '' }}">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">CP principale</label>
+            <select name="cp_principale" class="form-control">
+              {% for cp in ['CP 336','CP 200','CP 302','CP 124','CP 121','CP 140.03'] %}
+              <option value="{{ cp }}" {% if dossier.cp_principale == cp %}selected{% endif %}>{{ cp }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Représentant légal</label>
+            <input type="text" name="representant" class="form-control" value="{{ dossier.representant or '' }}">
+          </div>
+        </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">Date activation RSZ (1ère Dimona)</label>
+            <input type="date" name="date_activation_rsz" class="form-control" value="{{ dossier.date_activation_rsz.strftime('%Y-%m-%d') if dossier.date_activation_rsz else '' }}">
+            <div class="form-hint">Date à laquelle vous avez introduit votre 1ère Dimona</div>
+          </div>
+        </div>
+        <div class="full">
+          <div class="form-group">
+            <label class="form-label">Assurance accidents du travail</label>
+            <input type="text" name="assurance_at" class="form-control" value="{{ dossier.assurance_at or '' }}">
+          </div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+        <a href="/dossier/{{ dossier.id }}" class="btn btn-secondary">Annuler</a>
+      </div>
+    </form>
+
+    <hr style="margin:24px 0;border:none;border-top:1px solid var(--border)">
+    <div class="archive-notice">
+      ⚠️ <strong>Obligation légale</strong> — La législation belge (art. 30 L. 16/05/2003 et Code des sociétés) impose la conservation des documents sociaux pendant minimum 7 ans. L'archivage est irréversible.
+    </div>
+    <form method="POST" action="/dossier/{{ dossier.id }}/archiver" onsubmit="return confirm('Archiver ce dossier ? Il sera en lecture seule et inaccessible depuis la liste principale. Cette action est conforme à vos obligations légales de conservation.')">
+      <button type="submit" class="btn btn-secondary" style="color:#7a4000;border-color:#e0c060">Archiver ce dossier</button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

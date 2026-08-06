@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ dossier.nom }} — DuxSalary{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>{{ dossier.nom }}</h2>
+    <div class="breadcrumb">BCE : {{ dossier.bce or '—' }} · RSZ : {{ dossier.rsz or '—' }} · {{ dossier.cp_principale or '—' }}</div>
+  </div>
+  <div class="page-actions">
+    <a href="/dossier/{{ dossier.id }}/travailleur/nouveau" class="btn btn-secondary">+ Travailleur</a>
+    <a href="/dossier/{{ dossier.id }}/contrat/nouveau" class="btn btn-primary">+ Contrat</a>
+    <a href="/dossier/{{ dossier.id }}/modifier" class="btn btn-secondary">Modifier</a>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="dashboard-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{ travailleurs|length }}</div>
+    <div class="stat-label">Travailleur(s) actif(s)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ contrats|length }}</div>
+    <div class="stat-label">Contrat(s) en cours</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ fiches|length }}</div>
+    <div class="stat-label">Fiche(s) de paie</div>
+  </div>
+</div>
+
+<div class="two-col">
+
+  <!-- ALERTES -->
+  <div>
+    <div class="card">
+      <div class="card-header"><h3>⚠️ Échéances et obligations</h3></div>
+      <div class="card-body">
+        {% if alertes %}
+          {% for a in alertes %}
+          <div class="alert-item alert-{{ a.niveau }}">
+            <span>{{ a.message }}</span>
+            <span class="alert-date">{{ a.date }}</span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p style="color:var(--text-muted);font-size:13px">Aucune échéance urgente.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIONS RAPIDES -->
+  <div>
+    <div class="card">
+      <div class="card-header"><h3>Actions rapides</h3></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
+        <a href="/dossier/{{ dossier.id }}/travailleur/nouveau" class="btn btn-secondary" style="justify-content:flex-start;">+ Nouveau travailleur</a>
+        <a href="/dossier/{{ dossier.id }}/contrat/nouveau" class="btn btn-secondary" style="justify-content:flex-start;">+ Nouveau contrat</a>
+        <a href="/dossier/{{ dossier.id }}/fiche/nouvelle" class="btn btn-secondary" style="justify-content:flex-start;">+ Nouvelle fiche de paie</a>
+        <a href="/dossier/{{ dossier.id }}?tab=documents" class="btn btn-secondary" style="justify-content:flex-start;">+ Ajouter un document</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TRAVAILLEURS -->
+<div class="card">
+  <div class="card-header">
+    <h3>Travailleurs</h3>
+    <a href="/dossier/{{ dossier.id }}/travailleur/nouveau" class="btn btn-secondary btn-sm">+ Ajouter</a>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr><th>Nom</th><th>NISS</th><th>Fonction</th><th>Contrat</th><th>CP</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for t in travailleurs %}
+      <tr>
+        <td>
+          <div class="worker-row">
+            <div class="worker-avatar">{{ t.prenom[0] }}{{ t.nom[0] }}</div>
+            <div>
+              <div style="font-weight:500">{{ t.prenom }} {{ t.nom }}</div>
+              <div style="font-size:11px;color:var(--text-muted)">{{ t.email or '' }}</div>
+            </div>
+          </div>
+        </td>
+        <td>{{ t.niss or '—' }}</td>
+        <td>{{ t.fonction or '—' }}</td>
+        <td>
+          {% if t.type_contrat %}
+          <span class="badge badge-{% if t.type_contrat == 'CDI' %}blue{% elif t.type_contrat == 'CDD' %}orange{% else %}purple{% endif %}">{{ t.type_contrat }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ t.cp_key or '—' }}</td>
+        <td style="text-align:right">
+          <a href="/travailleur/{{ t.id }}" class="btn btn-secondary btn-xs">Ouvrir →</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr class="empty"><td colspan="6">Aucun travailleur — <a href="/dossier/{{ dossier.id }}/travailleur/nouveau" style="color:var(--accent)">Ajouter le premier</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

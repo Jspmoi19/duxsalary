@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>DuxSalary – Nouvelle fiche de paie</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #333; }
+header { background: #1F4E79; color: white; padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; }
+.logo { font-size: 20px; font-weight: 800; }
+.logo span { color: #4fc3f7; }
+.user-bar a { color: #90caf9; text-decoration: none; font-size: 13px; }
+.container { max-width: 700px; margin: 28px auto; padding: 0 24px; }
+.breadcrumb { font-size: 13px; color: #888; margin-bottom: 16px; }
+.breadcrumb a { color: #1F4E79; text-decoration: none; }
+.card { background: white; border-radius: 12px; padding: 28px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+.card h2 { font-size: 16px; font-weight: 700; color: #1F4E79; margin-bottom: 20px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.full { grid-column: 1/-1; }
+label { display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase; }
+input, select { width: 100%; padding: 9px 12px; border: 1.5px solid #dde3ea; border-radius: 6px; font-size: 13px; }
+input:focus, select:focus { outline: none; border-color: #1F4E79; }
+.hint { font-size: 10.5px; color: #999; margin-top: 3px; }
+.preview { background: #f8fafc; border-radius: 8px; padding: 14px 18px; margin-top: 16px; display: none; }
+.prev-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px solid #eee; }
+.prev-row:last-child { border: none; font-weight: 700; color: #1F4E79; font-size: 15px; }
+.btn { width: 100%; padding: 13px; background: #0F6E56; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 16px; }
+</style>
+</head>
+<body>
+<header>
+    <div class="logo">Dux<span>Salary</span></div>
+    <div class="user-bar"><a href="/dossier/{{ dossier.id }}?tab=fiches">← {{ dossier.nom }}</a></div>
+</header>
+<div class="container">
+    <div class="breadcrumb"><a href="/dossiers">Dossiers</a> / <a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> / Nouvelle fiche de paie</div>
+    <div class="card">
+        <h2>💶 Nouvelle fiche de paie — {{ dossier.nom }}</h2>
+        <form method="POST">
+            <div class="grid">
+                <div class="full">
+                    <label>Travailleur *</label>
+                    <select name="travailleur_id" required>
+                        {% for t in travailleurs %}
+                        <option value="{{ t.id }}">{{ t.prenom }} {{ t.nom }}{% if t.fonction %} — {{ t.fonction }}{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div><label>Date de début</label><input name="date_debut" placeholder="JJ/MM/AAAA" required></div>
+                <div><label>Date de fin</label><input name="date_fin" placeholder="JJ/MM/AAAA" required></div>
+            </div>
+            <br>
+            <div class="grid3">
+                <div>
+                    <label>Jours ouvrables</label>
+                    <input type="number" name="nb_jours" min="1" oninput="calc()" required>
+                </div>
+                <div>
+                    <label>Heures / jour</label>
+                    <input type="number" name="heures_jour" value="7.6" step="0.1" oninput="calc()" required>
+                    <div class="hint">7h36 = 7.6 | 36h30 CP121 = 7.3</div>
+                </div>
+                <div>
+                    <label>Salaire horaire brut (€)</label>
+                    <input type="number" name="salaire_horaire" step="0.01" oninput="calc()" required>
+                </div>
+            </div>
+            <br>
+            <div class="grid">
+                <div>
+                    <label>Fonction</label>
+                    <input name="fonction" placeholder="Ex: Aide-comptable">
+                </div>
+                <div>
+                    <label>Commission paritaire</label>
+                    <select name="cp_key">
+                        {% for cp in ['CP 336','CP 200','CP 302','CP 124','CP 121','CP 140.03'] %}
+                        <option value="{{ cp }}">{{ cp }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>Indemnité transport (€ total période)</label>
+                    <input type="number" name="transport_montant" value="0" step="0.01" oninput="calc()">
+                </div>
+                <div>
+                    <label>Description transport</label>
+                    <input name="transport_desc" placeholder="Ex: Train — 80% abonnement">
+                </div>
+            </div>
+
+            <div class="preview" id="preview">
+                <div class="prev-row"><span>Heures totales</span><span id="ph">—</span></div>
+                <div class="prev-row"><span>Salaire brut</span><span id="pb">—</span></div>
+                <div class="prev-row"><span>Cotisation solidarité (–2,71%)</span><span id="po">—</span></div>
+                <div class="prev-row"><span>Transport (exonéré)</span><span id="pt">—</span></div>
+                <div class="prev-row"><span>NET à payer</span><span id="pn">—</span></div>
+                <div class="prev-row"><span>ONSS total à verser</span><span id="ponss">—</span></div>
+            </div>
+
+            <button type="submit" class="btn">💾 Enregistrer et générer la fiche PDF</button>
+        </form>
+    </div>
+</div>
+<script>
+function calc() {
+    const t = parseFloat(document.querySelector('[name=salaire_horaire]').value) || 0;
+    const h = parseFloat(document.querySelector('[name=heures_jour]').value) || 0;
+    const j = parseInt(document.querySelector('[name=nb_jours]').value) || 0;
+    const tr = parseFloat(document.querySelector('[name=transport_montant]').value) || 0;
+    if (t && h && j) {
+        const th = h * j, br = t * th, op = br * 0.0271;
+        const net = br - op + tr, opc = br * 0.0542;
+        document.getElementById('ph').textContent = th.toFixed(2) + ' h';
+        document.getElementById('pb').textContent = br.toFixed(2) + ' €';
+        document.getElementById('po').textContent = '– ' + op.toFixed(2) + ' €';
+        document.getElementById('pt').textContent = tr > 0 ? '+ ' + tr.toFixed(2) + ' €' : '0,00 €';
+        document.getElementById('pn').textContent = net.toFixed(2) + ' €';
+        document.getElementById('ponss').textContent = (op + opc).toFixed(2) + ' €';
+        document.getElementById('preview').style.display = 'block';
+    }
+}
+</script>
+</body>
+</html>

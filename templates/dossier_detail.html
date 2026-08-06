@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>DuxSalary – {{ dossier.nom }}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #333; }
+header { background: #1F4E79; color: white; padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; }
+.logo { font-size: 20px; font-weight: 800; }
+.logo span { color: #4fc3f7; }
+.user-bar { display: flex; align-items: center; gap: 16px; font-size: 13px; }
+.user-bar a { color: #90caf9; text-decoration: none; }
+.container { max-width: 1100px; margin: 28px auto; padding: 0 24px; }
+.breadcrumb { font-size: 13px; color: #888; margin-bottom: 16px; }
+.breadcrumb a { color: #1F4E79; text-decoration: none; }
+.dossier-header { background: white; border-radius: 12px; padding: 24px 28px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); display: flex; justify-content: space-between; align-items: center; }
+.dossier-header h2 { font-size: 22px; color: #1F4E79; margin-bottom: 4px; }
+.dossier-header p { font-size: 13px; color: #888; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { padding: 9px 16px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 13px; border: none; cursor: pointer; }
+.btn-primary { background: #1F4E79; color: white; }
+.btn-green { background: #0F6E56; color: white; }
+.btn-orange { background: #e67e22; color: white; }
+.btn-red { background: #c0392b; color: white; }
+.btn-outline { border: 1.5px solid #1F4E79; color: #1F4E79; background: white; }
+.tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+.tab { padding: 10px 20px; border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 600; background: #dde3ea; color: #555; text-decoration: none; }
+.tab.active { background: white; color: #1F4E79; }
+.card { background: white; border-radius: 0 12px 12px 12px; padding: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+table { width: 100%; border-collapse: collapse; }
+th { background: #f8fafc; padding: 12px 16px; font-size: 11px; font-weight: 700; color: #666; text-transform: uppercase; text-align: left; border-bottom: 1px solid #eee; }
+td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #f5f5f5; vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #f8fafc; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+.badge-actif { background: #e8f5e9; color: #1b5e20; }
+.badge-cdi { background: #e3f2fd; color: #1F4E79; }
+.badge-cdd { background: #fff3e0; color: #e65100; }
+.badge-stu { background: #f3e5f5; color: #6a1b9a; }
+.empty-row td { text-align: center; color: #aaa; padding: 40px; }
+.top-section { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #eee; }
+.top-section h3 { font-size: 14px; font-weight: 700; color: #1F4E79; }
+.action-btns { display: flex; gap: 6px; }
+.btn-sm { padding: 5px 10px; font-size: 11px; border-radius: 6px; text-decoration: none; font-weight: 600; border: none; cursor: pointer; }
+.btn-sm-edit { background: #e3f2fd; color: #1F4E79; }
+.btn-sm-del { background: #fdecea; color: #c0392b; }
+</style>
+</head>
+<body>
+<header>
+    <div class="logo">Dux<span>Salary</span></div>
+    <div class="user-bar">
+        <span>👤 {{ session.user_nom }}</span>
+        <a href="/logout">Déconnexion</a>
+    </div>
+</header>
+<div class="container">
+    <div class="breadcrumb"><a href="/dossiers">← Dossiers</a> / {{ dossier.nom }}</div>
+
+    <div class="dossier-header">
+        <div>
+            <h2>🏢 {{ dossier.nom }}</h2>
+            <p>BCE : {{ dossier.bce or '—' }} | RSZ : {{ dossier.rsz or '—' }} | {{ dossier.cp_principale or '—' }} | {{ dossier.adresse or '—' }}</p>
+        </div>
+        <div class="actions">
+            <a href="/dossier/{{ dossier.id }}/modifier" class="btn btn-orange">✏️ Modifier</a>
+            <a href="/dossier/{{ dossier.id }}/travailleur/nouveau" class="btn btn-green">+ Travailleur</a>
+            <a href="/dossier/{{ dossier.id }}/contrat/nouveau" class="btn btn-primary">+ Contrat</a>
+            <a href="/dossier/{{ dossier.id }}/fiche/nouvelle" class="btn btn-primary">+ Fiche de paie</a>
+            <form method="POST" action="/dossier/{{ dossier.id }}/supprimer" style="display:inline" onsubmit="return confirm('Supprimer ce dossier ? Cette action est irréversible.')">
+                <button type="submit" class="btn btn-red">🗑️ Supprimer</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <a href="?tab=travailleurs" class="tab {% if tab == 'travailleurs' %}active{% endif %}">👥 Travailleurs ({{ travailleurs|length }})</a>
+        <a href="?tab=contrats" class="tab {% if tab == 'contrats' %}active{% endif %}">📄 Contrats ({{ contrats|length }})</a>
+        <a href="?tab=fiches" class="tab {% if tab == 'fiches' %}active{% endif %}">💶 Fiches de paie ({{ fiches|length }})</a>
+    </div>
+
+    <div class="card">
+        {% if tab == 'travailleurs' %}
+        <div class="top-section">
+            <h3>Travailleurs actifs</h3>
+            <a href="/dossier/{{ dossier.id }}/travailleur/nouveau" class="btn btn-green">+ Ajouter</a>
+        </div>
+        <table>
+            <thead><tr><th>Nom</th><th>NISS</th><th>Fonction</th><th>CP</th><th>Contrat</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for t in travailleurs %}
+            <tr>
+                <td><b>{{ t.prenom }} {{ t.nom }}</b></td>
+                <td>{{ t.niss or '—' }}</td>
+                <td>{{ t.fonction or '—' }}</td>
+                <td>{{ t.cp_key or '—' }}</td>
+                <td>{% if t.type_contrat %}<span class="badge badge-{{ t.type_contrat|lower }}">{{ t.type_contrat }}</span>{% else %}—{% endif %}</td>
+                <td>
+                    <div class="action-btns">
+                        <a href="/travailleur/{{ t.id }}/modifier" class="btn-sm btn-sm-edit">✏️ Modifier</a>
+                        <form method="POST" action="/travailleur/{{ t.id }}/supprimer" style="display:inline" onsubmit="return confirm('Supprimer ce travailleur ?')">
+                            <button type="submit" class="btn-sm btn-sm-del">🗑️</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr class="empty-row"><td colspan="6">Aucun travailleur — <a href="/dossier/{{ dossier.id }}/travailleur/nouveau">Ajouter le premier</a></td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        {% elif tab == 'contrats' %}
+        <div class="top-section">
+            <h3>Contrats</h3>
+            <a href="/dossier/{{ dossier.id }}/contrat/nouveau" class="btn btn-primary">+ Nouveau contrat</a>
+        </div>
+        <table>
+            <thead><tr><th>Travailleur</th><th>Type</th><th>CP</th><th>Fonction</th><th>Salaire</th><th>Début</th><th>Fin</th><th>PDF</th></tr></thead>
+            <tbody>
+            {% for c in contrats %}
+            <tr>
+                <td><b>{{ c.travailleur_nom }}</b></td>
+                <td><span class="badge badge-{{ c.type_contrat|lower }}">{{ c.type_contrat }}</span></td>
+                <td>{{ c.cp_key }}</td>
+                <td>{{ c.fonction or '—' }}</td>
+                <td>{{ c.salaire_horaire }} €/h</td>
+                <td>{{ c.date_debut }}</td>
+                <td>{{ c.date_fin or 'CDI' }}</td>
+                <td>{% if c.pdf_path %}<a href="/download/{{ c.pdf_path|basename }}" class="btn-sm btn-sm-edit">⬇️ PDF</a>{% else %}—{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr class="empty-row"><td colspan="8">Aucun contrat</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        {% elif tab == 'fiches' %}
+        <div class="top-section">
+            <h3>Fiches de paie</h3>
+            <a href="/dossier/{{ dossier.id }}/fiche/nouvelle" class="btn btn-primary">+ Nouvelle fiche</a>
+        </div>
+        <table>
+            <thead><tr><th>Travailleur</th><th>Période</th><th>Brut</th><th>Net</th><th>ONSS total</th><th>Statut</th><th>PDF</th></tr></thead>
+            <tbody>
+            {% for f in fiches %}
+            <tr>
+                <td><b>{{ f.travailleur_nom }}</b></td>
+                <td>{{ f.periode_debut }} → {{ f.periode_fin }}</td>
+                <td>{{ f.salaire_brut }} €</td>
+                <td>{{ f.salaire_net }} €</td>
+                <td>{{ f.total_onss }} €</td>
+                <td><span class="badge badge-actif">{{ f.statut_paiement }}</span></td>
+                <td>{% if f.pdf_path %}<a href="/download/{{ f.pdf_path|basename }}" class="btn-sm btn-sm-edit">⬇️ PDF</a>{% else %}—{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr class="empty-row"><td colspan="7">Aucune fiche de paie</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</div>
+</body>
+</html>
