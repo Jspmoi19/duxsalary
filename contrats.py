@@ -81,7 +81,7 @@ def _signatures(elements, data, sN, sB, sC):
         [Paragraph("<b>L'EMPLOYEUR</b>", sC), Paragraph("<b>LE/LA TRAVAILLEUR(SE)</b>", sC)],
         [Paragraph(data['nom_societe'], sC), Paragraph(data['nom_travailleur'], sC)],
         [Paragraph(data['representant'], ParagraphStyle('', fontName='Helvetica', fontSize=9, alignment=TA_CENTER, textColor=colors.grey)), ''],
-        [Spacer(1, 1.2*cm), Spacer(1, 1.2*cm)],
+        [Spacer(1, 2*cm), Spacer(1, 2*cm)],
         [Paragraph("Signature et cachet :", sN), Paragraph("Signature :", sN)],
         [Spacer(1, 1*cm), Spacer(1, 1*cm)],
         [Paragraph("Lu et approuvé :", sN), Paragraph("Lu et approuvé :", sN)],

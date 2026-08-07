@@ -950,13 +950,21 @@ def generer_pdf_etudiant(data, filepath):
     DARK  = colors.HexColor('#1a1a1a')
     MUTED = colors.HexColor('#555555')
 
-    sN  = ParagraphStyle('N', fontName='Helvetica', fontSize=10, leading=15, textColor=DARK)
-    sB  = ParagraphStyle('B', fontName='Helvetica-Bold', fontSize=10, leading=15, textColor=DARK)
-    sT  = ParagraphStyle('T', fontName='Helvetica-Bold', fontSize=15, leading=22, textColor=NAVY, alignment=TA_CENTER)
-    sS  = ParagraphStyle('S', fontName='Helvetica-Bold', fontSize=11, leading=16, textColor=NAVY)
-    sJ  = ParagraphStyle('J', fontName='Helvetica', fontSize=10, leading=15, alignment=TA_JUSTIFY, textColor=DARK)
-    sC  = ParagraphStyle('C', fontName='Helvetica', fontSize=9, leading=13, alignment=TA_CENTER, textColor=MUTED)
-    sMu = ParagraphStyle('M', fontName='Helvetica', fontSize=9, leading=13, textColor=MUTED)
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    try:
+        pdfmetrics.registerFont(TTFont('DVSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+        pdfmetrics.registerFont(TTFont('DVSans-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+        fn, fnb = 'DVSans', 'DVSans-Bold'
+    except:
+        fn, fnb = 'Helvetica', 'Helvetica-Bold'
+    sN  = ParagraphStyle('N', fontName=fn,  fontSize=10, leading=15, textColor=DARK)
+    sB  = ParagraphStyle('B', fontName=fnb, fontSize=10, leading=15, textColor=DARK)
+    sT  = ParagraphStyle('T', fontName=fnb, fontSize=15, leading=22, textColor=NAVY, alignment=TA_CENTER)
+    sS  = ParagraphStyle('S', fontName=fnb, fontSize=11, leading=16, textColor=NAVY)
+    sJ  = ParagraphStyle('J', fontName=fn,  fontSize=10, leading=15, alignment=TA_JUSTIFY, textColor=DARK)
+    sC  = ParagraphStyle('C', fontName=fn,  fontSize=9,  leading=13, alignment=TA_CENTER, textColor=MUTED)
+    sMu = ParagraphStyle('M', fontName=fn,  fontSize=9,  leading=13, textColor=MUTED)
 
     doc = SimpleDocTemplate(filepath, pagesize=A4,
         topMargin=2*cm, bottomMargin=2*cm,
@@ -1059,11 +1067,10 @@ def generer_pdf_etudiant(data, filepath):
         f"restent pleinement applicables."))
 
     e.append(art("6", "Remuneration",
-        f"L'Etudiant(e) percoit un salaire brut de <b>{sal_h} EUR de l'heure</b>, "
+        f"L'Etudiant(e) percoit un salaire brut de <b>{sal_h} EUR de l'heure</b> "
+        f"pour <b>{heures_j}h par jour</b>, "
         f"conformement aux baremes de la {cp_key}. "
-        f"Salaire brut total : <b>{brut} EUR</b>. "
-        f"Cotisation ONSS etudiant (2,71%) : <b>{onss} EUR</b>. "
-        f"Salaire net estime : <b>{net} EUR</b>. "
+        f"Cotisation ONSS etudiant : 2,71% a charge de l'etudiant(e) + 5,42% patronal. "
         f"Le salaire est paye par virement bancaire conformement a la loi du 12 avril 1965 "
         f"concernant la protection de la remuneration des travailleurs."))
 
