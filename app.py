@@ -936,93 +936,190 @@ def get_echeances_dossier(dossier_id):
     return result
 
 
+
 def generer_pdf_etudiant(data, filepath):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import cm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle, KeepTogether
     from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
     from datetime import datetime
 
-    NAVY = colors.HexColor('#1F4E79')
-    sN = ParagraphStyle('N', fontName='Helvetica', fontSize=10, leading=14)
-    sB = ParagraphStyle('B', fontName='Helvetica-Bold', fontSize=10, leading=14)
-    sT = ParagraphStyle('T', fontName='Helvetica-Bold', fontSize=14, leading=20, alignment=TA_CENTER)
-    sSub = ParagraphStyle('S', fontName='Helvetica-Bold', fontSize=11, leading=16, textColor=NAVY)
-    sJ = ParagraphStyle('J', fontName='Helvetica', fontSize=10, leading=14, alignment=TA_JUSTIFY)
-    sC = ParagraphStyle('C', fontName='Helvetica', fontSize=9, leading=12, alignment=TA_CENTER)
+    NAVY  = colors.HexColor('#1F4E79')
+    DARK  = colors.HexColor('#1a1a1a')
+    MUTED = colors.HexColor('#555555')
+
+    sN  = ParagraphStyle('N', fontName='Helvetica', fontSize=10, leading=15, textColor=DARK)
+    sB  = ParagraphStyle('B', fontName='Helvetica-Bold', fontSize=10, leading=15, textColor=DARK)
+    sT  = ParagraphStyle('T', fontName='Helvetica-Bold', fontSize=15, leading=22, textColor=NAVY, alignment=TA_CENTER)
+    sS  = ParagraphStyle('S', fontName='Helvetica-Bold', fontSize=11, leading=16, textColor=NAVY)
+    sJ  = ParagraphStyle('J', fontName='Helvetica', fontSize=10, leading=15, alignment=TA_JUSTIFY, textColor=DARK)
+    sC  = ParagraphStyle('C', fontName='Helvetica', fontSize=9, leading=13, alignment=TA_CENTER, textColor=MUTED)
+    sMu = ParagraphStyle('M', fontName='Helvetica', fontSize=9, leading=13, textColor=MUTED)
 
     doc = SimpleDocTemplate(filepath, pagesize=A4,
-        topMargin=2*cm, bottomMargin=2*cm, leftMargin=2.5*cm, rightMargin=2.5*cm)
-    e = []
-
-    # En-tête société
-    e.append(Paragraph(f"<b>{data['nom_societe']}</b>", sB))
-    e.append(Paragraph(data.get('adresse_societe', ''), sN))
-    e.append(Paragraph(f"BCE : {data.get('bce_societe','')}  |  N° RSZ : {data.get('rsz_societe','')}", sN))
-    e.append(Spacer(1, 0.3*cm))
-    e.append(HRFlowable(width='100%', thickness=2, color=NAVY))
-    e.append(Spacer(1, 0.4*cm))
-    e.append(Paragraph("CONTRAT D'OCCUPATION D'ÉTUDIANT", sT))
-    e.append(Paragraph("Article 121 de la loi du 3 juillet 1978 relative aux contrats de travail", sC))
-    e.append(Spacer(1, 0.5*cm))
+        topMargin=2*cm, bottomMargin=2*cm,
+        leftMargin=2.5*cm, rightMargin=2.5*cm)
 
     # Calculs
-    heures_j = float(data.get('heures_jour', 7.6))
-    nb_jours = int(data.get('nb_jours', 0))
-    sal_h = float(data.get('salaire_horaire', 0))
-    heures_tot = round(heures_j * nb_jours, 2)
-    brut = round(sal_h * heures_tot, 2)
-    onss = round(brut * 0.0271, 2)
-    net = round(brut - onss, 2)
+    heures_j  = float(data.get('heures_jour', 7.6))
+    nb_jours  = int(data.get('nb_jours', 0))
+    sal_h     = float(data.get('salaire_horaire', 0))
+    # Taux repos payés CP 140.03 niveau 1
+    sal_h_rep = round(sal_h * (14.5425 / 14.9255), 4) if 'CP 140.03' in data.get('cp_key','') else sal_h
+    heures_tot= round(heures_j * nb_jours, 2)
+    brut      = round(sal_h * heures_tot, 2)
+    onss      = round(brut * 0.0271, 2)
+    net       = round(brut - onss, 2)
+    cp_key    = data.get('cp_key', '')
 
-    e.append(Paragraph("ENTRE LES SOUSSIGNÉS :", sSub))
+    e = []
+
+    # ── EN-TÊTE ──
+    e.append(Spacer(1, 0.5*cm))  # espace logo
+    e.append(HRFlowable(width='100%', thickness=2, color=NAVY))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(Paragraph("CONTRAT D'OCCUPATION D'ETUDIANT", sT))
+    if nb_jours == 1:
+        e.append(Paragraph("Dagcontract — Contrat journalier", sC))
+    else:
+        e.append(Paragraph(f"Contrat a duree determinee — {nb_jours} jours ouvrables", sC))
     e.append(Spacer(1, 0.2*cm))
-    e.append(Paragraph(f"<b>L'EMPLOYEUR :</b> {data['nom_societe']}, {data.get('adresse_societe','')}, BCE {data.get('bce_societe','')}, RSZ {data.get('rsz_societe','')}, représenté par {data.get('representant','')}, ci-après « l'employeur ».", sJ))
-    e.append(Spacer(1, 0.2*cm))
-    e.append(Paragraph("<b>ET L'ÉTUDIANT(E) :</b>", sB))
+    e.append(Paragraph(f"{cp_key} — Fonction : {data.get('fonction','')}", sC))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(HRFlowable(width='100%', thickness=0.5, color=MUTED))
+    e.append(Spacer(1, 0.5*cm))
+
+    # ── PARTIES ──
+    e.append(Paragraph("ENTRE LES SOUSSIGNES :", sS))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(Paragraph("<b>L'EMPLOYEUR :</b>", sB))
+    e.append(Paragraph(
+        f"{data['nom_societe']}, dont le siege social est etabli a {data.get('adresse_societe','')}, "
+        f"inscrit a la BCE sous le numero {data.get('bce_societe','')}, "
+        f"identifie a l'ONSS sous le numero {data.get('rsz_societe','')}, "
+        f"represente par {data.get('representant','')}, ci-apres designe « l'Employeur »,", sJ))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(Paragraph("<b>ET L'ETUDIANT(E) :</b>", sB))
     for label, val in [
-        ("Nom et prénom :", f"<b>{data.get('nom_etudiant','')}</b>"),
+        ("Nom et prenom :", f"<b>{data.get('nom_etudiant','')}</b>"),
         ("Adresse :", data.get('adresse_etudiant', '')),
         ("Date de naissance :", data.get('ddn_etudiant', '')),
         ("N° NISS :", data.get('niss_etudiant', '')),
-        ("Établissement :", data.get('ecole_etudiant', '')),
+        ("Etablissement d'enseignement :", data.get('ecole_etudiant', '') or 'A completer'),
     ]:
         e.append(Paragraph(f"{label} {val}", sN))
+    e.append(Paragraph("ci-apres designe « l'Etudiant(e) »,", sN))
     e.append(Spacer(1, 0.3*cm))
-    e.append(HRFlowable(width='100%', thickness=0.5, color=colors.grey))
-    e.append(Spacer(1, 0.2*cm))
-
-    articles = [
-        ("Article 1 – Durée",
-         f"Contrat du <b>{data.get('date_debut','')}</b> au <b>{data.get('date_fin','')}</b> — <b>{nb_jours} jours ouvrables</b>."),
-        ("Article 2 – Temps de travail",
-         f"<b>{heures_j}h/jour</b> ({data.get('horaire_journalier','')}) — Commission paritaire : {data.get('cp_key','')}."),
-        ("Article 3 – Fonction et lieu",
-         f"Fonction : <b>{data.get('fonction','')}</b> — Lieu : <b>{data.get('lieu_travail','')}</b>."),
-        ("Article 4 – Rémunération",
-         f"Salaire brut : <b>{sal_h} €/h</b> × {heures_tot}h = <b>{brut} €</b>. ONSS étudiant (2,71%) : -{onss} €. Net estimé : <b>{net} €</b>."),
-        ("Article 5 – Dimona",
-         "L'employeur a effectué la déclaration Dimona STU auprès de l'ONSS avant l'entrée en service."),
-        ("Article 6 – Quota 600h",
-         "L'étudiant(e) déclare avoir vérifié son quota disponible sur Student@work (studentatwork.be). Au-delà des 600h, les cotisations ONSS ordinaires sont dues."),
-    ]
-    for titre, texte in articles:
-        e.append(Paragraph(f"<b>{titre}</b>", sSub))
-        e.append(Spacer(1, 0.05*cm))
-        e.append(Paragraph(texte, sJ))
-        e.append(Spacer(1, 0.25*cm))
-
-    e.append(HRFlowable(width='100%', thickness=0.5, color=colors.grey))
+    e.append(Paragraph("Il a ete convenu ce qui suit :", sN))
+    e.append(Spacer(1, 0.4*cm))
+    e.append(HRFlowable(width='100%', thickness=0.3, color=colors.HexColor('#DDDDDD')))
     e.append(Spacer(1, 0.3*cm))
-    e.append(Paragraph(f"Fait à <b>{data.get('lieu_signature','Bruxelles')}</b>, le <b>{datetime.now().strftime('%d/%m/%Y')}</b>, en deux exemplaires.", sN))
-    e.append(Spacer(1, 0.8*cm))
+
+    def art(num, titre, texte):
+        block = [
+            Paragraph(f"<b>Article {num} – {titre}</b>", sS),
+            Spacer(1, 0.1*cm),
+            Paragraph(texte, sJ),
+            Spacer(1, 0.3*cm),
+        ]
+        return KeepTogether(block)
+
+    # ── ARTICLES ──
+    e.append(art("1", "Nature et duree du contrat",
+        f"Le present contrat est un contrat d'occupation d'etudiant conclu conformement "
+        f"au Titre VII (articles 120 a 130bis) de la loi du 3 juillet 1978 relative aux contrats de travail. "
+        f"Il est conclu pour la periode du <b>{data.get('date_debut','')}</b> "
+        f"au <b>{data.get('date_fin','')}</b> inclus, soit <b>{nb_jours} jour(s) ouvrable(s)</b>. "
+        f"Le contrat prend fin de plein droit a l'echeance du terme, sans preavis ni indemnite."))
+
+    e.append(art("2", "Statut etudiant et contingent Student@Work",
+        f"L'Etudiant(e) declare etre principalement occupe(e) a suivre des etudes a temps plein "
+        f"et remplir les conditions legales pour etre employe(e) comme etudiant(e). "
+        f"L'Etudiant(e) s'engage a respecter le contingent annuel de <b>650 heures</b> autorise "
+        f"a cotisations ONSS reduites (2,71% personnel + 5,42% patronal) conformement a "
+        f"l'article 17bis de l'arrete royal du 28 novembre 1969. Au-dela des 650 heures, "
+        f"les cotisations ONSS ordinaires sont dues. L'Etudiant(e) peut consulter son quota "
+        f"disponible sur <b>studentatwork.be</b>."))
+
+    e.append(art("3", "Fonction et classification",
+        f"L'Etudiant(e) est engage(e) en qualite de <b>{data.get('fonction','')}</b>. "
+        f"Ce contrat est regi par la <b>{cp_key}</b> et l'ensemble de ses conventions collectives de travail."))
+
+    e.append(art("4", "Lieu de travail",
+        f"Lieu de travail principal : <b>{data.get('lieu_travail','')}</b>. "
+        f"L'Employeur se reserve le droit de modifier le lieu de travail en fonction "
+        f"des necessites operationnelles, dans les limites fixees par la loi."))
+
+    e.append(art("5", "Duree du travail et horaire",
+        f"L'Etudiant(e) est occupe(e) a raison de <b>{heures_j}h par jour</b> "
+        f"({data.get('horaire_journalier','')}) soit <b>{heures_tot}h au total</b> pour la duree du contrat. "
+        f"Les dispositions legales en matiere de duree du travail, de temps de repos et de pauses "
+        f"restent pleinement applicables."))
+
+    e.append(art("6", "Remuneration",
+        f"L'Etudiant(e) percoit un salaire brut de <b>{sal_h} EUR de l'heure</b>, "
+        f"conformement aux baremes de la {cp_key}. "
+        f"Salaire brut total : <b>{brut} EUR</b>. "
+        f"Cotisation ONSS etudiant (2,71%) : <b>{onss} EUR</b>. "
+        f"Salaire net estime : <b>{net} EUR</b>. "
+        f"Le salaire est paye par virement bancaire conformement a la loi du 12 avril 1965 "
+        f"concernant la protection de la remuneration des travailleurs."))
+
+    e.append(art("7", "Heures supplementaires et majorations",
+        f"Les prestations au-dela de la duree normale de travail donnent droit a : "
+        f"un supplement de <b>50%</b> pour les heures supplementaires en semaine ; "
+        f"un supplement de <b>100%</b> pour les prestations le dimanche et les jours feries legaux, "
+        f"conformement a la legislation en vigueur et aux CCT de la {cp_key}."))
+
+    e.append(art("8", "Pas de periode d'essai",
+        "Les parties conviennent expressement qu'aucune periode d'essai n'est applicable "
+        "au present contrat d'etudiant journalier."))
+
+    e.append(art("9", "Obligations de l'Etudiant(e)",
+        "L'Etudiant(e) s'engage a : executer ses taches avec soin et diligence ; "
+        "respecter le reglement de travail et les instructions de l'Employeur ; "
+        "maintenir la confidentialite sur les informations de l'entreprise ; "
+        "signaler immediatement tout incident, accident ou dommage a l'Employeur. "
+        "Les amendes et sanctions administratives resultant de fautes personnelles de l'Etudiant(e) "
+        "sont a sa charge."))
+
+    e.append(art("10", "Assurance accidents du travail",
+        f"L'Employeur souscrit la police d'assurance accidents du travail obligatoire "
+        f"conformement a la loi du 10 avril 1971. "
+        f"L'Etudiant(e) respecte strictement les regles de securite et de bien-etre au travail."))
+
+    e.append(art("11", "Droit applicable",
+        f"Le present contrat est regi par le droit belge, la loi du 3 juillet 1978 "
+        f"relative aux contrats de travail, le reglement de travail et les conventions "
+        f"collectives de la {cp_key}. Les tribunaux du travail belges sont seuls competents."))
+
+    e.append(art("12", "Dispositions finales",
+        f"Le present contrat est etabli en deux exemplaires originaux, dont un remis a chaque partie. "
+        f"Fait a <b>{data.get('lieu_signature','Bruxelles')}</b>, le <b>{datetime.now().strftime('%d/%m/%Y')}</b>."))
+
+    # ── SIGNATURES ──
+    e.append(Spacer(1, 0.5*cm))
     sig = Table([[
-        Paragraph("<b>L'EMPLOYEUR</b>\n\n\n\n_______________________", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)),
-        Paragraph("<b>L'ÉTUDIANT(E)</b>\n\n\n\n_______________________", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)),
-    ]], colWidths=[8*cm, 8*cm])
+        Paragraph(f"<b>L'EMPLOYEUR</b><br/>{data['nom_societe']}<br/>{data.get('representant','')}<br/><br/><br/>_______________________<br/>Signature et cachet",
+                  ParagraphStyle('', fontName='Helvetica', fontSize=10, leading=15, alignment=TA_LEFT)),
+        Paragraph(f"<b>L'ETUDIANT(E)</b><br/>{data.get('nom_etudiant','')}<br/><br/><br/><br/>_______________________<br/>Signature : Lu et approuve",
+                  ParagraphStyle('', fontName='Helvetica', fontSize=10, leading=15, alignment=TA_LEFT)),
+    ]], colWidths=[8.5*cm, 8.5*cm])
+    sig.setStyle(TableStyle([
+        ('VALIGN', (0,0),(-1,-1), 'TOP'),
+        ('TOPPADDING', (0,0),(-1,-1), 8),
+        ('LEFTPADDING', (0,0),(-1,-1), 0),
+        ('LINEAFTER', (0,0),(0,0), 0.5, colors.HexColor('#CCCCCC')),
+    ]))
     e.append(sig)
+    e.append(Spacer(1, 0.4*cm))
+    e.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#CCCCCC')))
+    e.append(Spacer(1, 0.2*cm))
+    e.append(Paragraph(
+        "Document etabli conformement a la loi du 3 juillet 1978 et au Titre VII relatif aux contrats d'occupation d'etudiants.",
+        sMu))
 
     doc.build(e)
 
