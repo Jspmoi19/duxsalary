@@ -285,7 +285,7 @@ def get_contrats(dossier_id=None, travailleur_id=None):
         SELECT c.*, t.nom || ' ' || t.prenom as travailleur_nom
         FROM contrats c
         JOIN travailleurs t ON t.id = c.travailleur_id
-        WHERE 1=1
+        WHERE c.statut = 'actif'
     """
     params = []
     if dossier_id:

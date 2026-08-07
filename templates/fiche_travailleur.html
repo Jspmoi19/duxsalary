@@ -10,7 +10,9 @@
   </div>
   <div class="page-actions">
     <a href="/travailleur/{{ travailleur.id }}/modifier" class="btn btn-secondary">Modifier</a>
-    <a href="/travailleur/{{ travailleur.id }}/supprimer" class="btn btn-danger btn-sm" onclick="return confirm('Supprimer ce travailleur ?')">Supprimer</a>
+    <form method="POST" action="/travailleur/{{ travailleur.id }}/supprimer" style="display:inline" onsubmit="return confirm('Supprimer ce travailleur ? Cette action est irréversible.')">
+      <button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
+    </form>
   </div>
 </div>
 
@@ -90,7 +92,12 @@
       <td>{{ c.salaire_horaire }} €/h</td>
       <td>{{ c.date_debut }}</td>
       <td>{{ c.date_fin or 'En cours' }}</td>
-      <td>{% if c.pdf_path %}<a href="/download/{{ c.pdf_path|basename }}" class="btn btn-secondary btn-xs">⬇ PDF</a>{% else %}—{% endif %}</td>
+      <td style="display:flex;gap:6px;align-items:center">
+        {% if c.pdf_path %}<a href="/download/{{ c.pdf_path|basename }}" class="btn btn-secondary btn-xs">⬇ PDF</a>{% else %}<span style="color:#ccc">—</span>{% endif %}
+        <form method="POST" action="/contrat/{{ c.id }}/archiver" style="display:inline" onsubmit="return confirm('Archiver ce contrat ?')">
+          <button type="submit" class="btn btn-danger btn-xs">Supprimer</button>
+        </form>
+      </td>
     </tr>
     {% else %}
     <tr class="empty"><td colspan="7">Aucun contrat</td></tr>

@@ -84,8 +84,8 @@
       <div class="form-group">
         <label>Commission paritaire</label>
         <select name="commission_paritaire_key" required>
-          {% for cp_key in cp_keys %}
-          <option value="{{ cp_key }}" {% if dossier.cp_principale == cp_key %}selected{% endif %}>{{ cp_key }}</option>
+          {% for cp_key, cp_val in cp_data.items() %}
+          <option value="{{ cp_key }}" {% if dossier.cp_principale == cp_key %}selected{% endif %}>{{ cp_key }} — {{ cp_val.meta.nom }}</option>
           {% endfor %}
         </select>
       </div>

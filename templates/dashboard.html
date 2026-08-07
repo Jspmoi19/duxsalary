@@ -31,20 +31,43 @@
   </div>
 </div>
 
-<!-- ALERTES -->
-{% if alertes %}
+<!-- ALERTES / ÉCHÉANCES -->
 <div class="card">
   <div class="card-header"><h3>⚠️ Échéances et obligations</h3></div>
-  <div class="card-body">
-    {% for a in alertes %}
-    <div class="alert-item alert-{{ a.niveau }}">
-      <span>{{ a.message }}</span>
-      <span class="alert-date">{{ a.date }}</span>
-    </div>
-    {% endfor %}
+  <div class="card-body" id="echeances-list">
+    {% if echeances %}
+      {% for e in echeances %}
+      <div class="echeance-item echeance-{{ e.statut }}" id="ech-{{ e.id }}">
+        <div class="echeance-left">
+          {% if e.statut == 'fait' %}
+            <span class="echeance-icon">✅</span>
+          {% elif e.niveau == 'urgent' %}
+            <span class="echeance-icon">🔴</span>
+          {% else %}
+            <span class="echeance-icon">🟡</span>
+          {% endif %}
+          <div>
+            <div class="echeance-msg">{{ e.description }}</div>
+            {% if e.statut == 'fait' %}
+            <div class="echeance-sub">Complété le {{ e.date_realisation.strftime('%d/%m/%Y') if e.date_realisation else '—' }}
+              {% if e.document_nom %} · <a href="/echeance/{{ e.id }}/document" style="color:var(--accent)">📄 {{ e.document_nom }}</a>{% endif %}
+            </div>
+            {% else %}
+            <div class="echeance-sub">Échéance : {{ e.date_echeance.strftime('%d/%m/%Y') if e.date_echeance else '—' }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% if e.statut != 'fait' %}
+        <button onclick="ouvrirModal({{ e.id }}, '{{ e.description|replace("'", "\\'") }}')"
+                class="btn btn-success btn-sm">✓ Marquer fait</button>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <p style="color:var(--text-muted);font-size:13px">Aucune échéance urgente.</p>
+    {% endif %}
   </div>
 </div>
-{% endif %}
 
 <!-- TRAVAILLEURS -->
 <div class="card">
@@ -86,5 +109,103 @@
     </tbody>
   </table>
 </div>
+
+<!-- MODAL CONFIRMATION ÉCHÉANCE -->
+<div id="modal-echeance" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:12px;padding:28px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <h3 style="margin:0 0 6px;color:#1F4E79">✅ Confirmer la réalisation</h3>
+    <p id="modal-desc" style="color:#555;font-size:14px;margin:0 0 20px"></p>
+
+    <form id="modal-form" enctype="multipart/form-data">
+      <input type="hidden" id="modal-ech-id" name="echeance_id">
+      <div class="form-group" style="margin-bottom:16px">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">
+          Date de réalisation
+        </label>
+        <input type="date" name="date_realisation" id="modal-date"
+               style="width:100%;padding:8px 12px;border:1.5px solid #ddd;border-radius:6px;font-size:13px">
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">
+          📎 Preuve de dépôt <span style="color:#dc3545">*</span>
+        </label>
+        <input type="file" name="document" id="modal-file" accept=".pdf,.png,.jpg,.jpeg"
+               style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:6px;font-size:13px" required>
+        <div style="font-size:11px;color:#888;margin-top:4px">PDF, PNG ou JPG — ex: accusé de réception DmfA, preuve de paiement ONSS...</div>
+      </div>
+      <div class="form-group" style="margin-bottom:20px">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Note (optionnel)</label>
+        <input type="text" name="note" placeholder="Ex: Référence de paiement, remarques..."
+               style="width:100%;padding:8px 12px;border:1.5px solid #ddd;border-radius:6px;font-size:13px">
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button type="button" onclick="fermerModal()" class="btn btn-secondary">Annuler</button>
+        <button type="button" onclick="confirmerEcheance()" class="btn btn-primary">✅ Confirmer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+const dossier_id = {{ dossier.id }};
+
+function ouvrirModal(id, desc) {
+  document.getElementById('modal-ech-id').value = id;
+  document.getElementById('modal-desc').textContent = desc;
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-date').value = today;
+  document.getElementById('modal-echeance').style.display = 'flex';
+}
+
+function fermerModal() {
+  document.getElementById('modal-echeance').style.display = 'none';
+  document.getElementById('modal-form').reset();
+}
+
+function confirmerEcheance() {
+  const file = document.getElementById('modal-file').files[0];
+  if (!file) {
+    alert('⚠️ Veuillez joindre la preuve de dépôt pour confirmer.');
+    return;
+  }
+  const id = document.getElementById('modal-ech-id').value;
+  const form = document.getElementById('modal-form');
+  const data = new FormData(form);
+
+  fetch(`/echeance/${id}/valider`, {method: 'POST', body: data})
+    .then(r => r.json())
+    .then(res => {
+      if (res.ok) {
+        fermerModal();
+        // Met à jour l'item sans rechargement
+        const item = document.getElementById('ech-' + id);
+        item.className = 'echeance-item echeance-fait';
+        item.innerHTML = `
+          <div class="echeance-left">
+            <span class="echeance-icon">✅</span>
+            <div>
+              <div class="echeance-msg">${res.description}</div>
+              <div class="echeance-sub">Complété le ${res.date} · 📄 ${res.document_nom}</div>
+            </div>
+          </div>`;
+        // Notification
+        const notif = document.createElement('div');
+        notif.style.cssText = 'position:fixed;top:20px;right:20px;background:#28a745;color:white;padding:14px 20px;border-radius:8px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2)';
+        notif.textContent = '✅ Échéance confirmée et enregistrée !';
+        document.body.appendChild(notif);
+        setTimeout(() => notif.remove(), 3500);
+      } else {
+        alert('Erreur : ' + res.error);
+      }
+    });
+}
+
+// Fermer modal en cliquant en dehors
+document.getElementById('modal-echeance').addEventListener('click', function(e) {
+  if (e.target === this) fermerModal();
+});
+</script>
+{% endblock %}
 
 {% endblock %}

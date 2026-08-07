@@ -139,7 +139,7 @@ def dossier_dashboard(dossier_id):
     ctx = get_context_base()
     return render_template('dashboard.html',
                            dossier=dossier, dossier_actif=dossier,
-                           alertes=get_alertes_dossier(dossier_id),
+                           echeances=get_echeances_dossier(dossier_id),
                            travailleurs=get_travailleurs(dossier_id),
                            contrats=get_contrats(dossier_id=dossier_id),
                            fiches=get_fiches_paie(dossier_id=dossier_id), **ctx)
@@ -189,7 +189,7 @@ def nouveau_travailleur(dossier_id):
             except: data['date_naissance'] = None
         tid = create_travailleur(data)
         return redirect(url_for('fiche_travailleur', travailleur_id=tid))
-    return render_template('nouveau_travailleur.html', dossier=dossier, dossier_actif=dossier, **ctx)
+    return render_template('nouveau_travailleur.html', dossier=dossier, dossier_actif=dossier, cp_keys=list(CP_DATABASE.keys()), **ctx)
 
 @app.route('/travailleur/<int:travailleur_id>')
 @login_required
@@ -227,7 +227,7 @@ def modifier_travailleur(travailleur_id):
              request.form.get('email'), request.form.get('telephone'), travailleur_id))
         conn.commit(); cur.close(); conn.close()
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id))
-    return render_template('modifier_travailleur.html', travailleur=travailleur, dossier=dossier, dossier_actif=dossier, **ctx)
+    return render_template('modifier_travailleur.html', travailleur=travailleur, dossier=dossier, dossier_actif=dossier, cp_keys=list(CP_DATABASE.keys()), **ctx)
 
 @app.route('/travailleur/<int:travailleur_id>/supprimer', methods=['POST'])
 @login_required
@@ -273,6 +273,18 @@ def ajouter_document(travailleur_id):
             conn.commit(); cur.close(); conn.close()
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id, tab='documents'))
     return render_template('upload_document.html', travailleur=travailleur, dossier=dossier, dossier_actif=dossier, **ctx)
+
+@app.route('/contrat/<int:contrat_id>/archiver', methods=['POST'])
+@login_required
+def archiver_contrat(contrat_id):
+    conn = get_conn()
+    from psycopg2.extras import RealDictCursor
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT dossier_id, travailleur_id FROM contrats WHERE id = %s", (contrat_id,))
+    c = cur.fetchone()
+    cur.execute("UPDATE contrats SET statut = 'archive' WHERE id = %s", (contrat_id,))
+    conn.commit(); cur.close(); conn.close()
+    return redirect(url_for('fiche_travailleur', travailleur_id=c['travailleur_id'], tab='contrats'))
 
 @app.route('/dossier/<int:dossier_id>/document/ajouter', methods=['GET', 'POST'])
 @login_required
@@ -527,10 +539,30 @@ def nouveau_contrat_dossier(dossier_id):
 
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id, tab='contrats'))
 
+    # Pré-remplir depuis contrat existant si travailleur sélectionné
+    prefill_travailleur = None
+    prefill_contrat = None
+    if prefill_travailleur_id:
+        prefill_travailleur = get_travailleur(prefill_travailleur_id)
+        contrats_t = get_contrats(travailleur_id=prefill_travailleur_id)
+        prefill_contrat = contrats_t[0] if contrats_t else None
+
+    # JSON travailleurs pour JS
+    import json as _json
+    travailleurs_json = jsonlib.dumps([{
+        'id': t['id'], 'prenom': t.get('prenom',''), 'nom': t.get('nom',''),
+        'niss': t.get('niss',''), 'adresse': t.get('adresse',''),
+        'iban': t.get('iban',''),
+        'date_naissance': t['date_naissance'].strftime('%d/%m/%Y') if t.get('date_naissance') else '',
+    } for t in travailleurs])
+
     return render_template('contrat_cdi_cdd.html', profil=dossier, profil_id=dossier_id,
                            dossier=dossier, dossier_actif=dossier,
                            travailleurs=travailleurs, cp_data=CP_DATABASE, cp_json=cp_json,
-                           prefill_travailleur_id=prefill_travailleur_id, **ctx)
+                           travailleurs_json=travailleurs_json,
+                           prefill_travailleur_id=prefill_travailleur_id,
+                           prefill_travailleur=prefill_travailleur,
+                           prefill_contrat=prefill_contrat, **ctx)
 
 # ── FICHES DE PAIE ────────────────────────────────────────────────────
 def calcul_paie_etudiant(salaire_horaire, heures_jour, nb_jours, transport=None):
@@ -713,181 +745,226 @@ if __name__ == '__main__':
     init_db()
     app.run(debug=False, host='0.0.0.0')
 
-# ── CONTRAT ÉTUDIANT ──────────────────────────────────────────────────
-from contrats import generer_contrat_cdi, generer_contrat_cdd
+# ── GESTION DES ÉCHÉANCES v2 ──────────────────────────────────────────
 
-def generer_contrat_etudiant_pdf(data, cp_info):
-    """Génère contrat étudiant + fiche de paie."""
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.lib.units import cm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle
-    from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
-    import os
-    from datetime import datetime
+def get_echeances_dossier(dossier_id):
+    conn = get_conn()
+    from psycopg2.extras import RealDictCursor
+    cur = conn.cursor(cursor_factory=RealDictCursor)
 
-    filename = f"contrat_etudiant_{data['nom_etudiant'].replace(' ','_')}_{data['date_debut'].replace('/','')}.pdf"
-    filepath = os.path.join('outputs', filename)
+    today = date.today()
+    annee = today.year
+    mois = today.month
+    dossier = get_dossier(dossier_id)
+    date_activation = dossier.get('date_activation_rsz')
 
-    BLUE = colors.HexColor('#1F4E79')
-    sN = ParagraphStyle('N', fontName='Helvetica', fontSize=10, leading=14)
-    sB = ParagraphStyle('B', fontName='Helvetica-Bold', fontSize=10, leading=14)
-    sT = ParagraphStyle('T', fontName='Helvetica-Bold', fontSize=14, leading=20, alignment=TA_CENTER)
-    sSub = ParagraphStyle('S', fontName='Helvetica-Bold', fontSize=11, leading=16, textColor=BLUE)
-    sJ = ParagraphStyle('J', fontName='Helvetica', fontSize=10, leading=14, alignment=TA_JUSTIFY)
-    sC = ParagraphStyle('C', fontName='Helvetica', fontSize=10, leading=14, alignment=TA_CENTER)
+    def inserer(type_ech, desc, date_ech, trimestre=None, niveau='warn'):
+        try:
+            cur.execute("""
+                INSERT INTO echeances (dossier_id, type_echeance, description, date_echeance, trimestre, annee, statut, niveau)
+                VALUES (%s, %s, %s, %s, %s, %s, 'en_attente', %s)
+                ON CONFLICT ON CONSTRAINT echeances_unique DO NOTHING
+            """, (dossier_id, type_ech, desc, date_ech, trimestre, annee, niveau))
+            conn.commit()
+        except:
+            conn.rollback()
 
-    doc = SimpleDocTemplate(filepath, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm, leftMargin=2.5*cm, rightMargin=2.5*cm)
-    e = []
+    def trim_actif(debut_mois, an=None):
+        if not date_activation: return True
+        if an is None: an = annee
+        import calendar as cal
+        last = cal.monthrange(an, debut_mois + 2)[1]
+        fin_trim = date(an, debut_mois + 2, last)
+        debut_trim = date(an, debut_mois, 1)
+        # Le trimestre est actif si la date d'activation est avant la fin du trimestre
+        # ET le trimestre a démarré après (ou pendant) le mois d'activation
+        return date_activation <= fin_trim and date_activation >= debut_trim - __import__('datetime').timedelta(days=95)
 
-    e.append(Paragraph(f"<b>{data['nom_societe']}</b>", sB))
-    e.append(Paragraph(data['adresse_societe'], sN))
-    e.append(Paragraph(f"BCE : {data['bce_societe']}  |  N° RSZ : {data['rsz_societe']}", sN))
-    e.append(Spacer(1, 0.4*cm))
-    e.append(HRFlowable(width='100%', thickness=2, color=BLUE))
-    e.append(Spacer(1, 0.5*cm))
-    e.append(Paragraph("CONTRAT D'OCCUPATION D'ÉTUDIANT", sT))
-    e.append(Paragraph("Article 121 de la loi du 3 juillet 1978 relative aux contrats de travail", sC))
-    e.append(Spacer(1, 0.6*cm))
-
-    e.append(Paragraph("ENTRE LES SOUSSIGNÉS :", sSub))
-    e.append(Spacer(1, 0.3*cm))
-    e.append(Paragraph("<b>L'EMPLOYEUR :</b>", sB))
-    e.append(Paragraph(
-        f"{data['nom_societe']}, société, dont le siège social est établi à {data['adresse_societe']}, "
-        f"inscrite à la BCE sous le numéro {data['bce_societe']}, identifiée à l'ONSS sous le numéro "
-        f"{data['rsz_societe']}, représentée par {data['representant']}, ci-après dénommé « l'employeur »,", sJ))
-    e.append(Spacer(1, 0.3*cm))
-    e.append(Paragraph("<b>ET L'ÉTUDIANT(E) :</b>", sB))
-    for label, val in [
-        ("Nom et prénom :", f"<b>{data['nom_etudiant']}</b>"),
-        ("Adresse :", data['adresse_etudiant']),
-        ("Date de naissance :", data['ddn_etudiant']),
-        ("N° NISS :", data['niss_etudiant']),
-        ("Établissement d'enseignement :", data['ecole_etudiant']),
-    ]:
-        e.append(Paragraph(f"{label} {val}", sN))
-    e.append(Spacer(1, 0.4*cm))
-    e.append(HRFlowable(width='100%', thickness=0.5, color=colors.grey))
-    e.append(Spacer(1, 0.3*cm))
-
-    nb_jours = data['nb_jours']
-    heures_j = data['heures_jour']
-    sal_h = float(data['salaire_horaire'])
-    heures_tot = round(heures_j * nb_jours, 2)
-    brut = round(sal_h * heures_tot, 2)
-    onss = round(brut * 0.0271, 2)
-    net = round(brut - onss, 2)
-
-    articles = [
-        ("Article 1 – Nature et durée du contrat",
-         f"Le présent contrat est un contrat d'occupation d'étudiant conclu conformément à l'article 121 "
-         f"de la loi du 3 juillet 1978. Il est conclu pour une durée déterminée du <b>{data['date_debut']}</b> "
-         f"au <b>{data['date_fin']}</b> inclus, soit <b>{nb_jours} jours ouvrables</b>."),
-        ("Article 2 – Temps de travail",
-         f"L'étudiant(e) est occupé(e) à raison de <b>{heures_j}h par jour</b> "
-         f"({data['horaire_journalier']}), conformément aux dispositions de la {data['commission_paritaire']}."),
-        ("Article 3 – Fonction et lieu de travail",
-         f"L'étudiant(e) est engagé(e) en qualité de <b>{data['fonction']}</b>. "
-         f"Lieu de travail : <b>{data['lieu_travail']}</b>."),
-        ("Article 4 – Rémunération",
-         f"La rémunération brute est fixée à <b>{sal_h} € de l'heure</b>. "
-         f"Cotisation ONSS étudiant : 2,71% à charge de l'étudiant(e). "
-         f"Salaire brut total : {brut} € — Net estimé : {net} €."),
-        ("Article 5 – Commission paritaire",
-         f"Le présent contrat est régi par la <b>{cp_info.get('meta', {}).get('nom', data['commission_paritaire'])}</b>."),
-        ("Article 6 – Dimona",
-         "L'employeur déclare avoir effectué la déclaration Dimona de type STU auprès de l'ONSS avant l'entrée en service."),
-        ("Article 7 – Quota 650h",
-         "L'étudiant(e) déclare avoir vérifié son quota d'heures disponible sur Student@work (studentatwork.be)."),
+    # ── DmfA trimestrielle ────────────────────────────────────────────
+    trimestres = [
+        ('Q1', 1, f"30/04/{annee}", f"DmfA Q1/{annee} — socialsecurity.be"),
+        ('Q2', 4, f"31/07/{annee}", f"DmfA Q2/{annee} — socialsecurity.be"),
+        ('Q3', 7, f"31/10/{annee}", f"DmfA Q3/{annee} — socialsecurity.be"),
+        ('Q4', 10, f"31/01/{annee+1}", f"DmfA Q4/{annee} — socialsecurity.be"),
     ]
+    for trim_code, m_debut, date_str, desc in trimestres:
+        if not trim_actif(m_debut):
+            continue
+        d_parts = date_str.split('/')
+        try:
+            d_ech = date(int(d_parts[2]), int(d_parts[1]), int(d_parts[0]))
+        except:
+            continue
+        if d_ech < date(today.year - 1, 1, 1):
+            continue
+        niv = 'urgent' if (d_ech - today).days <= 30 else 'warn'
+        inserer('dmfa', desc, d_ech, trim_code, niv)
 
-    for titre, texte in articles:
-        e.append(Paragraph(f"<b>{titre}</b>", sSub))
-        e.append(Spacer(1, 0.1*cm))
-        e.append(Paragraph(texte, sJ))
-        e.append(Spacer(1, 0.3*cm))
+    # ── Paiement ONSS mensuel ─────────────────────────────────────────
+    # Dû avant le 5 du mois suivant
+    import calendar as cal
+    _, last_day = cal.monthrange(annee, mois)
+    fin_mois = date(annee, mois, last_day)
+    # ONSS mensuel dû le 5 du mois suivant
+    if mois == 12:
+        onss_echeance = date(annee + 1, 1, 5)
+    else:
+        onss_echeance = date(annee, mois + 1, 5)
 
-    e.append(HRFlowable(width='100%', thickness=0.5, color=colors.grey))
-    e.append(Spacer(1, 0.3*cm))
-    e.append(Paragraph(
-        f"Fait à <b>{data['lieu_signature']}</b>, le <b>{datetime.now().strftime('%d/%m/%Y')}</b>, "
-        f"en deux exemplaires originaux.", sN))
-    e.append(Spacer(1, 1*cm))
-    sig = Table([[
-        Paragraph("<b>L'EMPLOYEUR</b>", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)),
-        Paragraph("<b>L'ÉTUDIANT(E)</b>", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)),
-    ]], colWidths=[8.5*cm, 8.5*cm])
-    e.append(sig)
-    doc.build(e)
-    return filepath, filename
+    mois_noms = ['','Janvier','Février','Mars','Avril','Mai','Juin',
+                 'Juillet','Août','Septembre','Octobre','Novembre','Décembre']
 
+    # Vérifier si des travailleurs actifs existent ce mois
+    cur.execute("""
+        SELECT COUNT(*) as nb FROM contrats c
+        WHERE c.dossier_id = %s AND c.statut = 'actif'
+        AND c.date_debut <= %s
+        AND (c.date_fin IS NULL OR c.date_fin >= %s)
+    """, (dossier_id, fin_mois, date(annee, mois, 1)))
+    row = cur.fetchone()
+    nb_actifs = row['nb'] if row else 0
+
+    if nb_actifs > 0 and date_activation and date_activation <= fin_mois:
+        desc_onss = f"Paiement ONSS {mois_noms[mois]} {annee} — avant le {onss_echeance.strftime('%d/%m/%Y')}"
+        niv_onss = 'urgent' if (onss_echeance - today).days <= 5 else 'warn'
+        inserer('onss_mensuel', desc_onss, onss_echeance, None, niv_onss)
+
+    # ── Fiches de paie manquantes ─────────────────────────────────────
+    cur.execute("""
+        SELECT t.id, t.prenom, t.nom, c.type_contrat, c.date_debut, c.date_fin
+        FROM contrats c JOIN travailleurs t ON t.id = c.travailleur_id
+        WHERE c.dossier_id = %s AND c.statut = 'actif'
+        AND c.date_debut <= %s
+        AND (c.date_fin IS NULL OR c.date_fin >= %s)
+    """, (dossier_id, fin_mois, date(annee, mois, 1)))
+    travailleurs_actifs = cur.fetchall()
+
+    for t in travailleurs_actifs:
+        # Vérifier si une fiche de paie existe pour ce mois
+        cur.execute("""
+            SELECT COUNT(*) as nb FROM fiches_paie
+            WHERE travailleur_id = %s
+            AND EXTRACT(MONTH FROM periode_debut) = %s
+            AND EXTRACT(YEAR FROM periode_debut) = %s
+        """, (t['id'], mois, annee))
+        fiche_row = cur.fetchone()
+        has_fiche = fiche_row['nb'] > 0 if fiche_row else False
+
+        if not has_fiche:
+            desc_fiche = f"Fiche de paie {mois_noms[mois]} {annee} — {t['prenom']} {t['nom']}"
+            niv_fiche = 'urgent' if today.day >= 25 else 'warn'
+            inserer('fiche_paie', desc_fiche, fin_mois, None, niv_fiche)
+
+        # Fiche du mois précédent si pas encore faite
+        mois_prec = mois - 1 if mois > 1 else 12
+        annee_prec = annee if mois > 1 else annee - 1
+        _, last_prec = cal.monthrange(annee_prec, mois_prec)
+        fin_mois_prec = date(annee_prec, mois_prec, last_prec)
+
+        if t['date_debut'] <= fin_mois_prec:
+            cur.execute("""
+                SELECT COUNT(*) as nb FROM fiches_paie
+                WHERE travailleur_id = %s
+                AND EXTRACT(MONTH FROM periode_debut) = %s
+                AND EXTRACT(YEAR FROM periode_debut) = %s
+            """, (t['id'], mois_prec, annee_prec))
+            fiche_prec = cur.fetchone()
+            has_fiche_prec = fiche_prec['nb'] > 0 if fiche_prec else False
+
+            if not has_fiche_prec:
+                desc_retard = f"⚠️ Fiche de paie {mois_noms[mois_prec]} {annee_prec} en retard — {t['prenom']} {t['nom']}"
+                inserer('fiche_paie_retard', desc_retard, fin_mois_prec, None, 'urgent')
+
+    # ── CDD/STU arrivant à échéance ───────────────────────────────────
+    cur.execute("""
+        SELECT t.prenom, t.nom, c.type_contrat, c.date_fin, c.id as contrat_id
+        FROM contrats c JOIN travailleurs t ON t.id = c.travailleur_id
+        WHERE c.dossier_id = %s AND c.type_contrat IN ('CDD', 'STU')
+        AND c.date_fin IS NOT NULL
+        AND c.date_fin BETWEEN CURRENT_DATE - INTERVAL '5 days' AND CURRENT_DATE + INTERVAL '30 days'
+        AND c.statut = 'actif'
+    """, (dossier_id,))
+    for row in cur.fetchall():
+        type_label = 'Contrat étudiant' if row['type_contrat'] == 'STU' else 'CDD'
+        date_fin_fmt = row['date_fin'].strftime('%d/%m/%Y')
+        jours = (row['date_fin'] - today).days
+        if jours < 0:
+            suffix = f"terminé le {date_fin_fmt} — à clôturer (Dimona OUT)"
+            niv = 'urgent'
+        elif jours == 0:
+            suffix = f"se termine aujourd'hui — Dimona OUT obligatoire"
+            niv = 'urgent'
+        else:
+            suffix = f"se termine le {date_fin_fmt} — dans {jours} jour(s)"
+            niv = 'urgent' if jours <= 7 else 'warn'
+
+        desc_cdd = f"{type_label} {row['prenom']} {row['nom']} — {suffix}"
+        try:
+            cur.execute("""
+                INSERT INTO echeances (dossier_id, type_echeance, description, date_echeance, trimestre, annee, statut, niveau)
+                VALUES (%s, %s, %s, %s, NULL, %s, 'en_attente', %s)
+                ON CONFLICT ON CONSTRAINT echeances_unique DO UPDATE SET
+                description = EXCLUDED.description, niveau = EXCLUDED.niveau
+            """, (dossier_id, f"cdd_{row['contrat_id']}", desc_cdd, row['date_fin'], annee, niv))
+            conn.commit()
+        except:
+            conn.rollback()
+
+    # ── Belcotax annuel ───────────────────────────────────────────────
+    if mois in [1, 2] and date_activation and date_activation.year < annee:
+        inserer('belcotax',
+                f"Belcotax 281.10 — fiches fiscales revenus {annee-1} — avant le 28/02/{annee}",
+                date(annee, 2, 28), None, 'warn')
+
+    # ── Récupérer toutes les échéances à afficher ─────────────────────
+    cur.execute("""
+        SELECT * FROM echeances
+        WHERE dossier_id = %s
+        AND (
+            statut = 'en_attente'
+            OR (statut = 'fait' AND updated_at > NOW() - INTERVAL '30 days')
+        )
+        ORDER BY
+            CASE statut WHEN 'en_attente' THEN 0 ELSE 1 END,
+            CASE niveau WHEN 'urgent' THEN 0 ELSE 1 END,
+            date_echeance ASC NULLS LAST
+        LIMIT 25
+    """, (dossier_id,))
+    result = [dict(r) for r in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return result
 
 @app.route('/contrat/etudiant/nouveau', methods=['GET', 'POST'])
 @login_required
 def nouveau_contrat_etudiant():
     dossier_id = request.args.get('dossier_id', type=int) or request.form.get('dossier_id', type=int)
     travailleur_id = request.args.get('travailleur_id', type=int) or request.form.get('travailleur_id', type=int)
-
     dossier = get_dossier(dossier_id)
     travailleur = get_travailleur(travailleur_id)
     ctx = get_context_base()
-
     if request.method == 'POST':
         form = request.form
-        cp_key = form['commission_paritaire_key']
-        cp_info = CP_DATABASE.get(cp_key, {})
-
-        data = {
-            'nom_societe': form.get('nom_societe', dossier['nom']),
-            'adresse_societe': form.get('adresse_societe', dossier['adresse'] or ''),
-            'bce_societe': form.get('bce_societe', dossier['bce'] or ''),
-            'rsz_societe': form.get('rsz_societe', dossier['rsz'] or ''),
-            'representant': form.get('representant', dossier['representant'] or ''),
-            'assurance_at': form.get('assurance_at', '—'),
-            'nom_etudiant': form['nom_etudiant'],
-            'adresse_etudiant': form.get('adresse_etudiant', travailleur['adresse'] or ''),
-            'ddn_etudiant': form.get('ddn_etudiant', ''),
-            'niss_etudiant': form.get('niss_etudiant', travailleur['niss'] or ''),
-            'ecole_etudiant': form.get('ecole_etudiant', ''),
-            'etat_civil': form.get('etat_civil', 'célibataire'),
-            'date_debut': form['date_debut'],
-            'date_fin': form['date_fin'],
-            'nb_jours': int(form['nb_jours']),
-            'heures_jour': float(form['heures_jour']),
-            'horaire_journalier': form.get('horaire_journalier', ''),
-            'salaire_horaire': form['salaire_horaire'],
-            'fonction': form['fonction'],
-            'lieu_travail': form.get('lieu_travail', dossier['adresse'] or ''),
-            'lieu_signature': form.get('lieu_signature', 'Bruxelles'),
-            'commission_paritaire': cp_key,
-        }
-
-        filepath, filename = generer_contrat_etudiant_pdf(data, cp_info)
-
+        cp_key = form.get('commission_paritaire_key', dossier.get('cp_principale', 'CP 140.03'))
         def pd(d):
             if not d: return None
             try: p = d.split('/'); return f"{p[2]}-{p[1]}-{p[0]}"
             except: return None
-
         create_contrat({'dossier_id': dossier_id, 'travailleur_id': travailleur_id,
             'type_contrat': 'STU', 'cp_key': cp_key,
-            'fonction': form['fonction'], 'categorie': 'étudiant',
-            'salaire_horaire': float(form['salaire_horaire']),
+            'fonction': form.get('fonction', ''), 'categorie': 'etudiant',
+            'salaire_horaire': float(form.get('salaire_horaire', 0) or 0),
             'salaire_mensuel': 0,
             'heures_semaine': get_heures_semaine(cp_key),
-            'horaire_journalier': form.get('horaire_journalier'),
-            'lieu_travail': form.get('lieu_travail'),
-            'date_debut': pd(form['date_debut']),
-            'date_fin': pd(form['date_fin']),
-            'motif_cdd': 'Contrat étudiant', 'temps_plein': True,
-            'pdf_path': filepath})
-
+            'horaire_journalier': form.get('horaire_journalier', ''),
+            'lieu_travail': form.get('lieu_travail', dossier.get('adresse', '')),
+            'date_debut': pd(form.get('date_debut', '')),
+            'date_fin': pd(form.get('date_fin', '')),
+            'motif_cdd': 'Contrat etudiant', 'temps_plein': True,
+            'pdf_path': None})
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id, tab='contrats'))
-
     return render_template('contrat_etudiant.html',
                            dossier=dossier, travailleur=travailleur,
                            dossier_actif=dossier,
-                           cp_keys=list(CP_DATABASE.keys()),
+                           cp_data=CP_DATABASE,
                            **ctx)

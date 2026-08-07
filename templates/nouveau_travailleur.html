@@ -4,72 +4,139 @@
 
 <div class="page-header">
   <div class="page-header-left">
+    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
     <h2>Nouveau travailleur</h2>
-    <div class="breadcrumb"><a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> · Nouveau travailleur</div>
   </div>
 </div>
 
-<div class="card" style="max-width:700px">
-  <div class="card-header"><h3>Informations du travailleur</h3></div>
-  <div class="card-body">
-    <form method="POST">
-      <div class="form-grid">
-        <div>
-          <div class="form-group">
-            <label class="form-label">Prénom *</label>
-            <input type="text" name="prenom" class="form-control" required {% if prefill_prenom %}value="{{ prefill_prenom }}"{% endif %}>
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">Nom *</label>
-            <input type="text" name="nom" class="form-control" required {% if prefill_nom %}value="{{ prefill_nom }}"{% endif %}>
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">N° Registre national (NISS)</label>
-            <input type="text" name="niss" class="form-control" placeholder="XX.XX.XX-XXX.XX">
-            <div class="form-hint">Sur la carte d'identité</div>
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">Date de naissance</label>
-            <input type="text" name="date_naissance" class="form-control" placeholder="JJ/MM/AAAA">
-          </div>
-        </div>
-        <div class="full">
-          <div class="form-group">
-            <label class="form-label">Adresse complète</label>
-            <input type="text" name="adresse" class="form-control" placeholder="Rue, N°, Code postal, Commune">
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">IBAN</label>
-            <input type="text" name="iban" class="form-control" placeholder="BE...">
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">Email</label>
-            <input type="email" name="email" class="form-control">
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">Téléphone</label>
-            <input type="text" name="telephone" class="form-control" placeholder="+32...">
-          </div>
-        </div>
+<form method="POST">
+<div class="two-col">
+
+  <!-- COL 1 : Infos personnelles -->
+  <div class="card">
+    <div class="card-header"><h3>👤 Informations personnelles</h3></div>
+    <div class="card-body form-grid">
+      <div class="form-group">
+        <label class="form-label">Prénom *</label>
+        <input type="text" name="prenom" class="form-control" required>
       </div>
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Enregistrer</button>
-        <a href="/dossier/{{ dossier.id }}" class="btn btn-secondary">Annuler</a>
+      <div class="form-group">
+        <label class="form-label">Nom *</label>
+        <input type="text" name="nom" class="form-control" required>
       </div>
-    </form>
+      <div class="form-group">
+        <label class="form-label">N° NISS</label>
+        <input type="text" name="niss" class="form-control" placeholder="XX.XX.XX-XXX.XX">
+        <div class="form-hint">Sur la carte d'identité</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date de naissance</label>
+        <input type="text" name="date_naissance" class="form-control" placeholder="JJ/MM/AAAA">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Adresse complète</label>
+        <input type="text" name="adresse" class="form-control" placeholder="Rue, N°, Code postal, Commune">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" name="email" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Téléphone</label>
+        <input type="text" name="telephone" class="form-control" placeholder="+32...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">IBAN</label>
+        <input type="text" name="iban" class="form-control" placeholder="BE...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Situation familiale</label>
+        <select name="situation_familiale" class="form-control">
+          <option value="isole">Isolé(e)</option>
+          <option value="marie">Marié(e) / Cohabitant légal</option>
+          <option value="chef_famille">Chef de famille</option>
+          <option value="autres">Autres</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Personnes à charge</label>
+        <input type="number" name="personnes_charge" class="form-control" value="0" min="0">
+      </div>
+    </div>
   </div>
+
+  <!-- COL 2 : Contrat et CP -->
+  <div class="card">
+    <div class="card-header"><h3>📋 Contrat et commission paritaire</h3></div>
+    <div class="card-body form-grid">
+      <div class="form-group">
+        <label class="form-label">Type de contrat *</label>
+        <select name="type_contrat" class="form-control" required onchange="toggleDateFin(this.value)">
+          <option value="CDI">CDI — Durée indéterminée</option>
+          <option value="CDD">CDD — Durée déterminée</option>
+          <option value="STU">Étudiant</option>
+          <option value="FLX">Flexi-job</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Commission paritaire *</label>
+        <select name="cp_key" class="form-control" required>
+          {% for cp in cp_keys %}
+          <option value="{{ cp }}" {% if dossier.cp_principale == cp %}selected{% endif %}>{{ cp }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Fonction *</label>
+        <input type="text" name="fonction" class="form-control" required placeholder="Ex: Chauffeur, Aide-cuisine, Assistant administratif">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Statut</label>
+        <select name="statut_travailleur" class="form-control">
+          <option value="employe">Employé</option>
+          <option value="ouvrier">Ouvrier</option>
+          <option value="etudiant">Étudiant</option>
+          <option value="flexi">Flexi-job</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Salaire horaire brut (€)</label>
+        <input type="number" name="salaire_horaire" class="form-control" step="0.0001" placeholder="Ex: 14.9255">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date d'entrée *</label>
+        <input type="text" name="date_debut" class="form-control" placeholder="JJ/MM/AAAA" required>
+      </div>
+      <div class="form-group" id="group-date-fin">
+        <label class="form-label">Date de fin <span style="color:#888;font-weight:400">(CDD/Étudiant)</span></label>
+        <input type="text" name="date_fin" class="form-control" placeholder="JJ/MM/AAAA">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Lieu de travail</label>
+        <input type="text" name="lieu_travail" class="form-control" value="{{ dossier.adresse or '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assurance AT</label>
+        <input type="text" name="assurance_at" class="form-control" value="{{ dossier.assurance_at or '' }}" placeholder="Nom assureur">
+      </div>
+    </div>
+  </div>
+
 </div>
 
+<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+  <a href="/dossier/{{ dossier.id }}" class="btn btn-secondary">Annuler</a>
+  <button type="submit" class="btn btn-primary">💾 Créer le travailleur</button>
+</div>
+</form>
+
+{% block scripts %}
+<script>
+function toggleDateFin(type) {
+  const g = document.getElementById('group-date-fin');
+  g.style.display = (type === 'CDD' || type === 'STU') ? '' : 'none';
+}
+toggleDateFin(document.querySelector('[name=type_contrat]').value);
+</script>
+{% endblock %}
 {% endblock %}

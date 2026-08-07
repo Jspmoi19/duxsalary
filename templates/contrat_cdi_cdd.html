@@ -1,230 +1,300 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>PayrollTool – Nouveau contrat CDI/CDD</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #333; }
-header { background: #1F4E79; color: white; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; }
-header h1 { font-size: 18px; font-weight: 700; }
-header a { color: #90caf9; font-size: 13px; text-decoration: none; }
-.container { max-width: 960px; margin: 24px auto; padding: 0 20px; }
-.card { background: white; border-radius: 10px; padding: 24px 28px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
-.card h2 { font-size: 13px; font-weight: 700; color: #1F4E79; border-left: 4px solid #1F4E79; padding-left: 10px; margin-bottom: 18px; text-transform: uppercase; }
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-.full { grid-column: 1/-1; }
-label { display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase; }
-input, select, textarea { width: 100%; padding: 8px 11px; border: 1.5px solid #dde3ea; border-radius: 6px; font-size: 13px; }
-input:focus, select:focus { outline: none; border-color: #1F4E79; }
-.hint { font-size: 10.5px; color: #999; margin-top: 3px; }
-.type-toggle { display: flex; gap: 12px; margin-bottom: 4px; }
-.type-btn { flex: 1; padding: 12px; border: 2px solid #dde3ea; border-radius: 8px; cursor: pointer; text-align: center; font-weight: 600; font-size: 14px; background: white; transition: all 0.2s; }
-.type-btn.active { border-color: #1F4E79; background: #e8f0f8; color: #1F4E79; }
-.cdd-only { display: none; }
-.cdd-only.show { display: block; }
-.info-box { background: #e8f4f8; border-left: 4px solid #1F4E79; padding: 10px 14px; border-radius: 4px; font-size: 12px; color: #1F4E79; margin-top: 10px; }
-.info-box.warning { background: #fff8e1; border-color: #f59e0b; color: #92400e; }
-.bareme-info { background: #f8fafc; border-radius: 6px; padding: 12px; margin-top: 8px; display: none; }
-.bareme-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px solid #eee; }
-.bareme-row:last-child { border: none; font-weight: 700; color: #1F4E79; }
-.btn { width: 100%; padding: 14px; background: #1F4E79; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px; }
-.btn:hover { background: #163d60; }
-</style>
-</head>
-<body>
-<header>
-    <h1>{{ profil.icon }} {{ profil.nom }} – Nouveau contrat CDI / CDD</h1>
-    <a href="/profil/{{ profil_id }}">← Dashboard</a>
-</header>
-<div class="container">
-<form action="/generer-contrat" method="POST">
+{% extends "base.html" %}
+{% block title %}Nouveau contrat — DuxSalary{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    {% if prefill_travailleur_id %}
+    <a href="/travailleur/{{ prefill_travailleur_id }}" class="btn-back">← Retour au travailleur</a>
+    {% else %}
+    <a href="/dossier/{{ profil.id }}" class="btn-back">← {{ profil.nom }}</a>
+    {% endif %}
+    <h2>Nouveau contrat CDI / CDD</h2>
+    <div class="breadcrumb">{{ profil.nom }}</div>
+  </div>
+</div>
+
+<form method="POST">
 <input type="hidden" name="type_contrat" id="type_contrat" value="CDI">
 
-<!-- TYPE -->
-<div class="card">
-    <h2>Type de contrat</h2>
-    <div class="type-toggle">
-        <div class="type-btn active" id="btn-cdi" onclick="setType('CDI')">📄 CDI<br><small style="font-weight:400;font-size:11px">Durée indéterminée</small></div>
-        <div class="type-btn" id="btn-cdd" onclick="setType('CDD')">⏱️ CDD<br><small style="font-weight:400;font-size:11px">Durée déterminée</small></div>
-    </div>
-    <div class="cdd-only" id="bloc-cdd">
-        <div class="grid" style="margin-top:14px">
-            <div>
-                <label>Date de fin du CDD</label>
-                <input type="text" name="date_fin" placeholder="JJ/MM/AAAA">
+<div class="two-col">
+  <!-- COL 1 -->
+  <div>
+    <!-- TYPE -->
+    <div class="card">
+      <div class="card-header"><h3>Type de contrat</h3></div>
+      <div class="card-body">
+        <div style="display:flex;gap:12px;margin-bottom:12px">
+          <div class="type-btn active" id="btn-cdi" onclick="setType('CDI')"
+               style="flex:1;padding:14px;border:2px solid #1F4E79;border-radius:8px;cursor:pointer;text-align:center;background:#e8f0f8;font-weight:700;font-size:14px;color:#1F4E79">
+            📄 CDI<br><small style="font-weight:400;font-size:11px">Durée indéterminée</small>
+          </div>
+          <div class="type-btn" id="btn-cdd" onclick="setType('CDD')"
+               style="flex:1;padding:14px;border:2px solid #dde3ea;border-radius:8px;cursor:pointer;text-align:center;background:white;font-weight:700;font-size:14px">
+            ⏱️ CDD<br><small style="font-weight:400;font-size:11px">Durée déterminée</small>
+          </div>
+        </div>
+        <div id="bloc-cdd" style="display:none">
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">Date de fin du CDD</label>
+              <input type="text" name="date_fin" class="form-control" placeholder="JJ/MM/AAAA"
+                     value="{{ prefill_contrat.date_fin.strftime('%d/%m/%Y') if prefill_contrat and prefill_contrat.date_fin else '' }}">
             </div>
-            <div>
-                <label>Motif justificatif du CDD</label>
-                <select name="motif_cdd">
-                    <option value="accroissement temporaire de travail">Accroissement temporaire de travail</option>
-                    <option value="remplacement d'un travailleur absent">Remplacement travailleur absent</option>
-                    <option value="travaux nettement définis et non habituels">Travaux nettement définis et non habituels</option>
-                    <option value="emploi saisonnier">Emploi saisonnier</option>
-                    <option value="programme de remise au travail">Programme remise au travail</option>
-                </select>
+            <div class="form-group">
+              <label class="form-label">Motif CDD</label>
+              <select name="motif_cdd" class="form-control">
+                <option value="accroissement temporaire de travail">Accroissement temporaire de travail</option>
+                <option value="remplacement d'un travailleur absent">Remplacement travailleur absent</option>
+                <option value="travaux nettement définis et non habituels">Travaux nettement définis</option>
+                <option value="emploi saisonnier">Emploi saisonnier</option>
+              </select>
             </div>
+          </div>
+          <div style="background:#fff8e1;border-left:4px solid #f59e0b;padding:10px 14px;border-radius:4px;font-size:12px;color:#92400e;margin-top:8px">
+            ⚠️ Maximum 4 CDD successifs OU 2 ans cumulés — sinon requalification en CDI automatique.
+          </div>
         </div>
-        <div class="info-box warning" style="margin-top:10px">
-            ⚠️ Maximum 4 CDD successifs OU 2 ans cumulés avec le même employeur, sinon requalification en CDI automatique.
-        </div>
+      </div>
     </div>
+
+    <!-- TRAVAILLEUR -->
+    <div class="card">
+      <div class="card-header"><h3>👤 Travailleur</h3></div>
+      <div class="card-body form-grid">
+        <div class="form-group">
+          <label class="form-label">Travailleur *</label>
+          <select name="travailleur_id" class="form-control" required onchange="prefillTravailleur(this.value)">
+            {% for t in travailleurs %}
+            <option value="{{ t.id }}"
+              {% if prefill_travailleur_id and t.id == prefill_travailleur_id %}selected{% endif %}>
+              {{ t.prenom }} {{ t.nom }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nom complet</label>
+          <input type="text" name="nom_travailleur" class="form-control" id="f_nom"
+                 value="{{ prefill_travailleur.prenom ~ ' ' ~ prefill_travailleur.nom if prefill_travailleur else '' }}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">NISS</label>
+          <input type="text" name="niss_travailleur" class="form-control" id="f_niss"
+                 value="{{ prefill_travailleur.niss or '' if prefill_travailleur else '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date de naissance</label>
+          <input type="text" name="ddn_travailleur" class="form-control" id="f_ddn"
+                 value="{{ prefill_travailleur.date_naissance.strftime('%d/%m/%Y') if prefill_travailleur and prefill_travailleur.date_naissance else '' }}">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Adresse</label>
+          <input type="text" name="adresse_travailleur" class="form-control" id="f_adresse"
+                 value="{{ prefill_travailleur.adresse or '' if prefill_travailleur else '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">IBAN</label>
+          <input type="text" name="iban_travailleur" class="form-control" id="f_iban"
+                 value="{{ prefill_travailleur.iban or '' if prefill_travailleur else '' }}">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COL 2 -->
+  <div>
+    <!-- EMPLOYEUR -->
+    <div class="card">
+      <div class="card-header"><h3>🏢 Employeur</h3></div>
+      <div class="card-body form-grid">
+        <div class="form-group">
+          <label class="form-label">Société</label>
+          <input type="text" name="nom_societe" class="form-control" value="{{ profil.nom }}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">BCE</label>
+          <input type="text" name="bce_societe" class="form-control" value="{{ profil.bce or '' }}" required>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Adresse</label>
+          <input type="text" name="adresse_societe" class="form-control" value="{{ profil.adresse or '' }}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">N° RSZ</label>
+          <input type="text" name="rsz_societe" class="form-control" value="{{ profil.rsz or '' }}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Représentant</label>
+          <input type="text" name="representant" class="form-control" value="{{ profil.representant or '' }}" required>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Assurance AT</label>
+          <input type="text" name="assurance_at" class="form-control" value="{{ profil.assurance_at or '' }}" placeholder="Ex: Ethias – Police n° 45.678.901">
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTRAT -->
+    <div class="card">
+      <div class="card-header"><h3>📋 Conditions du contrat</h3></div>
+      <div class="card-body form-grid">
+        <div class="form-group">
+          <label class="form-label">Commission paritaire *</label>
+          <select name="cp_key" id="cp_select" class="form-control" onchange="updateCP()" required>
+            {% for cp_key, cp_val in cp_data.items() %}
+            <option value="{{ cp_key }}"
+              {% if prefill_contrat and prefill_contrat.cp_key == cp_key %}selected
+              {% elif profil.cp_principale == cp_key %}selected{% endif %}>
+              {{ cp_key }} – {{ cp_val.meta.secteurs[0] if cp_val.meta.secteurs else '' }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Régime</label>
+          <select name="temps_plein" class="form-control">
+            <option value="1">Temps plein</option>
+            <option value="0">Temps partiel</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Fonction *</label>
+          <input type="text" name="fonction" class="form-control" required
+                 value="{{ prefill_contrat.fonction if prefill_contrat else '' }}"
+                 placeholder="Ex: Chauffeur poids lourd, Aide-cuisine...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Catégorie</label>
+          <input type="text" name="categorie" id="categorie_input" class="form-control"
+                 value="{{ prefill_contrat.categorie if prefill_contrat else '' }}"
+                 placeholder="Ex: Personnel roulant niveau 1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Horaire journalier</label>
+          <input type="text" name="horaire_journalier" class="form-control"
+                 value="{{ prefill_contrat.horaire_journalier or '08h00 – 16h36' if prefill_contrat else '08h00 – 16h36' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Salaire horaire brut (€) *</label>
+          <input type="number" name="salaire_horaire" step="0.0001" class="form-control"
+                 value="{{ prefill_contrat.salaire_horaire if prefill_contrat else '' }}"
+                 placeholder="Ex: 14.9255" oninput="calcSalaire()" required>
+          <div class="form-hint" id="min_hint">Sélectionnez une CP</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Salaire mensuel brut (€)</label>
+          <input type="text" name="salaire_mensuel" id="sal_mensuel" class="form-control"
+                 readonly style="background:#f5f5f5" placeholder="Auto-calculé">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date d&apos;entrée en service *</label>
+          <input type="text" name="date_debut" class="form-control" placeholder="JJ/MM/AAAA" required
+                 value="{{ prefill_contrat.date_debut.strftime('%d/%m/%Y') if prefill_contrat and prefill_contrat.date_debut else '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lieu de signature</label>
+          <input type="text" name="lieu_signature" class="form-control" value="Bruxelles">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Lieu de travail</label>
+          <input type="text" name="lieu_travail" class="form-control" value="{{ profil.adresse or '' }}">
+        </div>
+
+        <!-- Info CP -->
+        <div class="form-group full" id="cp_info_box" style="background:#e8f4fd;border-left:4px solid #1F4E79;padding:10px 14px;border-radius:4px;font-size:12px;color:#1F4E79;display:none">
+        </div>
+
+        <!-- Barèmes -->
+        <div class="form-group full" id="bareme_table" style="display:none;background:#f8fafc;border-radius:6px;padding:12px">
+          <div style="font-size:11px;font-weight:700;color:#1F4E79;margin-bottom:8px">Barèmes minimums CP (référence)</div>
+          <div id="bareme_rows"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
-<!-- EMPLOYEUR -->
-<div class="card">
-    <h2>Employeur</h2>
-    <div class="grid">
-        <div><label>Nom de la société</label><input name="nom_societe" value="{{ profil.nom }}" required></div>
-        <div><label>BCE</label><input name="bce_societe" value="{{ profil.bce }}" required></div>
-        <div class="full"><label>Adresse</label><input name="adresse_societe" value="{{ profil.adresse }}" required></div>
-        <div><label>N° RSZ</label><input name="rsz_societe" value="{{ profil.rsz }}" required></div>
-        <div><label>Représentant</label><input name="representant" value="{{ profil.representant }}" required></div>
-        <div class="full"><label>Assurance accidents du travail (assureur + n° police)</label><input name="assurance_at" placeholder="Ex: Ethias – Police n° 45.678.901" required></div>
-    </div>
+<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+  {% if prefill_travailleur_id %}
+  <a href="/travailleur/{{ prefill_travailleur_id }}" class="btn btn-secondary">Annuler</a>
+  {% else %}
+  <a href="/dossier/{{ profil.id }}" class="btn btn-secondary">Annuler</a>
+  {% endif %}
+  <button type="submit" class="btn btn-primary">🚀 Générer le contrat PDF</button>
 </div>
-
-<!-- TRAVAILLEUR -->
-<div class="card">
-    <h2>Travailleur</h2>
-    <div class="grid">
-        <div><label>Nom et prénom</label><input name="nom_travailleur" placeholder="Prénom NOM" required></div>
-        <div><label>NISS</label><input name="niss_travailleur" placeholder="XX.XX.XX-XXX.XX" required></div>
-        <div class="full"><label>Adresse</label><input name="adresse_travailleur" placeholder="Rue, N°, CP, Commune" required></div>
-        <div><label>Date de naissance</label><input name="ddn_travailleur" placeholder="JJ/MM/AAAA" required></div>
-        <div><label>N° de compte bancaire (IBAN)</label><input name="iban_travailleur" placeholder="BE..."></div>
-    </div>
-</div>
-
-<!-- CONTRAT -->
-<div class="card">
-    <h2>Contrat</h2>
-    <div class="grid">
-        <div><label>Date d'entrée en service</label><input name="date_debut" placeholder="JJ/MM/AAAA" required></div>
-        <div><label>Lieu de signature</label><input name="lieu_signature" value="Vilvoorde" required></div>
-        <div>
-            <label>Commission paritaire</label>
-            <select name="cp_key" id="cp_select" onchange="updateCP()" required>
-                {% for cp_key, cp_val in cp_data.items() %}
-                <option value="{{ cp_key }}">{{ cp_key }} – {{ cp_val.meta.secteurs[0] if cp_val.meta.secteurs else '' }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div>
-            <label>Régime de travail</label>
-            <select name="temps_plein">
-                <option value="1">Temps plein</option>
-                <option value="0">Temps partiel</option>
-            </select>
-        </div>
-    </div>
-    <div class="info-box" id="cp_info_box" style="margin-top:12px">
-        Sélectionnez une CP pour voir les informations.
-    </div>
-</div>
-
-<!-- FONCTION & RÉMUNÉRATION -->
-<div class="card">
-    <h2>Fonction et rémunération</h2>
-    <div class="grid">
-        <div>
-            <label>Fonction</label>
-            <input name="fonction" placeholder="Ex: Maçon, Cuisinier, Aide-comptable..." required>
-        </div>
-        <div>
-            <label>Catégorie</label>
-            <input name="categorie" id="categorie_input" placeholder="Ex: Catégorie III, Classe B..." required>
-        </div>
-        <div>
-            <label>Horaire journalier</label>
-            <input name="horaire_journalier" value="08h00 – 16h36">
-        </div>
-    </div>
-    <br>
-    <div class="grid3">
-        <div>
-            <label>Salaire horaire brut (€)</label>
-            <input type="number" name="salaire_horaire" step="0.01" placeholder="Ex: 18.39" oninput="calcSalaire()" required>
-            <div class="hint" id="min_hint">Sélectionnez une CP</div>
-        </div>
-        <div>
-            <label>Salaire mensuel brut (€) — calculé</label>
-            <input type="text" name="salaire_mensuel" id="sal_mensuel" placeholder="Auto-calculé" readonly style="background:#f5f5f5">
-        </div>
-        <div>
-            <label>Lieu de travail</label>
-            <input name="lieu_travail" value="{{ profil.adresse }}" required>
-        </div>
-    </div>
-
-    <!-- Barèmes par catégorie -->
-    <div class="bareme-info" id="bareme_table">
-        <div style="font-size:11px;font-weight:700;color:#1F4E79;margin-bottom:8px">Barèmes minimums CP (référence)</div>
-        <div id="bareme_rows"></div>
-    </div>
-</div>
-
-<button type="submit" class="btn">🚀 Générer le contrat</button>
 </form>
-</div>
 
-<script>
+{% block scripts %}
+
 const CP_INFO = {{ cp_json | safe }};
+const TRAVAILLEURS = {{ travailleurs_json | safe }};
 
 function setType(t) {
-    document.getElementById('type_contrat').value = t;
-    document.getElementById('btn-cdi').classList.toggle('active', t === 'CDI');
-    document.getElementById('btn-cdd').classList.toggle('active', t === 'CDD');
-    document.getElementById('bloc-cdd').classList.toggle('show', t === 'CDD');
+  document.getElementById('type_contrat').value = t;
+  document.getElementById('btn-cdi').style.cssText = t === 'CDI'
+    ? 'flex:1;padding:14px;border:2px solid #1F4E79;border-radius:8px;cursor:pointer;text-align:center;background:#e8f0f8;font-weight:700;font-size:14px;color:#1F4E79'
+    : 'flex:1;padding:14px;border:2px solid #dde3ea;border-radius:8px;cursor:pointer;text-align:center;background:white;font-weight:700;font-size:14px';
+  document.getElementById('btn-cdd').style.cssText = t === 'CDD'
+    ? 'flex:1;padding:14px;border:2px solid #1F4E79;border-radius:8px;cursor:pointer;text-align:center;background:#e8f0f8;font-weight:700;font-size:14px;color:#1F4E79'
+    : 'flex:1;padding:14px;border:2px solid #dde3ea;border-radius:8px;cursor:pointer;text-align:center;background:white;font-weight:700;font-size:14px';
+  document.getElementById('bloc-cdd').style.display = t === 'CDD' ? 'block' : 'none';
+}
+
+function prefillTravailleur(id) {
+  const t = TRAVAILLEURS.find(x => x.id == id);
+  if (!t) return;
+  document.getElementById('f_nom').value = (t.prenom || '') + ' ' + (t.nom || '');
+  document.getElementById('f_niss').value = t.niss || '';
+  document.getElementById('f_ddn').value = t.date_naissance || '';
+  document.getElementById('f_adresse').value = t.adresse || '';
+  document.getElementById('f_iban').value = t.iban || '';
 }
 
 function updateCP() {
-    const cp = document.getElementById('cp_select').value;
-    const info = CP_INFO[cp];
-    if (!info) return;
-    const box = document.getElementById('cp_info_box');
-    const h = info.duree_travail.heures_semaine;
-    box.innerHTML = `<b>${info.meta.nom}</b> — ${info.meta.type_travailleur.toUpperCase()} — ${h}h/semaine<br>
-        Secteurs : ${info.meta.secteurs.slice(0,3).join(', ')}${info.meta.secteurs.length > 3 ? '...' : ''}<br>
-        Fonds : ${info.meta.fonds_securite || '—'} | 
-        ${info.meta.type_travailleur === 'ouvrier' ? 'Pécule vacances : ONVA (≈10,27% brut)' : 'Pécule vacances : à charge employeur'}`;
+  const cp = document.getElementById('cp_select').value;
+  const info = CP_INFO[cp];
+  if (!info) return;
+  const h = info.duree_travail.heures_semaine;
+  document.getElementById('cp_info_box').style.display = 'block';
+  document.getElementById('cp_info_box').innerHTML =
+    `<b>${info.meta.nom}</b> — ${info.meta.type_travailleur.toUpperCase()} — ${h}h/semaine`;
 
-    // Barèmes
-    const baremes = info.baremes;
-    let rows = '';
-    const skip = ['etudiant','flexi','note_IT','titres_services'];
-    for (const [cat, val] of Object.entries(baremes)) {
-        if (skip.includes(cat) || typeof val !== 'object' || !val.horaire) continue;
-        const fonctions = val.fonctions ? val.fonctions.slice(0,2).join(', ') : '';
-        rows += `<div class="bareme-row"><span>${cat.replace(/_/g,' ')} ${fonctions ? '— '+fonctions : ''}</span><span>${val.horaire} €/h</span></div>`;
-    }
-    if (rows) {
-        document.getElementById('bareme_rows').innerHTML = rows;
-        document.getElementById('bareme_table').style.display = 'block';
-    }
-
-    // Minimum
-    const mins = Object.values(baremes).filter(v => typeof v === 'object' && v.horaire);
-    if (mins.length > 0) {
-        const minH = Math.min(...mins.map(v => v.horaire));
-        document.getElementById('min_hint').textContent = `Minimum légal CP : ${minH.toFixed(2)} €/h`;
-    }
-    calcSalaire();
+  const baremes = info.baremes;
+  let rows = '';
+  for (const [cat, val] of Object.entries(baremes)) {
+    if (typeof val !== 'object' || !val.horaire) continue;
+    rows += `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid #eee">
+      <span>${cat}</span><span style="font-weight:700">${val.horaire} €/h</span></div>`;
+  }
+  if (rows) {
+    document.getElementById('bareme_rows').innerHTML = rows;
+    document.getElementById('bareme_table').style.display = 'block';
+  }
+  const mins = Object.values(baremes).filter(v => typeof v === 'object' && v.horaire);
+  if (mins.length > 0) {
+    const minH = Math.min(...mins.map(v => v.horaire));
+    document.getElementById('min_hint').textContent = `Minimum légal CP : ${minH.toFixed(4)} €/h`;
+  }
+  calcSalaire();
 }
 
 function calcSalaire() {
-    const cp = document.getElementById('cp_select').value;
-    const info = CP_INFO[cp];
-    const h = parseFloat(document.querySelector('[name=salaire_horaire]').value) || 0;
-    if (h && info) {
-        const hsem = info.duree_travail.heures_semaine;
-        const hmois = hsem * 52 / 12;
-        document.getElementById('sal_mensuel').value = (h * hmois).toFixed(2) + ' €';
-    }
+  const cp = document.getElementById('cp_select').value;
+  const info = CP_INFO[cp];
+  const h = parseFloat(document.querySelector('[name=salaire_horaire]').value) || 0;
+  if (h && info) {
+    const hsem = info.duree_travail.heures_semaine;
+    const hmois = hsem * 52 / 12;
+    document.getElementById('sal_mensuel').value = (h * hmois).toFixed(2) + ' €';
+  }
 }
 
+// Init
 updateCP();
+{% if prefill_travailleur_id %}
+prefillTravailleur({{ prefill_travailleur_id }});
+{% endif %}
 </script>
-</body>
-</html>
+{% endblock %}
+{% endblock %}

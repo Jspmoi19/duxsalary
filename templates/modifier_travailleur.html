@@ -1,77 +1,155 @@
 {% extends "base.html" %}
-{% block title %}Modifier travailleur — DuxSalary{% endblock %}
+{% block title %}Modifier — {{ travailleur.prenom }} {{ travailleur.nom }} — DuxSalary{% endblock %}
 {% block content %}
 
 <div class="page-header">
   <div class="page-header-left">
-    <h2>Modifier — {{ travailleur.prenom }} {{ travailleur.nom }}</h2>
-    <div class="breadcrumb"><a href="/dossier/{{ travailleur.dossier_id }}">Dossier</a> · <a href="/travailleur/{{ travailleur.id }}">{{ travailleur.prenom }} {{ travailleur.nom }}</a> · Modifier</div>
+    <a href="/travailleur/{{ travailleur.id }}" class="btn-back">← {{ travailleur.prenom }} {{ travailleur.nom }}</a>
+    <h2>Modifier le travailleur</h2>
   </div>
 </div>
 
-<div class="card" style="max-width:700px">
-  <div class="card-header"><h3>Informations du travailleur</h3></div>
-  <div class="card-body">
-    <form method="POST">
-      <div class="form-grid">
-        <div>
-          <div class="form-group">
-            <label class="form-label">Prénom *</label>
-            <input type="text" name="prenom" class="form-control" value="{{ travailleur.prenom }}" required>
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">Nom *</label>
-            <input type="text" name="nom" class="form-control" value="{{ travailleur.nom }}" required>
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">NISS</label>
-            <input type="text" name="niss" class="form-control" value="{{ travailleur.niss or '' }}">
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">Date de naissance</label>
-            <input type="text" name="date_naissance" class="form-control" value="{{ travailleur.date_naissance.strftime('%d/%m/%Y') if travailleur.date_naissance else '' }}">
-          </div>
-        </div>
-        <div class="full">
-          <div class="form-group">
-            <label class="form-label">Adresse</label>
-            <input type="text" name="adresse" class="form-control" value="{{ travailleur.adresse or '' }}">
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">IBAN</label>
-            <input type="text" name="iban" class="form-control" value="{{ travailleur.iban or '' }}">
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">Email</label>
-            <input type="email" name="email" class="form-control" value="{{ travailleur.email or '' }}">
-          </div>
-        </div>
-        <div>
-          <div class="form-group">
-            <label class="form-label">Téléphone</label>
-            <input type="text" name="telephone" class="form-control" value="{{ travailleur.telephone or '' }}">
-          </div>
-        </div>
+<form method="POST">
+<div class="two-col">
+
+  <!-- COL 1 : Infos personnelles -->
+  <div class="card">
+    <div class="card-header"><h3>👤 Informations personnelles</h3></div>
+    <div class="card-body form-grid">
+      <div class="form-group">
+        <label class="form-label">Prénom *</label>
+        <input type="text" name="prenom" class="form-control" value="{{ travailleur.prenom }}" required>
       </div>
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Enregistrer</button>
-        <a href="/travailleur/{{ travailleur.id }}" class="btn btn-secondary">Annuler</a>
-        <form method="POST" action="/travailleur/{{ travailleur.id }}/supprimer" style="margin-left:auto" onsubmit="return confirm('Supprimer ce travailleur ?')">
-          <button type="submit" class="btn btn-danger">Supprimer</button>
-        </form>
+      <div class="form-group">
+        <label class="form-label">Nom *</label>
+        <input type="text" name="nom" class="form-control" value="{{ travailleur.nom }}" required>
       </div>
-    </form>
+      <div class="form-group">
+        <label class="form-label">N° NISS</label>
+        <input type="text" name="niss" class="form-control" value="{{ travailleur.niss or '' }}" placeholder="XX.XX.XX-XXX.XX">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date de naissance</label>
+        <input type="text" name="date_naissance" class="form-control" value="{{ travailleur.date_naissance.strftime('%d/%m/%Y') if travailleur.date_naissance else '' }}" placeholder="JJ/MM/AAAA">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Adresse complète</label>
+        <input type="text" name="adresse" class="form-control" value="{{ travailleur.adresse or '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" name="email" class="form-control" value="{{ travailleur.email or '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Téléphone</label>
+        <input type="text" name="telephone" class="form-control" value="{{ travailleur.telephone or '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">IBAN</label>
+        <input type="text" name="iban" class="form-control" value="{{ travailleur.iban or '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Situation familiale</label>
+        <select name="situation_familiale" class="form-control">
+          <option value="isole" {% if travailleur.situation_familiale == 'isole' %}selected{% endif %}>Isolé(e)</option>
+          <option value="marie" {% if travailleur.situation_familiale == 'marie' %}selected{% endif %}>Marié(e) / Cohabitant légal</option>
+          <option value="chef_famille" {% if travailleur.situation_familiale == 'chef_famille' %}selected{% endif %}>Chef de famille</option>
+          <option value="autres" {% if travailleur.situation_familiale == 'autres' %}selected{% endif %}>Autres</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Personnes à charge</label>
+        <input type="number" name="personnes_charge" class="form-control" value="{{ travailleur.personnes_charge or 0 }}" min="0">
+      </div>
+    </div>
   </div>
+
+  <!-- COL 2 : Contrat actif -->
+  <div class="card">
+    <div class="card-header"><h3>📋 Contrat actif</h3></div>
+    <div class="card-body form-grid">
+      {% if contrat_actif %}
+      <div style="grid-column:1/-1;background:#e8f4fd;border-radius:6px;padding:10px 14px;font-size:12px;color:#1F4E79;margin-bottom:4px">
+        ℹ️ Contrat actif trouvé — modifiez les données ci-dessous pour les mettre à jour.
+      </div>
+      {% endif %}
+      <div class="form-group">
+        <label class="form-label">Type de contrat</label>
+        <select name="type_contrat" class="form-control" onchange="toggleDateFin(this.value)">
+          <option value="CDI" {% if (contrat_actif and contrat_actif.type_contrat == 'CDI') or travailleur.type_contrat == 'CDI' %}selected{% endif %}>CDI</option>
+          <option value="CDD" {% if (contrat_actif and contrat_actif.type_contrat == 'CDD') or travailleur.type_contrat == 'CDD' %}selected{% endif %}>CDD</option>
+          <option value="STU" {% if (contrat_actif and contrat_actif.type_contrat == 'STU') or travailleur.type_contrat == 'STU' %}selected{% endif %}>Étudiant</option>
+          <option value="FLX" {% if (contrat_actif and contrat_actif.type_contrat == 'FLX') or travailleur.type_contrat == 'FLX' %}selected{% endif %}>Flexi-job</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Commission paritaire</label>
+        <select name="cp_key" class="form-control">
+          {% for cp in cp_keys %}
+          <option value="{{ cp }}"
+            {% if contrat_actif and contrat_actif.cp_key == cp %}selected
+            {% elif travailleur.cp_key == cp %}selected{% endif %}>{{ cp }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Fonction</label>
+        <input type="text" name="fonction" class="form-control"
+               value="{{ contrat_actif.fonction if contrat_actif else travailleur.fonction or '' }}"
+               placeholder="Ex: Chauffeur, Aide-cuisine...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Statut</label>
+        <select name="statut_travailleur" class="form-control">
+          <option value="employe" {% if travailleur.statut_travailleur == 'employe' %}selected{% endif %}>Employé</option>
+          <option value="ouvrier" {% if travailleur.statut_travailleur == 'ouvrier' %}selected{% endif %}>Ouvrier</option>
+          <option value="etudiant" {% if travailleur.statut_travailleur == 'etudiant' %}selected{% endif %}>Étudiant</option>
+          <option value="flexi" {% if travailleur.statut_travailleur == 'flexi' %}selected{% endif %}>Flexi-job</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Salaire horaire brut (€)</label>
+        <input type="number" name="salaire_horaire" class="form-control" step="0.0001"
+               value="{{ contrat_actif.salaire_horaire if contrat_actif else '' }}"
+               placeholder="Ex: 14.9255">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date d'entrée</label>
+        <input type="text" name="date_debut" class="form-control" placeholder="JJ/MM/AAAA"
+               value="{{ contrat_actif.date_debut.strftime('%d/%m/%Y') if contrat_actif and contrat_actif.date_debut else '' }}">
+      </div>
+      <div class="form-group" id="group-date-fin">
+        <label class="form-label">Date de fin <span style="color:#888;font-weight:400">(CDD/Étudiant)</span></label>
+        <input type="text" name="date_fin" class="form-control" placeholder="JJ/MM/AAAA"
+               value="{{ contrat_actif.date_fin.strftime('%d/%m/%Y') if contrat_actif and contrat_actif.date_fin else '' }}">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Lieu de travail</label>
+        <input type="text" name="lieu_travail" class="form-control"
+               value="{{ contrat_actif.lieu_travail if contrat_actif else dossier.adresse or '' }}">
+      </div>
+    </div>
+  </div>
+
 </div>
 
+<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;align-items:center">
+  <form method="POST" action="/travailleur/{{ travailleur.id }}/supprimer"
+        onsubmit="return confirm('Supprimer définitivement ce travailleur ?')" style="margin-right:auto">
+    <button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
+  </form>
+  <a href="/travailleur/{{ travailleur.id }}" class="btn btn-secondary">Annuler</a>
+  <button type="submit" class="btn btn-primary">💾 Enregistrer les modifications</button>
+</div>
+</form>
+
+{% block scripts %}
+<script>
+function toggleDateFin(type) {
+  const g = document.getElementById('group-date-fin');
+  g.style.display = (type === 'CDD' || type === 'STU') ? '' : 'none';
+}
+toggleDateFin(document.querySelector('[name=type_contrat]').value);
+</script>
+{% endblock %}
 {% endblock %}

@@ -127,3 +127,55 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; colo
   cursor: pointer;
 }
 .btn-danger:hover { background: #c82333; }
+
+/* ── Échéances ── */
+.echeance-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+.echeance-en_attente { background: #fff8f0; border-color: #fde8c8; }
+.echeance-fait { background: #f0fdf4; border-color: #bbf7d0; opacity: 0.8; }
+.echeance-left { display: flex; align-items: flex-start; gap: 12px; }
+.echeance-icon { font-size: 18px; margin-top: 2px; }
+.echeance-msg { font-size: 13px; font-weight: 500; color: var(--text); }
+.echeance-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.btn-success {
+  background: #28a745;
+  color: white;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-success:hover { background: #218838; }
+
+/* ── Échéances ── */
+.echeance-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+.echeance-en_attente { background: #fff8f0; border-color: #fde8c8; }
+.echeance-fait { background: #f0fdf4; border-color: #bbf7d0; opacity: 0.8; }
+.echeance-left { display: flex; align-items: flex-start; gap: 12px; }
+.echeance-icon { font-size: 18px; margin-top: 2px; }
+.echeance-msg { font-size: 13px; font-weight: 500; color: var(--text); }
+.echeance-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.btn-success {
+  background: #28a745;
+  color: white;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-success:hover { background: #218838; }
