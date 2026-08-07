@@ -414,7 +414,7 @@ def calendrier_prestations(dimona_id):
             jours.append({'jour': j, 'date': str(d), 'hors_dimona': True, 'weekend': False,
                          'code': 'HD', 'heures': 0, 'couleur': '#eee', 'texte': '#bbb', 'ferie': False})
             continue
-        if weekend:
+        if weekend and d not in prests_dict:
             jours.append({'jour': j, 'date': str(d), 'hors_dimona': False, 'weekend': True,
                          'code': 'WE', 'heures': 0, 'couleur': '#eceff1', 'texte': '#90a4ae', 'ferie': False})
             continue
@@ -935,6 +935,98 @@ def get_echeances_dossier(dossier_id):
     conn.close()
     return result
 
+
+def generer_pdf_etudiant(data, filepath):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    from datetime import datetime
+
+    NAVY = colors.HexColor('#1F4E79')
+    sN = ParagraphStyle('N', fontName='Helvetica', fontSize=10, leading=14)
+    sB = ParagraphStyle('B', fontName='Helvetica-Bold', fontSize=10, leading=14)
+    sT = ParagraphStyle('T', fontName='Helvetica-Bold', fontSize=14, leading=20, alignment=TA_CENTER)
+    sSub = ParagraphStyle('S', fontName='Helvetica-Bold', fontSize=11, leading=16, textColor=NAVY)
+    sJ = ParagraphStyle('J', fontName='Helvetica', fontSize=10, leading=14, alignment=TA_JUSTIFY)
+    sC = ParagraphStyle('C', fontName='Helvetica', fontSize=9, leading=12, alignment=TA_CENTER)
+
+    doc = SimpleDocTemplate(filepath, pagesize=A4,
+        topMargin=2*cm, bottomMargin=2*cm, leftMargin=2.5*cm, rightMargin=2.5*cm)
+    e = []
+
+    # En-tête société
+    e.append(Paragraph(f"<b>{data['nom_societe']}</b>", sB))
+    e.append(Paragraph(data.get('adresse_societe', ''), sN))
+    e.append(Paragraph(f"BCE : {data.get('bce_societe','')}  |  N° RSZ : {data.get('rsz_societe','')}", sN))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(HRFlowable(width='100%', thickness=2, color=NAVY))
+    e.append(Spacer(1, 0.4*cm))
+    e.append(Paragraph("CONTRAT D'OCCUPATION D'ÉTUDIANT", sT))
+    e.append(Paragraph("Article 121 de la loi du 3 juillet 1978 relative aux contrats de travail", sC))
+    e.append(Spacer(1, 0.5*cm))
+
+    # Calculs
+    heures_j = float(data.get('heures_jour', 7.6))
+    nb_jours = int(data.get('nb_jours', 0))
+    sal_h = float(data.get('salaire_horaire', 0))
+    heures_tot = round(heures_j * nb_jours, 2)
+    brut = round(sal_h * heures_tot, 2)
+    onss = round(brut * 0.0271, 2)
+    net = round(brut - onss, 2)
+
+    e.append(Paragraph("ENTRE LES SOUSSIGNÉS :", sSub))
+    e.append(Spacer(1, 0.2*cm))
+    e.append(Paragraph(f"<b>L'EMPLOYEUR :</b> {data['nom_societe']}, {data.get('adresse_societe','')}, BCE {data.get('bce_societe','')}, RSZ {data.get('rsz_societe','')}, représenté par {data.get('representant','')}, ci-après « l'employeur ».", sJ))
+    e.append(Spacer(1, 0.2*cm))
+    e.append(Paragraph("<b>ET L'ÉTUDIANT(E) :</b>", sB))
+    for label, val in [
+        ("Nom et prénom :", f"<b>{data.get('nom_etudiant','')}</b>"),
+        ("Adresse :", data.get('adresse_etudiant', '')),
+        ("Date de naissance :", data.get('ddn_etudiant', '')),
+        ("N° NISS :", data.get('niss_etudiant', '')),
+        ("Établissement :", data.get('ecole_etudiant', '')),
+    ]:
+        e.append(Paragraph(f"{label} {val}", sN))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(HRFlowable(width='100%', thickness=0.5, color=colors.grey))
+    e.append(Spacer(1, 0.2*cm))
+
+    articles = [
+        ("Article 1 – Durée",
+         f"Contrat du <b>{data.get('date_debut','')}</b> au <b>{data.get('date_fin','')}</b> — <b>{nb_jours} jours ouvrables</b>."),
+        ("Article 2 – Temps de travail",
+         f"<b>{heures_j}h/jour</b> ({data.get('horaire_journalier','')}) — Commission paritaire : {data.get('cp_key','')}."),
+        ("Article 3 – Fonction et lieu",
+         f"Fonction : <b>{data.get('fonction','')}</b> — Lieu : <b>{data.get('lieu_travail','')}</b>."),
+        ("Article 4 – Rémunération",
+         f"Salaire brut : <b>{sal_h} €/h</b> × {heures_tot}h = <b>{brut} €</b>. ONSS étudiant (2,71%) : -{onss} €. Net estimé : <b>{net} €</b>."),
+        ("Article 5 – Dimona",
+         "L'employeur a effectué la déclaration Dimona STU auprès de l'ONSS avant l'entrée en service."),
+        ("Article 6 – Quota 600h",
+         "L'étudiant(e) déclare avoir vérifié son quota disponible sur Student@work (studentatwork.be). Au-delà des 600h, les cotisations ONSS ordinaires sont dues."),
+    ]
+    for titre, texte in articles:
+        e.append(Paragraph(f"<b>{titre}</b>", sSub))
+        e.append(Spacer(1, 0.05*cm))
+        e.append(Paragraph(texte, sJ))
+        e.append(Spacer(1, 0.25*cm))
+
+    e.append(HRFlowable(width='100%', thickness=0.5, color=colors.grey))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(Paragraph(f"Fait à <b>{data.get('lieu_signature','Bruxelles')}</b>, le <b>{datetime.now().strftime('%d/%m/%Y')}</b>, en deux exemplaires.", sN))
+    e.append(Spacer(1, 0.8*cm))
+    sig = Table([[
+        Paragraph("<b>L'EMPLOYEUR</b>\n\n\n\n_______________________", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)),
+        Paragraph("<b>L'ÉTUDIANT(E)</b>\n\n\n\n_______________________", ParagraphStyle('', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)),
+    ]], colWidths=[8*cm, 8*cm])
+    e.append(sig)
+
+    doc.build(e)
+
+
 @app.route('/contrat/etudiant/nouveau', methods=['GET', 'POST'])
 @login_required
 def nouveau_contrat_etudiant():
@@ -943,16 +1035,57 @@ def nouveau_contrat_etudiant():
     dossier = get_dossier(dossier_id)
     travailleur = get_travailleur(travailleur_id)
     ctx = get_context_base()
+
     if request.method == 'POST':
         form = request.form
         cp_key = form.get('commission_paritaire_key', dossier.get('cp_principale', 'CP 140.03'))
+
         def pd(d):
             if not d: return None
             try: p = d.split('/'); return f"{p[2]}-{p[1]}-{p[0]}"
             except: return None
-        create_contrat({'dossier_id': dossier_id, 'travailleur_id': travailleur_id,
-            'type_contrat': 'STU', 'cp_key': cp_key,
-            'fonction': form.get('fonction', ''), 'categorie': 'etudiant',
+
+        # Générer PDF
+        filename = f"contrat_etudiant_{travailleur['prenom']}_{travailleur['nom']}_{form.get('date_debut','').replace('/','')}.pdf"
+        filepath = os.path.join(OUTPUT_DIR, filename)
+
+        data_pdf = {
+            'nom_societe': dossier['nom'],
+            'adresse_societe': dossier.get('adresse', ''),
+            'bce_societe': dossier.get('bce', ''),
+            'rsz_societe': dossier.get('rsz', ''),
+            'representant': dossier.get('representant', ''),
+            'nom_etudiant': f"{travailleur['prenom']} {travailleur['nom']}",
+            'adresse_etudiant': travailleur.get('adresse', ''),
+            'ddn_etudiant': travailleur['date_naissance'].strftime('%d/%m/%Y') if travailleur.get('date_naissance') else '',
+            'niss_etudiant': travailleur.get('niss', ''),
+            'ecole_etudiant': form.get('ecole_etudiant', ''),
+            'date_debut': form.get('date_debut', ''),
+            'date_fin': form.get('date_fin', ''),
+            'nb_jours': form.get('nb_jours', 0),
+            'heures_jour': form.get('heures_jour', 7.6),
+            'horaire_journalier': form.get('horaire_journalier', ''),
+            'salaire_horaire': form.get('salaire_horaire', 0),
+            'fonction': form.get('fonction', ''),
+            'lieu_travail': form.get('lieu_travail', dossier.get('adresse', '')),
+            'lieu_signature': form.get('lieu_signature', 'Bruxelles'),
+            'cp_key': cp_key,
+        }
+
+        try:
+            generer_pdf_etudiant(data_pdf, filepath)
+            pdf_path = filepath
+        except Exception as ex:
+            pdf_path = None
+            print(f"Erreur PDF étudiant: {ex}")
+
+        create_contrat({
+            'dossier_id': dossier_id,
+            'travailleur_id': travailleur_id,
+            'type_contrat': 'STU',
+            'cp_key': cp_key,
+            'fonction': form.get('fonction', ''),
+            'categorie': 'etudiant',
             'salaire_horaire': float(form.get('salaire_horaire', 0) or 0),
             'salaire_mensuel': 0,
             'heures_semaine': get_heures_semaine(cp_key),
@@ -960,11 +1093,28 @@ def nouveau_contrat_etudiant():
             'lieu_travail': form.get('lieu_travail', dossier.get('adresse', '')),
             'date_debut': pd(form.get('date_debut', '')),
             'date_fin': pd(form.get('date_fin', '')),
-            'motif_cdd': 'Contrat etudiant', 'temps_plein': True,
-            'pdf_path': None})
+            'motif_cdd': 'Contrat etudiant',
+            'temps_plein': True,
+            'pdf_path': pdf_path,
+        })
+
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id, tab='contrats'))
+
     return render_template('contrat_etudiant.html',
                            dossier=dossier, travailleur=travailleur,
                            dossier_actif=dossier,
                            cp_data=CP_DATABASE,
                            **ctx)
+
+
+@app.route('/dimona/<int:dimona_id>/supprimer', methods=['POST'])
+@login_required
+def supprimer_dimona(dimona_id):
+    dimona = get_dimona(dimona_id)
+    travailleur_id = dimona['travailleur_id']
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM prestations WHERE dimona_id = %s", (dimona_id,))
+    cur.execute("DELETE FROM dimona WHERE id = %s", (dimona_id,))
+    conn.commit(); cur.close(); conn.close()
+    return redirect(url_for('dimona_list', travailleur_id=travailleur_id))

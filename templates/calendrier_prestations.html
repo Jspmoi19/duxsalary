@@ -1,94 +1,86 @@
 {% extends "base.html" %}
 {% block title %}Prestations {{ mois_nom }} {{ annee }} — {{ travailleur.prenom }} {{ travailleur.nom }}{% endblock %}
 {% block content %}
-
 <div class="page-header">
   <div class="page-header-left">
-    <h2>Prestations — {{ travailleur.prenom }} {{ travailleur.nom }}</h2>
+    <a href="/travailleur/{{ travailleur.id }}" class="btn-back">&#8592; {{ travailleur.prenom }} {{ travailleur.nom }}</a>
+    <h2>Prestations &#8212; {{ travailleur.prenom }} {{ travailleur.nom }}</h2>
     <div class="breadcrumb">
-      <a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> ·
-      <a href="/travailleur/{{ travailleur.id }}">{{ travailleur.prenom }} {{ travailleur.nom }}</a> ·
+      <a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> &#183;
+      <a href="/travailleur/{{ travailleur.id }}">{{ travailleur.prenom }} {{ travailleur.nom }}</a> &#183;
       {{ mois_nom }} {{ annee }}
     </div>
   </div>
   <div class="page-actions">
     {% if mois > 1 %}
-    <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois - 1 }}" class="btn btn-secondary">← Mois précédent</a>
+    <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois - 1 }}" class="btn btn-secondary">&#8592; Mois precedent</a>
+    {% else %}
+    <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee - 1 }}&mois=12" class="btn btn-secondary">&#8592; Mois precedent</a>
     {% endif %}
     {% if mois < 12 %}
-    <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois + 1 }}" class="btn btn-secondary">Mois suivant →</a>
-    {% endif %}
-    {% if calcul %}
-    <a href="/dimona/{{ dimona.id }}/generer-paie?annee={{ annee }}&mois={{ mois }}" class="btn btn-primary">Générer fiche de paie</a>
+    <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois + 1 }}" class="btn btn-secondary">Mois suivant &#8594;</a>
+    {% else %}
+    <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee + 1 }}&mois=1" class="btn btn-secondary">Mois suivant &#8594;</a>
     {% endif %}
   </div>
 </div>
 
-<!-- LÉGENDE -->
+<!-- LEGENDE -->
 <div class="card" style="margin-bottom:14px">
   <div class="card-body" style="padding:12px 18px">
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <span style="font-size:12px;color:var(--text-muted);font-weight:600;margin-right:4px">Légende :</span>
+      <span style="font-size:12px;color:var(--text-muted);font-weight:600;margin-right:4px">Code actif :</span>
       {% for code, info in codes.items() %}
-      {% if code not in ['WE','HD'] %}
-      <span style="background:{{ info.couleur }};color:{{ info.texte }};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer" onclick="setCode('{{ code }}')">{{ code }} — {{ info.label }}</span>
+      {% if code != 'HD' %}
+      <span style="background:{{ info.couleur }};color:{{ info.texte }};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;border:2px solid transparent" 
+            id="btn_{{ code }}"
+            onclick="setCode('{{ code }}')">{{ code }}</span>
       {% endif %}
       {% endfor %}
     </div>
   </div>
 </div>
 
-<!-- CODE SÉLECTIONNÉ -->
+<!-- CODE + HEURES -->
 <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;background:white;border:1px solid var(--border);border-radius:8px;padding:12px 18px">
-  <span style="font-size:13px;font-weight:600;color:var(--text-muted)">Code actif :</span>
-  <span id="code_actif_label" style="font-size:14px;font-weight:700;color:var(--accent)">P — Presté</span>
-  <span style="font-size:12px;color:var(--text-muted)">· Cliquez sur un jour pour appliquer ce code</span>
+  <span style="font-size:13px;font-weight:600;color:var(--text-muted)">Code :</span>
+  <span id="code_actif_label" style="font-size:14px;font-weight:700;color:var(--accent)">P &#8212; Preste</span>
   <input type="hidden" id="code_actif" value="P">
+  <span style="font-size:12px;color:var(--text-muted);margin-left:12px">Heures :</span>
+  <input type="number" id="heures_actives" value="{{ heures_jour }}" step="0.5" min="0" max="24"
+         style="width:70px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:600">
+  <span style="font-size:11px;color:var(--text-muted)">h &#8212; Cliquez sur un jour pour appliquer</span>
 </div>
 
 <!-- CALENDRIER -->
 <div class="card">
   <div class="card-header">
-    <h3>{{ mois_nom }} {{ annee }} — Dimona {{ dimona.type_dimona }} ({{ dimona.date_debut.strftime('%d/%m/%Y') }} → {{ dimona.date_fin.strftime('%d/%m/%Y') if dimona.date_fin else 'En cours' }})</h3>
-    <div style="font-size:12px;color:var(--text-muted)">{{ stats.jours_prestes }} j. prestés · {{ stats.heures_prestees|round(1) }}h · {{ stats.jours_conge }} j. congé · {{ stats.jours_maladie }} j. maladie</div>
+    <h3>{{ mois_nom }} {{ annee }} &#8212; Dimona {{ dimona.type_dimona }} ({{ dimona.date_debut.strftime('%d/%m/%Y') }} &#8594; {{ dimona.date_fin.strftime('%d/%m/%Y') if dimona.date_fin else 'En cours' }})</h3>
+    <div style="font-size:12px;color:var(--text-muted)">{{ stats.jours_prestes }} j. prestes &#183; {{ stats.heures_prestees|round(1) }}h &#183; {{ stats.jours_conge }} j. conge &#183; {{ stats.jours_maladie }} j. maladie</div>
   </div>
   <div style="padding:16px">
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:8px">
-      {% for jour in ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'] %}
-      <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-muted);padding:4px">{{ jour }}</div>
+      {% for j in ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'] %}
+      <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-muted);padding:4px">{{ j }}</div>
       {% endfor %}
     </div>
-    
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">
-      <!-- Cellules vides avant le 1er -->
-      {% for i in range(premier_jour_semaine) %}
-      <div></div>
-      {% endfor %}
-      
-      {% for jour_data in jours %}
-      {% if jour_data.hors_dimona %}
+      {% for i in range(premier_jour_semaine) %}<div></div>{% endfor %}
+      {% for j in jours %}
+      {% if j.hors_dimona %}
       <div style="background:#f5f5f5;border-radius:6px;padding:6px;text-align:center;opacity:0.4;min-height:56px">
-        <div style="font-size:13px;font-weight:600;color:#bbb">{{ jour_data.jour }}</div>
-      </div>
-      {% elif jour_data.weekend %}
-      <div style="background:#eceff1;border-radius:6px;padding:6px;text-align:center;min-height:56px">
-        <div style="font-size:13px;font-weight:600;color:#90a4ae">{{ jour_data.jour }}</div>
-        <div style="font-size:10px;color:#b0bec5">WE</div>
+        <div style="font-size:13px;font-weight:600;color:#bbb">{{ j.jour }}</div>
       </div>
       {% else %}
-      <div id="jour_{{ jour_data.date }}"
-           style="background:{{ jour_data.couleur }};color:{{ jour_data.texte }};border-radius:6px;padding:6px;text-align:center;cursor:pointer;min-height:56px;border:2px solid transparent;transition:all 0.15s"
-           onclick="clickJour('{{ jour_data.date }}', {{ jour_data.heures }})"
-           onmouseover="this.style.borderColor='var(--accent)'"
+      <div id="jour_{{ j.date }}"
+           style="background:{{ j.couleur }};color:{{ j.texte }};border-radius:6px;padding:6px;text-align:center;cursor:pointer;min-height:56px;border:2px solid transparent;transition:all 0.15s"
+           onclick="clickJour('{{ j.date }}', {{ j.heures }})"
+           onmouseover="this.style.borderColor='#1F4E79'"
            onmouseout="this.style.borderColor='transparent'">
-        <div style="font-size:13px;font-weight:700">{{ jour_data.jour }}</div>
-        <div style="font-size:10px;font-weight:600;margin-top:2px">{{ jour_data.code }}</div>
-        {% if jour_data.heures > 0 %}
-        <div style="font-size:9px;opacity:0.8">{{ jour_data.heures }}h</div>
-        {% endif %}
-        {% if jour_data.ferie %}
-        <div style="font-size:9px">⭐</div>
-        {% endif %}
+        <div style="font-size:13px;font-weight:700">{{ j.jour }}</div>
+        <div style="font-size:10px;font-weight:600;margin-top:2px">{{ j.code }}</div>
+        {% if j.heures > 0 %}<div style="font-size:9px;opacity:0.8">{{ j.heures }}h</div>{% endif %}
+        {% if j.ferie %}<div style="font-size:9px">&#11088;</div>{% endif %}
       </div>
       {% endif %}
       {% endfor %}
@@ -96,20 +88,19 @@
   </div>
 </div>
 
-<!-- RÉCAPITULATIF -->
 {% if calcul %}
 <div class="card">
-  <div class="card-header"><h3>Récapitulatif — {{ mois_nom }} {{ annee }}</h3></div>
+  <div class="card-header"><h3>Recapitulatif &#8212; {{ mois_nom }} {{ annee }}</h3></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
     <div style="padding:18px;border-right:1px solid var(--border)">
-      <div style="font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:12px">Prestations</div>
+      <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:12px">Prestations</div>
       {% for label, val in [
-        ('Jours prestés', stats.jours_prestes ~ ' jours'),
-        ('Heures prestées', stats.heures_prestees|round(2) ~ ' h'),
-        ('Congés légaux', stats.jours_conge ~ ' jours'),
-        ('Jours fériés', stats.jours_ferie ~ ' jours'),
+        ('Jours prestes', stats.jours_prestes ~ ' jours'),
+        ('Heures prestees', stats.heures_prestees|round(2) ~ ' h'),
+        ('Conges legaux', stats.jours_conge ~ ' jours'),
+        ('Jours feries', stats.jours_ferie ~ ' jours'),
         ('Maladie', stats.jours_maladie ~ ' jours'),
-        ('Chômage', stats.jours_chomage ~ ' jours'),
+        ('Chomage', stats.jours_chomage ~ ' jours'),
         ('Sans solde', stats.jours_cnp ~ ' jours'),
       ] %}
       <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f2f5;font-size:13px">
@@ -119,79 +110,71 @@
       {% endfor %}
     </div>
     <div style="padding:18px">
-      <div style="font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:12px">Calcul de paie</div>
+      <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:12px">Calcul de paie</div>
       {% for label, val, bold in [
-        ('Salaire brut', calcul.salaire_brut|round(2) ~ ' €', False),
-        ('ONSS personnel (13,07%)', '– ' ~ calcul.onss_personnel|round(2) ~ ' €', False),
-        ('Imposable', calcul.imposable|round(2) ~ ' €', False),
-        ('Précompte professionnel', '– ' ~ calcul.precompte|round(2) ~ ' €', False),
-        ('NET À PAYER', calcul.net|round(2) ~ ' €', True),
+        ('Salaire brut', calcul.salaire_brut|round(2) ~ ' EUR', False),
+        ('ONSS personnel (13,07%)', '- ' ~ calcul.onss_personnel|round(2) ~ ' EUR', False),
+        ('Imposable', calcul.imposable|round(2) ~ ' EUR', False),
+        ('Precompte professionnel', '- ' ~ calcul.precompte|round(2) ~ ' EUR', False),
+        ('NET A PAYER', calcul.net|round(2) ~ ' EUR', True),
       ] %}
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f2f5;font-size:13px{% if bold %};font-weight:700;color:var(--accent);font-size:15px{% endif %}">
-        <span>{{ label }}</span>
-        <span>{{ val }}</span>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f2f5;font-size:{% if bold %}15{% else %}13{% endif %}px;{% if bold %}font-weight:700;color:var(--accent){% endif %}">
+        <span>{{ label }}</span><span>{{ val }}</span>
       </div>
       {% endfor %}
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-        {% for label, val in [
-          ('ONSS patronal', calcul.onss_patronal_net|round(2) ~ ' €'),
-          ('Réduction structurelle', '– ' ~ calcul.reduction_structurelle|round(2) ~ ' €'),
-          ('Coût employeur total', calcul.cout_employeur|round(2) ~ ' €'),
-        ] %}
-        <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:var(--text-muted)">
-          <span>{{ label }}</span>
-          <span>{{ val }}</span>
-        </div>
-        {% endfor %}
-      </div>
     </div>
   </div>
 </div>
 {% endif %}
 
 <script>
-const CODES = {{ codes_json | safe }};
-const HEURES_CONTRAT = {{ heures_jour }};
+var CODES = {{ codes_json | safe }};
+var HEURES_DEF = {{ heures_jour }};
 
 function setCode(code) {
   document.getElementById('code_actif').value = code;
-  const info = CODES[code];
-  document.getElementById('code_actif_label').textContent = code + ' — ' + info.label;
+  var info = CODES[code];
+  document.getElementById('code_actif_label').textContent = code + ' - ' + info.label;
   document.getElementById('code_actif_label').style.color = info.texte;
+  document.getElementById('heures_actives').value = info.prestation ? HEURES_DEF : 0;
+  // Highlight bouton actif
+  Object.keys(CODES).forEach(function(c) {
+    var btn = document.getElementById('btn_' + c);
+    if (btn) btn.style.border = c === code ? '2px solid #1F4E79' : '2px solid transparent';
+  });
 }
 
 function clickJour(dateStr, heuresActuelles) {
-  const code = document.getElementById('code_actif').value;
-  const info = CODES[code];
-  const heures = info.prestation ? HEURES_CONTRAT : 0;
-  
+  var code = document.getElementById('code_actif').value;
+  var info = CODES[code];
+  var heures = parseFloat(document.getElementById('heures_actives').value) || 0;
+
   fetch('/prestation/sauvegarder', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
-      date: dateStr,
-      code: code,
-      heures: heures,
+      date: dateStr, code: code, heures: heures,
       travailleur_id: {{ travailleur.id }},
       dimona_id: {{ dimona.id }},
       dossier_id: {{ dossier.id }}
     })
   })
-  .then(r => r.json())
-  .then(data => {
-    const el = document.getElementById('jour_' + dateStr);
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    var el = document.getElementById('jour_' + dateStr);
     if (el) {
       el.style.background = info.couleur;
       el.style.color = info.texte;
-      el.querySelector('div:nth-child(2)').textContent = code;
-      if (el.querySelector('div:nth-child(3)')) {
-        el.querySelector('div:nth-child(3)').textContent = heures > 0 ? heures + 'h' : '';
-      }
+      var divs = el.querySelectorAll('div');
+      if (divs[0]) divs[0].textContent = dateStr.split('-')[2].replace(/^0/, '');
+      if (divs[1]) divs[1].textContent = code;
+      if (divs[2]) divs[2].textContent = heures > 0 ? heures + 'h' : '';
     }
-    // Recharger les stats
     if (data.reload) location.reload();
   });
 }
-</script>
 
+// Init
+setCode('P');
+</script>
 {% endblock %}

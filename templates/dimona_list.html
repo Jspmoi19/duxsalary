@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Dimona — {{ travailleur.prenom }} {{ travailleur.nom }}{% endblock %}
 {% block content %}
-
 <div class="page-header">
   <div class="page-header-left">
+    <a href="/travailleur/{{ travailleur.id }}" class="btn-back">← {{ travailleur.prenom }} {{ travailleur.nom }}</a>
     <h2>Dimona — {{ travailleur.prenom }} {{ travailleur.nom }}</h2>
     <div class="breadcrumb">
       <a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> ·
@@ -15,7 +15,6 @@
     <a href="/travailleur/{{ travailleur.id }}/dimona/nouvelle" class="btn btn-primary">+ Enregistrer une Dimona</a>
   </div>
 </div>
-
 <div class="card">
   <div class="card-header"><h3>Périodes Dimona enregistrées</h3></div>
   <table class="data-table">
@@ -30,8 +29,12 @@
       <td>{{ d.date_fin.strftime('%d/%m/%Y') if d.date_fin else 'En cours' }}</td>
       <td><span class="badge badge-{% if d.statut == 'active' %}green{% else %}gray{% endif %}">{{ d.statut }}</span></td>
       <td style="font-size:11px;color:var(--text-muted)">{{ d.numero_reference or '—' }}</td>
-      <td>
+      <td style="display:flex;gap:6px;align-items:center">
         <a href="/dimona/{{ d.id }}/prestations" class="btn btn-secondary btn-xs">Prestations →</a>
+        <form method="POST" action="/dimona/{{ d.id }}/supprimer" style="display:inline"
+              onsubmit="return confirm('Supprimer cette Dimona ? Les prestations associées seront aussi supprimées.')">
+          <button type="submit" class="btn btn-danger btn-xs">Supprimer</button>
+        </form>
       </td>
     </tr>
     {% else %}
@@ -40,5 +43,4 @@
     </tbody>
   </table>
 </div>
-
 {% endblock %}
