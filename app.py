@@ -763,193 +763,94 @@ if __name__ == '__main__':
 # ── GESTION DES ÉCHÉANCES v2 ──────────────────────────────────────────
 
 def get_echeances_dossier(dossier_id):
-    conn = get_conn()
+    """Génère les échéances dynamiquement + récupère DmfA/Belcotax depuis la BDD."""
     from psycopg2.extras import RealDictCursor
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-
     today = date.today()
     annee = today.year
     mois = today.month
     dossier = get_dossier(dossier_id)
     date_activation = dossier.get('date_activation_rsz')
+    echeances = []
 
-    def inserer(type_ech, desc, date_ech, trimestre=None, niveau='warn'):
-        try:
-            cur.execute("""
-                INSERT INTO echeances (dossier_id, type_echeance, description, date_echeance, trimestre, annee, statut, niveau)
-                VALUES (%s, %s, %s, %s, %s, %s, 'en_attente', %s)
-                ON CONFLICT ON CONSTRAINT echeances_unique DO NOTHING
-            """, (dossier_id, type_ech, desc, date_ech, trimestre, annee, niveau))
-            conn.commit()
-        except:
-            conn.rollback()
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
 
+    # ── 1. DmfA et Belcotax depuis la BDD (seules choses stockées) ──
+    # Générer les DmfA si pas encore en base
     def trim_actif(debut_mois, an=None):
         if not date_activation: return True
         if an is None: an = annee
         import calendar as cal
         last = cal.monthrange(an, debut_mois + 2)[1]
-        fin_trim = date(an, debut_mois + 2, last)
-        debut_trim = date(an, debut_mois, 1)
-        # Le trimestre est actif si la date d'activation est avant la fin du trimestre
-        # ET le trimestre a démarré après (ou pendant) le mois d'activation
-        return date_activation <= fin_trim and date_activation >= debut_trim - __import__('datetime').timedelta(days=95)
+        return date_activation <= date(an, debut_mois + 2, last)
 
-    # ── DmfA trimestrielle ────────────────────────────────────────────
     trimestres = [
-        ('Q1', 1, f"30/04/{annee}", f"DmfA Q1/{annee} — socialsecurity.be"),
-        ('Q2', 4, f"31/07/{annee}", f"DmfA Q2/{annee} — socialsecurity.be"),
-        ('Q3', 7, f"31/10/{annee}", f"DmfA Q3/{annee} — socialsecurity.be"),
-        ('Q4', 10, f"31/01/{annee+1}", f"DmfA Q4/{annee} — socialsecurity.be"),
+        ('Q1', 1, date(annee, 4, 30), 'warn'),
+        ('Q2', 4, date(annee, 7, 31), 'warn'),
+        ('Q3', 7, date(annee, 10, 31), 'urgent' if mois in [9,10] else 'warn'),
+        ('Q4', 10, date(annee+1, 1, 31), 'warn'),
     ]
-    for trim_code, m_debut, date_str, desc in trimestres:
-        if not trim_actif(m_debut):
-            continue
-        d_parts = date_str.split('/')
-        try:
-            d_ech = date(int(d_parts[2]), int(d_parts[1]), int(d_parts[0]))
-        except:
-            continue
-        if d_ech < date(today.year - 1, 1, 1):
-            continue
-        niv = 'urgent' if (d_ech - today).days <= 30 else 'warn'
-        inserer('dmfa', desc, d_ech, trim_code, niv)
+    for trim_code, m_debut, d_ech, niv in trimestres:
+        if not trim_actif(m_debut): continue
+        cur.execute("SELECT id, statut, date_realisation, document_nom FROM echeances WHERE dossier_id=%s AND type_echeance='dmfa' AND trimestre=%s AND annee=%s",
+                    (dossier_id, trim_code, annee))
+        row = cur.fetchone()
+        if not row:
+            cur.execute("""INSERT INTO echeances (dossier_id, type_echeance, description, date_echeance, trimestre, annee, statut, niveau)
+                VALUES (%s,'dmfa',%s,%s,%s,%s,'en_attente',%s) ON CONFLICT ON CONSTRAINT echeances_unique DO NOTHING RETURNING id""",
+                (dossier_id, f"DmfA {trim_code}/{annee} — socialsecurity.be", d_ech, trim_code, annee, niv))
+            conn.commit()
+            cur.execute("SELECT id, statut, date_realisation, document_nom FROM echeances WHERE dossier_id=%s AND type_echeance='dmfa' AND trimestre=%s AND annee=%s",
+                        (dossier_id, trim_code, annee))
+            row = cur.fetchone()
+        if row:
+            echeances.append({
+                'id': row['id'], 'type_echeance': 'dmfa',
+                'description': f"DmfA {trim_code}/{annee} — à introduire sur socialsecurity.be",
+                'date_echeance': d_ech, 'statut': row['statut'],
+                'niveau': niv, 'date_realisation': row['date_realisation'],
+                'document_nom': row['document_nom'],
+            })
 
-    # ── Paiement ONSS mensuel ─────────────────────────────────────────
-    # Dû avant le 5 du mois suivant
-    import calendar as cal
-    _, last_day = cal.monthrange(annee, mois)
-    fin_mois = date(annee, mois, last_day)
-    # ONSS mensuel dû le 5 du mois suivant
-    if mois == 12:
-        onss_echeance = date(annee + 1, 1, 5)
-    else:
-        onss_echeance = date(annee, mois + 1, 5)
+    # ── 2. Échéances dynamiques (jamais stockées en base) ──
 
-    mois_noms = ['','Janvier','Février','Mars','Avril','Mai','Juin',
-                 'Juillet','Août','Septembre','Octobre','Novembre','Décembre']
+    # ONSS mensuel
+    from datetime import timedelta
+    premier_prochain = date(annee, mois, 1) + timedelta(days=32)
+    premier_prochain = premier_prochain.replace(day=1)
+    date_onss = date(premier_prochain.year, premier_prochain.month, 5)
+    if (date_onss - today).days <= 45:
+        echeances.append({
+            'id': -1, 'type_echeance': 'onss_mensuel',
+            'description': f"Paiement ONSS {premier_prochain.strftime('%B %Y')} — avant le {date_onss.strftime('%d/%m/%Y')}",
+            'date_echeance': date_onss, 'statut': 'en_attente', 'niveau': 'warn',
+            'date_realisation': None, 'document_nom': None,
+        })
 
-    # Vérifier si des travailleurs actifs existent ce mois
+    # CDD/STU arrivant à échéance (1 seul par contrat actif)
     cur.execute("""
-        SELECT COUNT(*) as nb FROM contrats c
-        WHERE c.dossier_id = %s AND c.statut = 'actif'
-        AND c.date_debut <= %s
-        AND (c.date_fin IS NULL OR c.date_fin >= %s)
-    """, (dossier_id, fin_mois, date(annee, mois, 1)))
-    row = cur.fetchone()
-    nb_actifs = row['nb'] if row else 0
-
-    if nb_actifs > 0 and date_activation and date_activation <= fin_mois:
-        desc_onss = f"Paiement ONSS {mois_noms[mois]} {annee} — avant le {onss_echeance.strftime('%d/%m/%Y')}"
-        niv_onss = 'urgent' if (onss_echeance - today).days <= 5 else 'warn'
-        inserer('onss_mensuel', desc_onss, onss_echeance, None, niv_onss)
-
-    # ── Fiches de paie manquantes ─────────────────────────────────────
-    cur.execute("""
-        SELECT t.id, t.prenom, t.nom, c.type_contrat, c.date_debut, c.date_fin
+        SELECT DISTINCT ON (c.id) t.prenom, t.nom, c.date_fin, c.id as contrat_id,
+               c.type_contrat
         FROM contrats c JOIN travailleurs t ON t.id = c.travailleur_id
-        WHERE c.dossier_id = %s AND c.statut = 'actif'
-        AND c.date_debut <= %s
-        AND (c.date_fin IS NULL OR c.date_fin >= %s)
-    """, (dossier_id, fin_mois, date(annee, mois, 1)))
-    travailleurs_actifs = cur.fetchall()
-
-    for t in travailleurs_actifs:
-        # Vérifier si une fiche de paie existe pour ce mois
-        cur.execute("""
-            SELECT COUNT(*) as nb FROM fiches_paie
-            WHERE travailleur_id = %s
-            AND EXTRACT(MONTH FROM periode_debut) = %s
-            AND EXTRACT(YEAR FROM periode_debut) = %s
-        """, (t['id'], mois, annee))
-        fiche_row = cur.fetchone()
-        has_fiche = fiche_row['nb'] > 0 if fiche_row else False
-
-        if not has_fiche:
-            desc_fiche = f"Fiche de paie {mois_noms[mois]} {annee} — {t['prenom']} {t['nom']}"
-            niv_fiche = 'urgent' if today.day >= 25 else 'warn'
-            inserer('fiche_paie', desc_fiche, fin_mois, None, niv_fiche)
-
-        # Fiche du mois précédent si pas encore faite
-        mois_prec = mois - 1 if mois > 1 else 12
-        annee_prec = annee if mois > 1 else annee - 1
-        _, last_prec = cal.monthrange(annee_prec, mois_prec)
-        fin_mois_prec = date(annee_prec, mois_prec, last_prec)
-
-        if t['date_debut'] <= fin_mois_prec:
-            cur.execute("""
-                SELECT COUNT(*) as nb FROM fiches_paie
-                WHERE travailleur_id = %s
-                AND EXTRACT(MONTH FROM periode_debut) = %s
-                AND EXTRACT(YEAR FROM periode_debut) = %s
-            """, (t['id'], mois_prec, annee_prec))
-            fiche_prec = cur.fetchone()
-            has_fiche_prec = fiche_prec['nb'] > 0 if fiche_prec else False
-
-            if not has_fiche_prec:
-                desc_retard = f"⚠️ Fiche de paie {mois_noms[mois_prec]} {annee_prec} en retard — {t['prenom']} {t['nom']}"
-                inserer('fiche_paie_retard', desc_retard, fin_mois_prec, None, 'urgent')
-
-    # ── CDD/STU arrivant à échéance ───────────────────────────────────
-    cur.execute("""
-        SELECT t.prenom, t.nom, c.type_contrat, c.date_fin, c.id as contrat_id
-        FROM contrats c JOIN travailleurs t ON t.id = c.travailleur_id
-        WHERE c.dossier_id = %s AND c.type_contrat IN ('CDD', 'STU')
+        WHERE c.dossier_id = %s AND c.type_contrat IN ('CDD','STU')
         AND c.date_fin IS NOT NULL
-        AND c.date_fin BETWEEN CURRENT_DATE - INTERVAL '5 days' AND CURRENT_DATE + INTERVAL '30 days'
+        AND c.date_fin BETWEEN CURRENT_DATE - INTERVAL '60 days' AND CURRENT_DATE + INTERVAL '45 days'
         AND c.statut = 'actif'
     """, (dossier_id,))
     for row in cur.fetchall():
-        type_label = 'Contrat étudiant' if row['type_contrat'] == 'STU' else 'CDD'
-        date_fin_fmt = row['date_fin'].strftime('%d/%m/%Y')
-        jours = (row['date_fin'] - today).days
-        if jours < 0:
-            suffix = f"terminé le {date_fin_fmt} — à clôturer (Dimona OUT)"
-            niv = 'urgent'
-        elif jours == 0:
-            suffix = f"se termine aujourd'hui — Dimona OUT obligatoire"
-            niv = 'urgent'
-        else:
-            suffix = f"se termine le {date_fin_fmt} — dans {jours} jour(s)"
-            niv = 'urgent' if jours <= 7 else 'warn'
+        label = 'Contrat étudiant' if row['type_contrat'] == 'STU' else 'Contrat CDD'
+        echeances.append({
+            'id': -(row['contrat_id']+1000), 'type_echeance': 'cdd',
+            'description': f"{label} {row['prenom']} {row['nom']} — échéance {row['date_fin'].strftime('%d/%m/%Y')}",
+            'date_echeance': row['date_fin'], 'statut': 'en_attente', 'niveau': 'urgent',
+            'date_realisation': None, 'document_nom': None,
+        })
 
-        desc_cdd = f"{type_label} {row['prenom']} {row['nom']} — {suffix}"
-        try:
-            cur.execute("""
-                INSERT INTO echeances (dossier_id, type_echeance, description, date_echeance, trimestre, annee, statut, niveau)
-                VALUES (%s, %s, %s, %s, NULL, %s, 'en_attente', %s)
-                ON CONFLICT ON CONSTRAINT echeances_unique DO UPDATE SET
-                description = EXCLUDED.description, niveau = EXCLUDED.niveau
-            """, (dossier_id, f"cdd_{row['contrat_id']}", desc_cdd, row['date_fin'], annee, niv))
-            conn.commit()
-        except:
-            conn.rollback()
+    cur.close(); conn.close()
 
-    # ── Belcotax annuel ───────────────────────────────────────────────
-    if mois in [1, 2] and date_activation and date_activation.year < annee:
-        inserer('belcotax',
-                f"Belcotax 281.10 — fiches fiscales revenus {annee-1} — avant le 28/02/{annee}",
-                date(annee, 2, 28), None, 'warn')
-
-    # ── Récupérer toutes les échéances à afficher ─────────────────────
-    cur.execute("""
-        SELECT * FROM echeances
-        WHERE dossier_id = %s
-        AND (
-            statut = 'en_attente'
-            OR (statut = 'fait' AND updated_at > NOW() - INTERVAL '30 days')
-        )
-        ORDER BY
-            CASE statut WHEN 'en_attente' THEN 0 ELSE 1 END,
-            CASE niveau WHEN 'urgent' THEN 0 ELSE 1 END,
-            date_echeance ASC NULLS LAST
-        LIMIT 25
-    """, (dossier_id,))
-    result = [dict(r) for r in cur.fetchall()]
-    cur.close()
-    conn.close()
-    return result
-
+    # Trier par date
+    echeances.sort(key=lambda x: (x['statut'] != 'en_attente', x['date_echeance'] or date(2099,1,1)))
+    return echeances
 
 
 def generer_pdf_etudiant(data, filepath):
@@ -1376,3 +1277,47 @@ def nexsocial_toggle_client(client_id):
     cur.execute("UPDATE tenants SET actif = NOT actif WHERE id = %s", (client_id,))
     conn.commit(); cur.close(); conn.close()
     return redirect('/nexsocial/dashboard')
+
+@app.route('/echeance/<int:echeance_id>/valider', methods=['POST'])
+@login_required
+def valider_echeance(echeance_id):
+    fichier = request.files.get('document')
+    date_real = request.form.get('date_realisation')
+    note = request.form.get('note', '')
+    if not fichier or not fichier.filename:
+        return jsonlib.dumps({'ok': False, 'error': 'Veuillez joindre un document.'})
+    filename = werkzeug.utils.secure_filename(fichier.filename)
+    unique_name = f"echeance_{echeance_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
+    filepath = os.path.join(UPLOAD_DIR, unique_name)
+    fichier.save(filepath)
+    conn = get_conn()
+    from psycopg2.extras import RealDictCursor
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM echeances WHERE id = %s", (echeance_id,))
+    ech = cur.fetchone()
+    if not ech:
+        cur.close(); conn.close()
+        return jsonlib.dumps({'ok': False, 'error': 'Échéance introuvable.'})
+    cur.execute("""UPDATE echeances SET statut='fait', date_realisation=%s,
+        document_path=%s, document_nom=%s, note=%s, updated_at=NOW() WHERE id=%s""",
+        (date_real or date.today(), filepath, filename, note, echeance_id))
+    cur.execute("""INSERT INTO documents (dossier_id, travailleur_id, nom, type_document, filename, filepath, taille, uploaded_by, niveau)
+        VALUES (%s, NULL, %s, 'echeance', %s, %s, %s, %s, 'dossier')""",
+        (ech['dossier_id'], f"Preuve — {ech['description'][:50]}",
+         unique_name, filepath, os.path.getsize(filepath), session['user_id']))
+    conn.commit(); cur.close(); conn.close()
+    from datetime import datetime as dt
+    date_fmt = dt.strptime(date_real, '%Y-%m-%d').strftime('%d/%m/%Y') if date_real else date.today().strftime('%d/%m/%Y')
+    return jsonlib.dumps({'ok': True, 'description': ech['description'], 'date': date_fmt, 'document_nom': filename})
+
+@app.route('/echeance/<int:echeance_id>/document')
+@login_required
+def download_echeance_document(echeance_id):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT document_path, document_nom FROM echeances WHERE id = %s", (echeance_id,))
+    row = cur.fetchone()
+    cur.close(); conn.close()
+    if row and row[0] and os.path.exists(row[0]):
+        return send_file(row[0], as_attachment=True, download_name=row[1])
+    return "Document introuvable", 404
