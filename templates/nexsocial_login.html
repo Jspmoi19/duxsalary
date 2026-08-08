@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexSocial — Administration</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #0f0f0f;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.logo { font-size: 36px; font-weight: 900; color: white; margin-bottom: 6px; letter-spacing: -1px; }
+.logo span { color: #7C3AED; }
+.tagline { font-size: 10px; letter-spacing: 5px; color: #7C3AED; margin-bottom: 40px; text-transform: uppercase; }
+.card {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  padding: 36px;
+  width: 100%;
+  max-width: 380px;
+}
+.card-title { font-size: 15px; color: #888; margin-bottom: 24px; text-align: center; }
+.form-group { margin-bottom: 16px; }
+.form-group label { font-size: 11px; font-weight: 600; color: #666; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+.form-group input {
+  width: 100%; padding: 11px 14px;
+  background: #111; border: 1.5px solid #333;
+  border-radius: 8px; font-size: 14px; color: white;
+  font-family: inherit; outline: none; transition: border-color 0.2s;
+}
+.form-group input:focus { border-color: #7C3AED; }
+.error { background: #2a1515; border: 1px solid #5a2020; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #f88; margin-bottom: 16px; }
+.btn { width: 100%; padding: 12px; background: #7C3AED; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; transition: opacity 0.2s; }
+.btn:hover { opacity: 0.85; }
+.badge { margin-top: 20px; text-align: center; font-size: 11px; color: #333; }
+</style>
+</head>
+<body>
+  <div class="logo">NEX<span>SOCIAL</span></div>
+  <div class="tagline">Admin Portal</div>
+  <div class="card">
+    <div class="card-title">Accès administrateur</div>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <form method="POST">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" name="email" placeholder="admin@nexsocial.be" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input type="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn">Connexion</button>
+    </form>
+    <div class="badge">NexSocial — Accès restreint</div>
+  </div>
+</body>
+</html>

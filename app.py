@@ -95,8 +95,8 @@ def login():
             if dernier:
                 return redirect(url_for('dossier_dashboard', dossier_id=dernier))
             return redirect(url_for('dossiers'))
-        return render_template('login.html', error='Email ou mot de passe incorrect.')
-    return render_template('login.html')
+        return render_template('login.html', error='Email ou mot de passe incorrect.', tenant=get_tenant())
+    return render_template('login.html', tenant=get_tenant())
 
 @app.route('/logout')
 def logout():
@@ -116,6 +116,7 @@ def index():
 @login_required
 def dossiers():
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     tous = get_all_dossiers()
     actifs = [d for d in tous if d.get('statut') != 'archive']
     return render_template('dossiers.html', dossiers=actifs, **ctx)
@@ -124,6 +125,7 @@ def dossiers():
 @login_required
 def nouveau_dossier():
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     if request.method == 'POST':
         did = create_dossier(request.form)
         return redirect(url_for('dossier_dashboard', dossier_id=did))
@@ -137,6 +139,7 @@ def dossier_dashboard(dossier_id):
         return redirect(url_for('dossiers'))
     session['dernier_dossier_id'] = dossier_id
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     return render_template('dashboard.html',
                            dossier=dossier, dossier_actif=dossier,
                            echeances=get_echeances_dossier(dossier_id),
@@ -149,6 +152,7 @@ def dossier_dashboard(dossier_id):
 def modifier_dossier(dossier_id):
     dossier = get_dossier(dossier_id)
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     if request.method == 'POST':
         update_dossier(dossier_id, request.form)
         return redirect(url_for('dossier_dashboard', dossier_id=dossier_id))
@@ -179,6 +183,7 @@ def supprimer_dossier(dossier_id):
 def nouveau_travailleur(dossier_id):
     dossier = get_dossier(dossier_id)
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     if request.method == 'POST':
         data = dict(request.form)
         data['dossier_id'] = dossier_id
@@ -197,6 +202,7 @@ def fiche_travailleur(travailleur_id):
     travailleur = get_travailleur(travailleur_id)
     dossier = get_dossier(travailleur['dossier_id'])
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     tab = request.args.get('tab', 'info')
     documents = get_documents_travailleur(travailleur_id)
     return render_template('fiche_travailleur.html',
@@ -211,6 +217,7 @@ def modifier_travailleur(travailleur_id):
     travailleur = get_travailleur(travailleur_id)
     dossier = get_dossier(travailleur['dossier_id'])
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     if request.method == 'POST':
         conn = get_conn()
         cur = conn.cursor()
@@ -256,6 +263,7 @@ def ajouter_document(travailleur_id):
     travailleur = get_travailleur(travailleur_id)
     dossier = get_dossier(travailleur['dossier_id'])
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     if request.method == 'POST':
         fichier = request.files.get('fichier')
         if fichier and fichier.filename:
@@ -291,6 +299,7 @@ def archiver_contrat(contrat_id):
 def ajouter_document_dossier(dossier_id):
     dossier = get_dossier(dossier_id)
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     if request.method == 'POST':
         fichier = request.files.get('fichier')
         if fichier and fichier.filename:
@@ -346,6 +355,7 @@ def dimona_list(travailleur_id):
     travailleur = get_travailleur(travailleur_id)
     dossier = get_dossier(travailleur['dossier_id'])
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     return render_template('dimona_list.html', travailleur=travailleur,
                            dossier=dossier, dossier_actif=dossier,
                            dimona_list=get_dimona_travailleur(travailleur_id), **ctx)
@@ -356,6 +366,7 @@ def nouvelle_dimona(travailleur_id):
     travailleur = get_travailleur(travailleur_id)
     dossier = get_dossier(travailleur['dossier_id'])
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     if request.method == 'POST':
         form = request.form
         conn = get_conn()
@@ -377,6 +388,7 @@ def calendrier_prestations(dimona_id):
     travailleur = get_travailleur(dimona['travailleur_id'])
     dossier = get_dossier(dimona['dossier_id'])
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
 
     annee = request.args.get('annee', date.today().year, type=int)
     mois = request.args.get('mois', date.today().month, type=int)
@@ -485,6 +497,7 @@ def nouveau_contrat_dossier(dossier_id):
     dossier = get_dossier(dossier_id)
     travailleurs = get_travailleurs(dossier_id)
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     cp_json = jsonlib.dumps({k: {'meta': v['meta'], 'duree_travail': v['duree_travail'],
         'baremes': {cat: {kk: vv for kk, vv in val.items() if kk in ['horaire','mensuel','fonctions']}
                     for cat, val in v['baremes'].items() if isinstance(val, dict)}}
@@ -649,6 +662,7 @@ def nouvelle_fiche(dossier_id):
     dossier = get_dossier(dossier_id)
     travailleurs = get_travailleurs(dossier_id)
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     prefill_travailleur_id = request.args.get('travailleur_id', type=int)
 
     if request.method == 'POST':
@@ -704,6 +718,7 @@ import anthropic as anthropic_client
 @login_required
 def assistant():
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
     cps = [
         {'key': 'CP 336', 'secteur': 'Professions libérales'},
         {'key': 'CP 200', 'secteur': 'Auxiliaire employés / IT'},
@@ -1139,6 +1154,7 @@ def nouveau_contrat_etudiant():
     dossier = get_dossier(dossier_id)
     travailleur = get_travailleur(travailleur_id)
     ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
 
     if request.method == 'POST':
         form = request.form
@@ -1222,3 +1238,141 @@ def supprimer_dimona(dimona_id):
     cur.execute("DELETE FROM dimona WHERE id = %s", (dimona_id,))
     conn.commit(); cur.close(); conn.close()
     return redirect(url_for('dimona_list', travailleur_id=travailleur_id))
+
+# ── SYSTÈME MULTI-TENANT ──────────────────────────────────────────────
+
+def get_tenant():
+    """Récupère le tenant depuis le sous-domaine de la requête."""
+    from psycopg2.extras import RealDictCursor
+    host = request.host or ''
+    subdomain = 'duxsalary'
+    
+    if 'nexsocial' in host:
+        parts = host.split('.')
+        idx = next((i for i, p in enumerate(parts) if 'nexsocial' in p), None)
+        if idx and idx > 0:
+            subdomain = parts[idx-1]
+    
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM tenants WHERE subdomain = %s AND actif = TRUE", (subdomain,))
+    tenant = cur.fetchone()
+    cur.close(); conn.close()
+    
+    if tenant:
+        return dict(tenant)
+    
+    return {
+        'subdomain': 'duxsalary',
+        'nom': 'DuxSalary',
+        'couleur_primaire': '#1F4E79',
+        'couleur_accent': '#4fc3f7',
+        'logo_text': 'DuxSalary',
+    }
+
+def get_context_base_tenant():
+    """Context de base avec tenant."""
+    ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
+    ctx['tenant'] = get_tenant()
+    return ctx
+
+# ── PORTAIL ADMIN NEXSOCIAL ───────────────────────────────────────────
+
+NEXSOCIAL_ADMIN_EMAIL = "leo@nexsocial.be"
+NEXSOCIAL_ADMIN_PASSWORD_HASH = None  # défini au démarrage
+
+def get_nexsocial_password_hash(password):
+    import hashlib
+    return hashlib.sha256(f"nexsocial2026{password}".encode()).hexdigest()
+
+def is_nexsocial_admin():
+    return session.get('nexsocial_admin') == True
+
+def nexsocial_admin_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not is_nexsocial_admin():
+            return redirect('/nexsocial/login')
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route('/nexsocial/login', methods=['GET', 'POST'])
+def nexsocial_login():
+    # Cette route fonctionne seulement sur app.nexsocial.be
+    error = None
+    if request.method == 'POST':
+        email = request.form.get('email', '').lower().strip()
+        password = request.form.get('password', '')
+        pw_hash = get_nexsocial_password_hash(password)
+        
+        conn = get_conn()
+        from psycopg2.extras import RealDictCursor
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM nexsocial_admins WHERE email = %s AND password_hash = %s AND actif = TRUE",
+                    (email, pw_hash))
+        admin = cur.fetchone()
+        cur.close(); conn.close()
+        
+        if admin:
+            session['nexsocial_admin'] = True
+            session['nexsocial_admin_nom'] = admin['nom']
+            return redirect('/nexsocial/dashboard')
+        error = "Email ou mot de passe incorrect."
+    
+    return render_template('nexsocial_login.html', error=error)
+
+@app.route('/nexsocial/logout')
+def nexsocial_logout():
+    session.pop('nexsocial_admin', None)
+    session.pop('nexsocial_admin_nom', None)
+    return redirect('/nexsocial/login')
+
+@app.route('/nexsocial/dashboard')
+@nexsocial_admin_required
+def nexsocial_dashboard():
+    conn = get_conn()
+    from psycopg2.extras import RealDictCursor
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM tenants ORDER BY created_at DESC")
+    clients = [dict(r) for r in cur.fetchall()]
+    cur.close(); conn.close()
+    return render_template('nexsocial_dashboard.html', clients=clients,
+                           admin_nom=session.get('nexsocial_admin_nom', 'Admin'))
+
+@app.route('/nexsocial/client/nouveau', methods=['GET', 'POST'])
+@nexsocial_admin_required
+def nexsocial_nouveau_client():
+    if request.method == 'POST':
+        form = request.form
+        import hashlib
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO tenants (subdomain, nom, couleur_primaire, couleur_accent, 
+                                logo_text, email_admin, plan, nb_dossiers_max)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            form['subdomain'].lower().strip(),
+            form['nom'],
+            form.get('couleur_primaire', '#1F4E79'),
+            form.get('couleur_accent', '#4fc3f7'),
+            form['logo_text'],
+            form.get('email_admin', ''),
+            form.get('plan', 'standard'),
+            int(form.get('nb_dossiers_max', 50))
+        ))
+        conn.commit(); cur.close(); conn.close()
+        return redirect('/nexsocial/dashboard')
+    return render_template('nexsocial_nouveau_client.html',
+                           admin_nom=session.get('nexsocial_admin_nom', 'Admin'))
+
+@app.route('/nexsocial/client/<int:client_id>/toggle', methods=['POST'])
+@nexsocial_admin_required
+def nexsocial_toggle_client(client_id):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("UPDATE tenants SET actif = NOT actif WHERE id = %s", (client_id,))
+    conn.commit(); cur.close(); conn.close()
+    return redirect('/nexsocial/dashboard')

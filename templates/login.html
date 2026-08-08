@@ -2,29 +2,172 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>DuxSalary — Connexion</title>
-<link rel="stylesheet" href="/static/style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ tenant.nom }} — Connexion</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #f0f2f5;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* Logo NexSocial en haut */
+.nexsocial-brand {
+  margin-bottom: 28px;
+  text-align: center;
+}
+.nexsocial-brand .logo-text {
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: #1a1a1a;
+}
+.nexsocial-brand .logo-text span { color: #7C3AED; }
+.nexsocial-brand .tagline {
+  font-size: 9px;
+  letter-spacing: 4px;
+  color: #7C3AED;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Carte de connexion */
+.login-card {
+  background: white;
+  border-radius: 16px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  text-align: center;
+}
+
+/* Logo client */
+.client-logo {
+  margin-bottom: 28px;
+}
+.client-logo-text {
+  font-size: 26px;
+  font-weight: 800;
+  color: {{ tenant.couleur_primaire }};
+  letter-spacing: -0.5px;
+}
+.client-logo-sub {
+  font-size: 10px;
+  color: #aaa;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.client-divider {
+  width: 40px;
+  height: 3px;
+  background: {{ tenant.couleur_primaire }};
+  margin: 12px auto 0;
+  border-radius: 2px;
+}
+
+.login-title {
+  font-size: 15px;
+  color: #444;
+  margin-bottom: 24px;
+  font-weight: 400;
+}
+
+.form-group { margin-bottom: 16px; text-align: left; }
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  display: block;
+  margin-bottom: 6px;
+}
+.form-group input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid #e0e3e8;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  outline: none;
+}
+.form-group input:focus { border-color: {{ tenant.couleur_primaire }}; }
+
+{% if error %}
+<div style="background:#fff0f0;border:1px solid #fcc;border-radius:8px;padding:10px 14px;font-size:13px;color:#c00;margin-bottom:16px;text-align:left">
+  {{ error }}
+</div>
+{% endif %}
+
+.btn-login {
+  width: 100%;
+  padding: 12px;
+  background: {{ tenant.couleur_primaire }};
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  font-family: inherit;
+}
+.btn-login:hover { opacity: 0.9; }
+
+/* Powered by */
+.powered-by {
+  margin-top: 20px;
+  font-size: 11px;
+  color: #bbb;
+}
+.powered-by span { color: #7C3AED; font-weight: 600; }
+</style>
 </head>
 <body>
-<div class="login-page">
-  <div class="login-box">
-    <div class="login-logo">
-      <h1>Dux<span>Salary</span></h1>
-      <p>Secrétariat social digital</p>
-    </div>
-    {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
-    <form method="POST">
-      <div class="form-group">
-        <label class="form-label">Adresse email</label>
-        <input type="email" name="email" class="form-control" placeholder="vous@duxsalary.be" required autofocus>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Mot de passe</label>
-        <input type="password" name="password" class="form-control" placeholder="••••••••" required>
-      </div>
-      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;">Se connecter</button>
-    </form>
-  </div>
+
+<!-- NexSocial brand en haut -->
+<div class="nexsocial-brand">
+  <div class="logo-text">NEX<span>SOCIAL</span></div>
+  <div class="tagline">Payroll Management</div>
 </div>
+
+<!-- Carte login avec branding client -->
+<div class="login-card">
+  <div class="client-logo">
+    <div class="client-logo-text">{{ tenant.logo_text }}</div>
+    <div class="client-logo-sub">Espace client</div>
+    <div class="client-divider"></div>
+  </div>
+
+  <p class="login-title">Connectez-vous à votre espace</p>
+
+  {% if error %}
+  <div style="background:#fff0f0;border:1px solid #fcc;border-radius:8px;padding:10px 14px;font-size:13px;color:#c00;margin-bottom:16px;text-align:left">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <form method="POST">
+    <div class="form-group">
+      <label>Adresse e-mail</label>
+      <input type="email" name="email" placeholder="vous@exemple.be" required autofocus>
+    </div>
+    <div class="form-group">
+      <label>Mot de passe</label>
+      <input type="password" name="password" placeholder="••••••••" required>
+    </div>
+    <button type="submit" class="btn-login">Connexion</button>
+  </form>
+
+  <div class="powered-by">Propulsé par <span>NexSocial</span></div>
+</div>
+
 </body>
 </html>

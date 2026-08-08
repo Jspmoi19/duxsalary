@@ -3,24 +3,42 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{% block title %}DuxSalary{% endblock %}</title>
+<title>{% block title %}{{ tenant.nom }}{% endblock %} — NexSocial</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+:root {
+  --tenant-primary: {{ tenant.couleur_primaire }};
+  --tenant-accent: {{ tenant.couleur_accent }};
+}
+.app-header {
+  background: {{ tenant.couleur_primaire }} !important;
+}
+.app-logo span { color: {{ tenant.couleur_accent }} !important; }
+</style>
 </head>
 <body>
 
 {% if session.user_id %}
-<header class="app-header">
-  <a href="/dossiers" class="app-logo">Dux<span>Salary</span></a>
+<header class="app-header" style="display:flex;align-items:center;padding:0 20px;height:52px;gap:16px">
 
-  <div class="dossier-select-wrap">
+  <!-- NexSocial brand à gauche -->
+  <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;border-right:1px solid rgba(255,255,255,0.2);padding-right:16px;margin-right:4px">
+    <div style="font-size:14px;font-weight:900;color:white;letter-spacing:-0.3px">NEX<span style="color:#A78BFA">SOCIAL</span></div>
+  </div>
+
+  <!-- Nom du client -->
+  <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.85);flex-shrink:0">
+    {{ tenant.logo_text }}
+  </div>
+
+  <!-- Sélecteur dossier -->
+  <div class="dossier-select-wrap" style="flex:1">
     <select class="dossier-select" onchange="naviguerDossier(this.value)">
       <option value="">— Sélectionner un dossier —</option>
       {% for d in tous_les_dossiers %}
-        {% if d.statut != 'archive' %}
-        <option value="{{ d.id }}" {% if dossier_actif and dossier_actif.id == d.id %}selected{% endif %}>
-          {{ d.nom }}
-        </option>
-        {% endif %}
+      <option value="{{ d.id }}" {% if dossier_actif and dossier_actif.id == d.id %}selected{% endif %}>
+        {{ d.nom }}
+      </option>
       {% endfor %}
       {% if dossiers_archives %}
       <option disabled>──────────────</option>
@@ -34,7 +52,8 @@
 
   <div class="header-spacer"></div>
 
-  <a href="/assistant" style="color:rgba(255,255,255,0.75);text-decoration:none;font-size:12px;padding:5px 10px;border-radius:5px;border:1px solid rgba(255,255,255,0.2);margin-right:8px" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background=''">⚖️ Assistant</a>
+  <a href="/assistant" style="color:rgba(255,255,255,0.75);text-decoration:none;font-size:12px;padding:5px 10px;border-radius:5px;border:1px solid rgba(255,255,255,0.2);margin-right:8px"
+     onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background=''">⚖️ Assistant</a>
 
   <div class="header-user">
     <span>{{ session.user_nom }}</span>
