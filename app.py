@@ -529,6 +529,8 @@ def nouveau_contrat_dossier(dossier_id):
             'lieu_signature': form.get('lieu_signature', 'Bruxelles'),
             'date_signature': datetime.now().strftime('%d/%m/%Y'),
             'motif_cdd': form.get('motif_cdd', ''),
+            'heures_jour': float(form.get('heures_jour', 7.6) or 7.6),
+            'jours_semaine': int(form.get('jours_semaine', 5) or 5),
         }
 
         filepath, filename = (generer_contrat_cdi(data) if type_contrat == 'CDI' else generer_contrat_cdd(data))
@@ -544,6 +546,8 @@ def nouveau_contrat_dossier(dossier_id):
             'salaire_horaire': float(form.get('salaire_horaire', 0) or 0),
             'salaire_mensuel': float((form.get('salaire_mensuel') or '0').replace(' €','') or 0),
             'heures_semaine': get_heures_semaine(form['cp_key']),
+            'heures_jour': float(form.get('heures_jour', 7.6) or 7.6),
+            'jours_semaine': int(form.get('jours_semaine', 5) or 5),
             'horaire_journalier': form.get('horaire_journalier'),
             'lieu_travail': form.get('lieu_travail'),
             'date_debut': pd(form['date_debut']), 'date_fin': pd(form.get('date_fin')),
@@ -1321,3 +1325,178 @@ def download_echeance_document(echeance_id):
     if row and row[0] and os.path.exists(row[0]):
         return send_file(row[0], as_attachment=True, download_name=row[1])
     return "Document introuvable", 404
+
+# ── FICHE DE PAIE DEPUIS CALENDRIER ──────────────────────────────────
+
+@app.route('/dimona/<int:dimona_id>/generer-paie', methods=['GET', 'POST'])
+@login_required
+def generer_fiche_depuis_calendrier(dimona_id):
+    from psycopg2.extras import RealDictCursor
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    # Récupérer dimona + travailleur + contrat + dossier
+    cur.execute("""
+        SELECT d.*, t.prenom, t.nom, t.niss, t.adresse, t.iban,
+               t.date_naissance, t.etat_civil, t.nb_enfants_charge,
+               t.km_domicile_travail, t.moyen_transport, t.vehicule_societe,
+               dos.nom as dossier_nom, dos.adresse as dossier_adresse,
+               dos.bce, dos.rsz, dos.id as dossier_id
+        FROM dimona d
+        JOIN travailleurs t ON t.id = d.travailleur_id
+        JOIN dossiers dos ON dos.id = d.dossier_id
+        WHERE d.id = %s
+    """, (dimona_id,))
+    dimona = cur.fetchone()
+    if not dimona:
+        return "Dimona introuvable", 404
+
+    # Récupérer le contrat actif du travailleur
+    cur.execute("""
+        SELECT * FROM contrats 
+        WHERE travailleur_id = %s AND statut = 'actif'
+        ORDER BY created_at DESC LIMIT 1
+    """, (dimona['travailleur_id'],))
+    contrat = cur.fetchone()
+
+    annee = request.args.get('annee', date.today().year, type=int)
+    mois = request.args.get('mois', date.today().month, type=int)
+
+    if request.method == 'POST':
+        form = request.form
+
+        # Récupérer les prestations du mois depuis la BDD
+        import calendar
+        premier_jour = date(annee, mois, 1)
+        dernier_jour = date(annee, mois, calendar.monthrange(annee, mois)[1])
+
+        cur.execute("""
+            SELECT code_journee, heures, date_prestation
+            FROM prestations
+            WHERE dimona_id = %s
+            AND date_prestation BETWEEN %s AND %s
+        """, (dimona_id, premier_jour, dernier_jour))
+        prestations = cur.fetchall()
+
+        # Codes journaliers payés comme prestations
+        CODES_PRESTES = {'P', 'S', 'HS', 'PP'}
+        CODES_FERIES = {'F', 'FM'}
+        CODES_CONGE = {'CL', 'CE', 'VP'}
+        CODES_MALADIE = {'MA', 'AC', 'MAT', 'PAT'}
+        CODES_CHOMAGE = {'CT', 'CI', 'CNP'}
+
+        jours_prestes = sum(1 for p in prestations if p['code_journee'] in CODES_PRESTES)
+        heures_prestees = float(sum(p['heures'] or 0 for p in prestations if p['code_journee'] in CODES_PRESTES))
+        jours_feries = sum(1 for p in prestations if p['code_journee'] in CODES_FERIES)
+        heures_feries = float(sum(p['heures'] or 0 for p in prestations if p['code_journee'] in CODES_FERIES))
+        jours_conge = sum(1 for p in prestations if p['code_journee'] in CODES_CONGE)
+        jours_maladie = sum(1 for p in prestations if p['code_journee'] in CODES_MALADIE)
+        jours_chomage = sum(1 for p in prestations if p['code_journee'] in CODES_CHOMAGE)
+
+        # Paramètres indemnités depuis le form
+        rgpt_actif = form.get('rgpt_actif') == 'on'
+        arab_heure = float(form.get('arab_heure', 0) or 0)
+        cheques_repas = form.get('cheques_repas') == 'on'
+        vehicule_societe = form.get('vehicule_societe') == 'on' or (dimona.get('vehicule_societe') or False)
+        km_domicile = int(form.get('km_domicile', dimona.get('km_domicile_travail', 0)) or 0)
+        moyen_transport = form.get('moyen_transport', dimona.get('moyen_transport', 'voiture'))
+
+        if jours_prestes == 0 and jours_feries == 0:
+            cur.close(); conn.close()
+            return redirect(url_for('calendrier_prestations',
+                dimona_id=dimona_id, annee=annee, mois=mois,
+                error='Aucune prestation encodée pour ce mois'))
+
+        # Importer le moteur
+        import sys
+        sys.path.insert(0, '/var/www/duxsalary')
+        from moteur_paie import calculer_fiche_paie
+        from generer_fiche_pdf import generer_fiche_paie_pdf
+
+        cp_key = contrat['cp_key'] if contrat else dimona.get('cp_key', 'CP 140.03')
+        salaire_h = float(contrat['salaire_horaire']) if contrat else 14.9255
+        heures_sem = float(contrat['heures_semaine']) if contrat else 38.0
+        heures_jour = float(contrat.get('heures_jour') or 7.6) if contrat else 7.6
+        jours_semaine = int(contrat.get('jours_semaine') or 5) if contrat else 5
+        is_etudiant = contrat['type_contrat'] == 'STU' if contrat else False
+
+        import calendar as cal
+        periode_debut = date(annee, mois, 1)
+        periode_fin = date(annee, mois, cal.monthrange(annee, mois)[1])
+
+        data = calculer_fiche_paie(
+            prenom=dimona['prenom'], nom=dimona['nom'],
+            niss=dimona['niss'] or '—', adresse=dimona['adresse'] or '—',
+            iban=dimona['iban'] or '—',
+            date_naissance=dimona['date_naissance'],
+            date_entree=contrat['date_debut'] if contrat else periode_debut,
+            nom_societe=dimona['dossier_nom'],
+            adresse_societe=dimona['dossier_adresse'] or '—',
+            bce_societe=dimona['bce'] or '—',
+            rsz_societe=dimona['rsz'] or '—',
+            cp_key=cp_key, categorie=contrat['categorie'] if contrat else '—',
+            salaire_horaire=salaire_h,
+            etat_civil=dimona.get('etat_civil', 'celibataire') or 'celibataire',
+            nb_enfants=int(dimona.get('nb_enfants_charge', 0) or 0),
+            heures_semaine=heures_sem, heures_jour=heures_jour, jours_semaine=jours_semaine,
+            type_contrat=contrat['type_contrat'] if contrat else 'CDD',
+            is_etudiant=is_etudiant,
+            jours_prestes=jours_prestes, heures_prestees=heures_prestees,
+            jours_feries_payes=jours_feries, heures_feries=heures_feries,
+            jours_conge=jours_conge, jours_maladie=jours_maladie, jours_chomage=jours_chomage,
+            km_domicile=km_domicile, moyen_transport=moyen_transport,
+            vehicule_societe=vehicule_societe,
+            rgpt_actif=rgpt_actif, arab_heure=arab_heure, cheques_repas=cheques_repas,
+            periode_debut=periode_debut, periode_fin=periode_fin,
+        )
+
+        # Générer le PDF
+        mois_nom = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+                    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][mois]
+        filename = f"fiche_paie_{dimona['nom']}_{dimona['prenom']}_{mois_nom}_{annee}.pdf"
+        filepath = os.path.join(OUTPUT_DIR, filename)
+        generer_fiche_paie_pdf(data, filepath)
+
+        # Sauvegarder en BDD
+        cur.execute("""
+            INSERT INTO fiches_paie (
+                dossier_id, travailleur_id, contrat_id,
+                periode_debut, periode_fin,
+                salaire_brut, onss_personnel, precompte,
+                salaire_net, total_onss,
+                cout_employeur, pdf_path, statut_paiement
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'genere')
+            RETURNING id
+        """, (
+            dimona['dossier_id'], dimona['travailleur_id'],
+            contrat['id'] if contrat else None,
+            periode_debut, periode_fin,
+            data['brut_onss'], abs(data['onss_net']),
+            abs(data['precompte']), data['salaire_net'],
+            abs(data['onss_net']) + data['onss_patronal'],
+            data['cout_employeur'], filepath
+        ))
+        fiche_id = cur.fetchone()['id']
+        conn.commit()
+        cur.close(); conn.close()
+
+        return send_file(filepath, as_attachment=False,
+                        download_name=filename, mimetype='application/pdf')
+
+    # GET — afficher le formulaire popup
+    cur.close(); conn.close()
+
+    import calendar as cal
+    mois_nom = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+                'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][mois]
+    cp_key = contrat['cp_key'] if contrat else 'CP 140.03'
+
+    ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
+    return render_template('generer_fiche_form.html',
+        dimona=dimona, contrat=contrat,
+        annee=annee, mois=mois, mois_nom=mois_nom,
+        cp_key=cp_key,
+        vehicule_societe=dimona.get('vehicule_societe', False),
+        km_domicile=dimona.get('km_domicile_travail', 0),
+        **ctx)

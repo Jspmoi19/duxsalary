@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Générer fiche de paie — {{ dimona.prenom }} {{ dimona.nom }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois }}" class="btn-back">← Retour au calendrier</a>
+    <h2>Fiche de paie — {{ mois_nom }} {{ annee }}</h2>
+    <div class="breadcrumb">{{ dimona.prenom }} {{ dimona.nom }} · {{ cp_key }}</div>
+  </div>
+</div>
+
+<form method="POST" action="/dimona/{{ dimona.id }}/generer-paie?annee={{ annee }}&mois={{ mois }}">
+<div class="two-col">
+
+  <div class="card">
+    <div class="card-header"><h3>Indemnités et paramètres</h3></div>
+    <div class="card-body form-grid">
+
+      {% if 'CP 140.03' in cp_key %}
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" name="rgpt_actif" {% if not vehicule_societe %}checked{% endif %} style="width:16px;height:16px">
+          Indemnité RGPT (1,63 €/h) — personnel roulant
+        </label>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Exonérée ONSS et IPP</div>
+      </div>
+
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" name="cheques_repas" checked style="width:16px;height:16px">
+          Chèques-repas (3,09 €/jour presté)
+        </label>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Depuis 01/07/2026 — CP 140.03</div>
+      </div>
+
+      <div class="form-group">
+        <label>Indemnité ARAB (€/heure)</label>
+        <input type="number" name="arab_heure" value="0" step="0.001" min="0" class="form-control">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Allocation de remplacement de bénéfice — selon CCT entreprise</div>
+      </div>
+      {% endif %}
+
+      {% if 'CP 302' in cp_key %}
+      <div class="form-group">
+        <label>Avantage en nature repas</label>
+        <p style="font-size:13px;color:var(--text-muted)">1,09 €/jour — calculé automatiquement (soumis ONSS, déduit du net)</p>
+      </div>
+      <div class="form-group">
+        <label>Indemnité vêtements</label>
+        <p style="font-size:13px;color:var(--text-muted)">4,40 €/jour — calculé automatiquement (exonéré)</p>
+      </div>
+      <div class="form-group">
+        <label>Déplacement maison/travail</label>
+        <p style="font-size:13px;color:var(--text-muted)">1,98 €/jour — calculé automatiquement (exonéré)</p>
+      </div>
+      {% endif %}
+
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" name="vehicule_societe" {% if vehicule_societe %}checked{% endif %} style="width:16px;height:16px"
+                 onchange="toggleKm(this)">
+          Véhicule de société (pas d'indemnité km)
+        </label>
+      </div>
+
+      <div class="form-group" id="km_group" {% if vehicule_societe %}style="display:none"{% endif %}>
+        <label>Km domicile-travail (aller)</label>
+        <input type="number" name="km_domicile" value="{{ km_domicile or 0 }}" min="0" class="form-control">
+      </div>
+
+      <div class="form-group" id="transport_group" {% if vehicule_societe %}style="display:none"{% endif %}>
+        <label>Moyen de transport</label>
+        <select name="moyen_transport" class="form-control">
+          <option value="voiture">Voiture personnelle</option>
+          <option value="train">Train</option>
+          <option value="velo">Vélo</option>
+          <option value="autre">Autre</option>
+        </select>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>Récapitulatif</h3></div>
+    <div class="card-body">
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        Les prestations du calendrier de <strong>{{ mois_nom }} {{ annee }}</strong> seront utilisées pour le calcul.
+      </div>
+      {% if contrat %}
+      <div style="display:flex;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:var(--text-muted);width:160px">Salaire horaire</span>
+        <span style="font-weight:600">{{ contrat.salaire_horaire }} €/h</span>
+      </div>
+      <div style="display:flex;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:var(--text-muted);width:160px">CP</span>
+        <span style="font-weight:600">{{ contrat.cp_key }}</span>
+      </div>
+      <div style="display:flex;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:var(--text-muted);width:160px">Type contrat</span>
+        <span style="font-weight:600">{{ contrat.type_contrat }}</span>
+      </div>
+      {% endif %}
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:16px;font-size:13px;color:#166534">
+        ✅ Le PDF de la fiche de paie sera généré automatiquement et téléchargé.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="text-align:right;margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+  <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois }}" class="btn btn-secondary">Annuler</a>
+  <button type="submit" class="btn btn-primary">🧾 Générer la fiche de paie</button>
+</div>
+</form>
+
+{% endblock %}
+<script>
+function toggleKm(cb) {
+  document.getElementById('km_group').style.display = cb.checked ? 'none' : '';
+  document.getElementById('transport_group').style.display = cb.checked ? 'none' : '';
+}
+</script>

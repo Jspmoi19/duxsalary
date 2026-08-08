@@ -81,8 +81,9 @@ def _signatures(elements, data, sN, sB, sC):
         [Paragraph("<b>L'EMPLOYEUR</b>", sC), Paragraph("<b>LE/LA TRAVAILLEUR(SE)</b>", sC)],
         [Paragraph(data['nom_societe'], sC), Paragraph(data['nom_travailleur'], sC)],
         [Paragraph(data['representant'], ParagraphStyle('', fontName='Helvetica', fontSize=9, alignment=TA_CENTER, textColor=colors.grey)), ''],
-        [Spacer(1, 2*cm), Spacer(1, 2*cm)],
-        [Paragraph("Signature et cachet :", sN), Paragraph("Signature :", sN)],
+        [Spacer(1, 1.5*cm), Spacer(1, 1.5*cm)],
+        [Paragraph("_______________________", sN), Paragraph("_______________________", sN)],
+        [Paragraph("Signature et cachet", sN), Paragraph("Signature", sN)],
         [Spacer(1, 1*cm), Spacer(1, 1*cm)],
         [Paragraph("Lu et approuvé :", sN), Paragraph("Lu et approuvé :", sN)],
     ]
@@ -151,10 +152,12 @@ def generer_contrat_cdi(data):
 
         ("Article 4 – Durée du travail",
          f"Le/la travailleur(se) est occupé(e) à <b>{'temps plein' if data.get('temps_plein', True) else 'temps partiel'}</b>, "
-         f"à raison de <b>{heures_sem}h par semaine</b> "
-         f"({data.get('horaire_journalier', f'{heures_sem/5:.1f}h/jour')}), "
-         f"conformément au régime de travail en vigueur dans l'entreprise et au règlement de travail. "
-         f"{'Pour le personnel roulant : application du règlement CE n° 561/2006 relatif aux temps de conduite et de repos.' if 'transport' in cp_key.lower() or '140' in cp_key else ''}"),
+         f"à raison de <b>{data.get('heures_jour', heures_sem/5):.1f}h/jour</b> × "
+         f"<b>{data.get('jours_semaine', 5)} jours/semaine</b> = "
+         f"<b>{float(data.get('heures_jour', heures_sem/5)) * int(data.get('jours_semaine', 5)):.1f}h/semaine</b> "
+         f"({data.get('horaire_journalier', '')}), "
+         f"conformément au règlement de travail. "
+         f"{'Pour le personnel roulant : application du règlement CE n° 561/2006.' if '140' in cp_key else ''}"),
 
         ("Article 5 – Rémunération",
          f"La rémunération brute est fixée à <b>{data.get('salaire_horaire', '—')} € brut de l'heure</b> "
@@ -340,7 +343,10 @@ def generer_contrat_cdd(data):
 
         ("Article 5 – Durée du travail",
          f"Le/la travailleur(se) est occupé(e) à <b>{'temps plein' if data.get('temps_plein', True) else 'temps partiel'}</b>, "
-         f"à raison de <b>{heures_sem}h par semaine</b> ({data.get('horaire_journalier', '')}), "
+         f"à raison de <b>{data.get('heures_jour', heures_sem/5):.1f}h/jour</b> × "
+         f"<b>{data.get('jours_semaine', 5)} jours/semaine</b> = "
+         f"<b>{float(data.get('heures_jour', heures_sem/5)) * int(data.get('jours_semaine', 5)):.1f}h/semaine</b> "
+         f"({data.get('horaire_journalier', '')}), "
          f"conformément au règlement de travail."),
 
         ("Article 6 – Rémunération",

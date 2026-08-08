@@ -158,6 +158,18 @@
             <option value="0">Temps partiel</option>
           </select>
         </div>
+        <div class="form-group">
+          <label class="form-label">Heures par jour *</label>
+          <input type="number" name="heures_jour" step="0.1" min="0.5" max="12" class="form-control"
+                 value="{{ prefill_contrat.heures_jour if prefill_contrat and prefill_contrat.heures_jour else '7.6' }}"
+                 placeholder="Ex: 7.6" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Jours par semaine *</label>
+          <input type="number" name="jours_semaine" step="1" min="1" max="7" class="form-control"
+                 value="{{ prefill_contrat.jours_semaine if prefill_contrat and prefill_contrat.jours_semaine else '5' }}"
+                 placeholder="Ex: 5" required>
+        </div>
         <div class="form-group full">
           <label class="form-label">Fonction *</label>
           <input type="text" name="fonction" class="form-control" required

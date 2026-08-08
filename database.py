@@ -306,14 +306,15 @@ def create_contrat(data):
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO contrats (dossier_id, travailleur_id, type_contrat, cp_key, fonction,
-        categorie, salaire_horaire, salaire_mensuel, heures_semaine, horaire_journalier,
-        lieu_travail, date_debut, date_fin, motif_cdd, temps_plein, pdf_path)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        categorie, salaire_horaire, salaire_mensuel, heures_semaine, heures_jour, jours_semaine,
+        horaire_journalier, lieu_travail, date_debut, date_fin, motif_cdd, temps_plein, pdf_path)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
     """, (data['dossier_id'], data['travailleur_id'], data['type_contrat'],
           data['cp_key'], data.get('fonction'), data.get('categorie'),
           data.get('salaire_horaire'), data.get('salaire_mensuel'),
-          data.get('heures_semaine'), data.get('horaire_journalier'),
-          data.get('lieu_travail'), data['date_debut'], data.get('date_fin'),
+          data.get('heures_semaine'), data.get('heures_jour', 7.6), data.get('jours_semaine', 5),
+          data.get('horaire_journalier'), data.get('lieu_travail'),
+          data['date_debut'], data.get('date_fin'),
           data.get('motif_cdd'), data.get('temps_plein', True), data.get('pdf_path')))
     cid = cur.fetchone()[0]
     conn.commit()
