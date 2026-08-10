@@ -78,6 +78,17 @@
             <label class="form-label">Assurance accidents du travail</label>
             <input type="text" name="assurance_at" class="form-control" value="{{ dossier.assurance_at or '' }}">
           </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Premier engagement ONSS</label>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:6px">
+              <input type="checkbox" name="premier_engagement" {% if dossier.premier_engagement %}checked{% endif %} style="width:16px;height:16px">
+              <span style="font-size:13px">Actif — exonération ONSS patronal (max 2.000€/trim.)</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Premier engagement depuis</label>
+            <input type="date" name="premier_engagement_depuis" class="form-control" value="{{ dossier.premier_engagement_depuis.strftime('%Y-%m-%d') if dossier.premier_engagement_depuis else '' }}">
         </div>
       </div>
       <div class="form-actions">

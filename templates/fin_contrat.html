@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Fin de contrat — {{ contrat.prenom }} {{ contrat.nom }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="/travailleur/{{ contrat.travailleur_id }}" class="btn-back">← {{ contrat.prenom }} {{ contrat.nom }}</a>
+    <h2>Documents fin de contrat</h2>
+  </div>
+</div>
+
+<div class="two-col">
+
+  <div class="card">
+    <div class="card-header"><h3>📄 Certificat de travail</h3></div>
+    <div class="card-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        Obligatoire légalement (art. 21 loi 03/07/1978). Mentionne uniquement les dates et la nature du travail.
+      </p>
+      <form method="POST">
+        <input type="hidden" name="doc_type" value="certificat">
+        <button type="submit" class="btn btn-primary">Générer le certificat de travail</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>📋 Formulaire C4 (chômage)</h3></div>
+    <div class="card-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        Obligatoire — à remettre le dernier jour de travail (AR 25/11/1991 art. 137).
+      </p>
+      <form method="POST">
+        <input type="hidden" name="doc_type" value="c4">
+        <div class="form-group">
+          <label>Motif de fin de contrat</label>
+          <select name="motif_fin" class="form-control">
+            <option value="Fin de contrat à durée déterminée">Fin CDD — échéance du terme</option>
+            <option value="Rupture d'un commun accord">Rupture d'un commun accord</option>
+            <option value="Licenciement par l'employeur">Licenciement par l'employeur</option>
+            <option value="Démission du travailleur">Démission du travailleur</option>
+            <option value="Fin de contrat étudiant">Fin de contrat étudiant</option>
+            <option value="Force majeure">Force majeure</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Qui a mis fin au contrat</label>
+          <select name="qui_fin" class="form-control">
+            <option value="Employeur">Employeur</option>
+            <option value="Travailleur">Travailleur</option>
+            <option value="D'un commun accord">D'un commun accord</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Salaire de référence brut (€/mois)</label>
+          <input type="number" name="salaire_reference" step="0.01" class="form-control"
+                 value="{{ contrat.salaire_mensuel or '' }}" placeholder="Ex: 2457.73">
+        </div>
+        <button type="submit" class="btn btn-primary">Générer le C4</button>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

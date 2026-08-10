@@ -1341,7 +1341,8 @@ def generer_fiche_depuis_calendrier(dimona_id):
                t.date_naissance, t.etat_civil, t.nb_enfants_charge,
                t.km_domicile_travail, t.moyen_transport, t.vehicule_societe,
                dos.nom as dossier_nom, dos.adresse as dossier_adresse,
-               dos.bce, dos.rsz, dos.id as dossier_id
+               dos.bce, dos.rsz, dos.id as dossier_id,
+               dos.premier_engagement, dos.premier_engagement_depuis
         FROM dimona d
         JOIN travailleurs t ON t.id = d.travailleur_id
         JOIN dossiers dos ON dos.id = d.dossier_id
@@ -1388,7 +1389,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
         jours_prestes = sum(1 for p in prestations if p['code_journee'] in CODES_PRESTES)
         heures_prestees = float(sum(p['heures'] or 0 for p in prestations if p['code_journee'] in CODES_PRESTES))
         jours_feries = sum(1 for p in prestations if p['code_journee'] in CODES_FERIES)
-        heures_feries = float(sum(p['heures'] or 0 for p in prestations if p['code_journee'] in CODES_FERIES))
+        heures_feries = float(sum(p['heures'] or heures_jour for p in prestations if p['code_journee'] in CODES_FERIES))
         jours_conge = sum(1 for p in prestations if p['code_journee'] in CODES_CONGE)
         jours_maladie = sum(1 for p in prestations if p['code_journee'] in CODES_MALADIE)
         jours_chomage = sum(1 for p in prestations if p['code_journee'] in CODES_CHOMAGE)
@@ -1413,6 +1414,8 @@ def generer_fiche_depuis_calendrier(dimona_id):
         from moteur_paie import calculer_fiche_paie
         from generer_fiche_pdf import generer_fiche_paie_pdf
 
+        # Premier engagement
+        premier_engagement = bool(dimona.get('premier_engagement', False))
         cp_key = contrat['cp_key'] if contrat else dimona.get('cp_key', 'CP 140.03')
         salaire_h = float(contrat['salaire_horaire']) if contrat else 14.9255
         heures_sem = float(contrat['heures_semaine']) if contrat else 38.0
@@ -1444,6 +1447,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
             jours_prestes=jours_prestes, heures_prestees=heures_prestees,
             jours_feries_payes=jours_feries, heures_feries=heures_feries,
             jours_conge=jours_conge, jours_maladie=jours_maladie, jours_chomage=jours_chomage,
+            premier_engagement=premier_engagement,
             km_domicile=km_domicile, moyen_transport=moyen_transport,
             vehicule_societe=vehicule_societe,
             rgpt_actif=rgpt_actif, arab_heure=arab_heure, cheques_repas=cheques_repas,
@@ -1480,8 +1484,10 @@ def generer_fiche_depuis_calendrier(dimona_id):
         conn.commit()
         cur.close(); conn.close()
 
+        if not os.path.exists(filepath):
+            return redirect(url_for('fiche_travailleur', travailleur_id=dimona['travailleur_id'], tab='fiches'))
         return send_file(filepath, as_attachment=False,
-                        download_name=filename, mimetype='application/pdf')
+                            download_name=filename, mimetype='application/pdf')
 
     # GET — afficher le formulaire popup
     cur.close(); conn.close()
@@ -1500,3 +1506,403 @@ def generer_fiche_depuis_calendrier(dimona_id):
         vehicule_societe=dimona.get('vehicule_societe', False),
         km_domicile=dimona.get('km_domicile_travail', 0),
         **ctx)
+
+# ── SUPPRESSION FICHE DE PAIE ─────────────────────────────────────────
+
+@app.route('/fiche/<int:fiche_id>/supprimer', methods=['POST'])
+@login_required
+def supprimer_fiche_paie(fiche_id):
+    conn = get_conn()
+    from psycopg2.extras import RealDictCursor
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT travailleur_id, pdf_path FROM fiches_paie WHERE id = %s", (fiche_id,))
+    fiche = cur.fetchone()
+    if not fiche:
+        cur.close(); conn.close()
+        return "Introuvable", 404
+    travailleur_id = fiche['travailleur_id']
+    # Supprimer le fichier PDF si existe
+    if fiche.get('pdf_path') and os.path.exists(fiche['pdf_path']):
+        try:
+            os.remove(fiche['pdf_path'])
+        except:
+            pass
+    cur.execute("DELETE FROM fiches_paie WHERE id = %s", (fiche_id,))
+    conn.commit(); cur.close(); conn.close()
+    return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id, tab='fiches'))
+
+
+# ── LETTRE ONSS MENSUELLE ─────────────────────────────────────────────
+
+@app.route('/dossier/<int:dossier_id>/lettre-onss', methods=['GET', 'POST'])
+@login_required
+def lettre_onss(dossier_id):
+    from psycopg2.extras import RealDictCursor
+    dossier = get_dossier(dossier_id)
+    ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
+
+    annee = request.args.get('annee', date.today().year, type=int)
+    mois = request.args.get('mois', date.today().month, type=int)
+
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    # Récupérer toutes les fiches du mois pour ce dossier
+    import calendar as cal
+    premier = date(annee, mois, 1)
+    dernier = date(annee, mois, cal.monthrange(annee, mois)[1])
+    mois_nom = ['','Janvier','Février','Mars','Avril','Mai','Juin',
+                'Juillet','Août','Septembre','Octobre','Novembre','Décembre'][mois]
+
+    cur.execute("""
+        SELECT f.*, t.prenom || ' ' || t.nom as nom_travailleur,
+               t.niss, c.cp_key, c.type_contrat
+        FROM fiches_paie f
+        JOIN travailleurs t ON t.id = f.travailleur_id
+        LEFT JOIN contrats c ON c.id = f.contrat_id
+        WHERE f.dossier_id = %s
+        AND f.periode_debut >= %s AND f.periode_fin <= %s
+    """, (dossier_id, premier, dernier))
+    fiches = [dict(r) for r in cur.fetchall()]
+    cur.close(); conn.close()
+
+    if request.method == 'POST':
+        return generer_lettre_onss_pdf(dossier, fiches, annee, mois, mois_nom)
+
+    return render_template('lettre_onss.html',
+        dossier=dossier, dossier_actif=dossier,
+        fiches=fiches, annee=annee, mois=mois, mois_nom=mois_nom,
+        **ctx)
+
+
+def generer_lettre_onss_pdf(dossier, fiches, annee, mois, mois_nom):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    try:
+        pdfmetrics.registerFont(TTFont('DVSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+        pdfmetrics.registerFont(TTFont('DVSans-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+        FN, FNB = 'DVSans', 'DVSans-Bold'
+    except:
+        FN, FNB = 'Helvetica', 'Helvetica-Bold'
+
+    NAVY = colors.HexColor('#1F4E79')
+    LGRAY = colors.HexColor('#f5f5f5')
+    LINE = colors.HexColor('#cccccc')
+
+    def sty(bold=False, size=9, align=TA_LEFT):
+        return ParagraphStyle('x', fontName=FNB if bold else FN,
+                              fontSize=size, leading=size+3, alignment=align)
+    def p(t, **kw): return Paragraph(str(t or ''), sty(**kw))
+
+    filename = f"lettre_ONSS_{dossier['nom']}_{mois_nom}_{annee}.pdf"
+    filepath = os.path.join(OUTPUT_DIR, filename)
+
+    doc = SimpleDocTemplate(filepath, pagesize=A4,
+        topMargin=2*cm, bottomMargin=2*cm, leftMargin=2*cm, rightMargin=2*cm)
+    e = []
+
+    # En-tête
+    e.append(p(dossier['nom'], bold=True, size=12))
+    e.append(p(dossier.get('adresse', ''), size=9))
+    e.append(p(f"BCE : {dossier.get('bce','')}  |  RSZ : {dossier.get('rsz','')}", size=9))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(HRFlowable(width='100%', thickness=1.5, color=NAVY))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(p(f"DECLARATION ET PAIEMENT ONSS — {mois_nom.upper()} {annee}", bold=True, size=13))
+    e.append(p(f"Date limite de paiement : 5e jour ouvrable du mois suivant", size=9))
+    e.append(Spacer(1, 0.5*cm))
+
+    # Totaux
+    total_brut = sum(float(f.get('salaire_brut', 0) or 0) for f in fiches)
+    total_onss_pers = sum(float(f.get('onss_personnel', 0) or 0) for f in fiches)
+    total_onss_pat = sum(float(f.get('onss_patronal', 0) or 0) for f in fiches)
+    total_onss = total_onss_pers + total_onss_pat
+
+    # Tableau par travailleur
+    cols = [5*cm, 2.5*cm, 2.5*cm, 2.5*cm, 3*cm]
+    rows = [[
+        p('Travailleur', bold=True),
+        p('Brut ONSS', bold=True, align=TA_RIGHT),
+        p('ONSS pers.', bold=True, align=TA_RIGHT),
+        p('ONSS pat.', bold=True, align=TA_RIGHT),
+        p('Total ONSS', bold=True, align=TA_RIGHT),
+    ]]
+    for f in fiches:
+        brut = float(f.get('salaire_brut', 0) or 0)
+        op = float(f.get('onss_personnel', 0) or 0)
+        opp = float(f.get('onss_patronal', 0) or 0)
+        rows.append([
+            p(f.get('nom_travailleur', '—')),
+            p(f"{brut:.2f} €", align=TA_RIGHT),
+            p(f"{op:.2f} €", align=TA_RIGHT),
+            p(f"{opp:.2f} €", align=TA_RIGHT),
+            p(f"{op+opp:.2f} €", align=TA_RIGHT),
+        ])
+    # Ligne total
+    rows.append([
+        p('TOTAL', bold=True),
+        p(f"{total_brut:.2f} €", bold=True, align=TA_RIGHT),
+        p(f"{total_onss_pers:.2f} €", bold=True, align=TA_RIGHT),
+        p(f"{total_onss_pat:.2f} €", bold=True, align=TA_RIGHT),
+        p(f"{total_onss:.2f} €", bold=True, align=TA_RIGHT),
+    ])
+
+    t = Table(rows, colWidths=cols)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), LGRAY),
+        ('LINEBELOW', (0,0), (-1,0), 0.5, LINE),
+        ('LINEABOVE', (0,-1), (-1,-1), 1, NAVY),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    e.append(t)
+    e.append(Spacer(1, 0.5*cm))
+
+    # Récapitulatif à payer
+    recap = [
+        ['ONSS personnel (13,07%)', f"{total_onss_pers:.2f} EUR"],
+        ['ONSS patronal (~27%)', f"{total_onss_pat:.2f} EUR"],
+        ['TOTAL À PAYER À L\'ONSS', f"{total_onss:.2f} EUR"],
+    ]
+    for i, (label, val) in enumerate(recap):
+        bold = i == len(recap) - 1
+        e.append(Table([[p(label, bold=bold, size=10), p(val, bold=bold, size=10, align=TA_RIGHT)]],
+                      colWidths=[12*cm, 4.5*cm]))
+    e.append(Spacer(1, 0.5*cm))
+
+    # Instructions paiement
+    e.append(HRFlowable(width='100%', thickness=0.5, color=LINE))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(p('INSTRUCTIONS DE PAIEMENT', bold=True, size=10))
+    e.append(Spacer(1, 0.15*cm))
+    e.append(p(f"Virement bancaire vers : BE76 6790 0001 9059 (ONSS)", size=9))
+    e.append(p(f"Communication : {dossier.get('rsz','').replace('-','')} - {mois:02d}/{annee}", size=9))
+    e.append(p(f"Date limite : avant le 5e jour ouvrable de {['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][(mois%12)+1]}", size=9))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(p(f"Document généré le {date.today().strftime('%d/%m/%Y')} via NexSocial — DuxSalary", size=8))
+
+    doc.build(e)
+    return send_file(filepath, as_attachment=False, download_name=filename, mimetype='application/pdf')
+
+
+# ── DOCUMENTS FIN DE CONTRAT ──────────────────────────────────────────
+
+@app.route('/contrat/<int:contrat_id>/fin-contrat', methods=['GET', 'POST'])
+@login_required
+def fin_contrat(contrat_id):
+    from psycopg2.extras import RealDictCursor
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("""
+        SELECT c.*, t.prenom, t.nom, t.niss, t.adresse, t.iban,
+               t.date_naissance, t.etat_civil,
+               dos.nom as dossier_nom, dos.adresse as dossier_adresse,
+               dos.bce, dos.rsz, dos.representant, dos.id as dossier_id
+        FROM contrats c
+        JOIN travailleurs t ON t.id = c.travailleur_id
+        JOIN dossiers dos ON dos.id = c.dossier_id
+        WHERE c.id = %s
+    """, (contrat_id,))
+    contrat = cur.fetchone()
+    cur.close(); conn.close()
+    if not contrat:
+        return "Introuvable", 404
+
+    ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
+
+    if request.method == 'POST':
+        doc_type = request.form.get('doc_type', 'certificat')
+        if doc_type == 'certificat':
+            return generer_certificat_travail(dict(contrat))
+        elif doc_type == 'c4':
+            return generer_c4(dict(contrat), request.form)
+
+    return render_template('fin_contrat.html', contrat=contrat,
+                           dossier_actif={'id': contrat['dossier_id'], 'nom': contrat['dossier_nom']},
+                           **ctx)
+
+
+def generer_certificat_travail(c):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    try:
+        pdfmetrics.registerFont(TTFont('DVSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+        pdfmetrics.registerFont(TTFont('DVSans-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+        FN, FNB = 'DVSans', 'DVSans-Bold'
+    except:
+        FN, FNB = 'Helvetica', 'Helvetica-Bold'
+
+    NAVY = colors.HexColor('#1F4E79')
+    sN = ParagraphStyle('N', fontName=FN, fontSize=10, leading=15)
+    sB = ParagraphStyle('B', fontName=FNB, fontSize=10, leading=15)
+    sT = ParagraphStyle('T', fontName=FNB, fontSize=14, leading=20, alignment=TA_CENTER)
+    sJ = ParagraphStyle('J', fontName=FN, fontSize=10, leading=15, alignment=TA_JUSTIFY)
+
+    filename = f"certificat_travail_{c['nom']}_{c['prenom']}.pdf"
+    filepath = os.path.join(OUTPUT_DIR, filename)
+
+    doc = SimpleDocTemplate(filepath, pagesize=A4,
+        topMargin=2*cm, bottomMargin=2*cm, leftMargin=2.5*cm, rightMargin=2.5*cm)
+    e = []
+
+    e.append(Paragraph(c['dossier_nom'], sB))
+    e.append(Paragraph(c.get('dossier_adresse', ''), sN))
+    e.append(Paragraph(f"BCE : {c.get('bce','')}  |  RSZ : {c.get('rsz','')}", sN))
+    e.append(Spacer(1, 0.5*cm))
+    e.append(HRFlowable(width='100%', thickness=2, color=NAVY))
+    e.append(Spacer(1, 0.5*cm))
+    e.append(Paragraph("CERTIFICAT DE TRAVAIL", sT))
+    e.append(Paragraph("Article 21 de la loi du 3 juillet 1978 relative aux contrats de travail", 
+                       ParagraphStyle('C', fontName=FN, fontSize=9, alignment=TA_CENTER)))
+    e.append(Spacer(1, 0.8*cm))
+
+    debut = c['date_debut'].strftime('%d/%m/%Y') if c.get('date_debut') else '—'
+    fin = c['date_fin'].strftime('%d/%m/%Y') if c.get('date_fin') else date.today().strftime('%d/%m/%Y')
+
+    e.append(Paragraph(
+        f"Je soussigné(e), <b>{c.get('representant', '—')}</b>, représentant(e) de la société "
+        f"<b>{c['dossier_nom']}</b>, certifie que :", sJ))
+    e.append(Spacer(1, 0.4*cm))
+    e.append(Paragraph(f"<b>M./Mme {c['prenom']} {c['nom']}</b>", sB))
+    for label, val in [
+        ("N° NISS :", c.get('niss', '—')),
+        ("Adresse :", c.get('adresse', '—')),
+        ("A été occupé(e) du :", f"{debut} au {fin}"),
+        ("En qualité de :", c.get('fonction', '—')),
+        ("Commission paritaire :", c.get('cp_key', '—')),
+        ("Type de contrat :", c.get('type_contrat', '—')),
+    ]:
+        e.append(Paragraph(f"<b>{label}</b> {val}", sN))
+    e.append(Spacer(1, 0.4*cm))
+    e.append(Paragraph(
+        "Ce certificat est délivré conformément à l'article 21 de la loi du 3 juillet 1978 "
+        "relative aux contrats de travail. Il ne peut contenir aucune autre mention, "
+        "sauf à la demande expresse du travailleur.", sJ))
+    e.append(Spacer(1, 1*cm))
+    e.append(Paragraph(f"Fait à _____________________, le {date.today().strftime('%d/%m/%Y')}", sN))
+    e.append(Spacer(1, 1.5*cm))
+    e.append(Paragraph("_______________________", sN))
+    e.append(Paragraph(f"{c.get('representant', '—')}", sN))
+    e.append(Paragraph(f"{c['dossier_nom']}", sN))
+
+    doc.build(e)
+    return send_file(filepath, as_attachment=False, download_name=filename, mimetype='application/pdf')
+
+
+def generer_c4(c, form):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    try:
+        pdfmetrics.registerFont(TTFont('DVSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+        pdfmetrics.registerFont(TTFont('DVSans-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+        FN, FNB = 'DVSans', 'DVSans-Bold'
+    except:
+        FN, FNB = 'Helvetica', 'Helvetica-Bold'
+
+    NAVY = colors.HexColor('#1F4E79')
+    sN = ParagraphStyle('N', fontName=FN, fontSize=9, leading=13)
+    sB = ParagraphStyle('B', fontName=FNB, fontSize=9, leading=13)
+    sT = ParagraphStyle('T', fontName=FNB, fontSize=13, leading=18, alignment=TA_CENTER)
+
+    filename = f"C4_{c['nom']}_{c['prenom']}.pdf"
+    filepath = os.path.join(OUTPUT_DIR, filename)
+
+    doc = SimpleDocTemplate(filepath, pagesize=A4,
+        topMargin=1.5*cm, bottomMargin=1.5*cm, leftMargin=2*cm, rightMargin=2*cm)
+    e = []
+
+    e.append(Paragraph("FORMULAIRE C4 — CERTIFICAT DE CHOMAGE", sT))
+    e.append(Paragraph("Arrêté royal du 25 novembre 1991 portant réglementation du chômage", 
+                       ParagraphStyle('C', fontName=FN, fontSize=8, alignment=TA_CENTER)))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(HRFlowable(width='100%', thickness=1.5, color=NAVY))
+    e.append(Spacer(1, 0.4*cm))
+
+    debut = c['date_debut'].strftime('%d/%m/%Y') if c.get('date_debut') else '—'
+    fin = c['date_fin'].strftime('%d/%m/%Y') if c.get('date_fin') else date.today().strftime('%d/%m/%Y')
+    motif = form.get('motif_fin', 'Fin de contrat à durée déterminée')
+    salaire_ref = form.get('salaire_reference', '')
+
+    sections = [
+        ("EMPLOYEUR", [
+            ("Nom/Dénomination", c['dossier_nom']),
+            ("Adresse", c.get('dossier_adresse', '—')),
+            ("N° RSZ (ONSS)", c.get('rsz', '—')),
+            ("BCE", c.get('bce', '—')),
+            ("Commission paritaire", c.get('cp_key', '—')),
+        ]),
+        ("TRAVAILLEUR", [
+            ("Nom et prénom", f"{c['nom']} {c['prenom']}"),
+            ("N° NISS", c.get('niss', '—')),
+            ("Adresse", c.get('adresse', '—')),
+            ("Statut", "Ouvrier" if c.get('cp_key') and is_ouvrier(c.get('cp_key','')) else "Employé"),
+        ]),
+        ("OCCUPATION", [
+            ("Date de début", debut),
+            ("Date de fin", fin),
+            ("Fonction", c.get('fonction', '—')),
+            ("Type de contrat", c.get('type_contrat', '—')),
+            ("Régime de travail", f"{c.get('heures_semaine', 38)}h/semaine"),
+            ("Salaire de référence brut", f"{salaire_ref} EUR/mois" if salaire_ref else "Voir fiches de paie"),
+        ]),
+        ("FIN DU CONTRAT", [
+            ("Motif de la fin", motif),
+            ("Qui a mis fin", form.get('qui_fin', 'Employeur')),
+            ("Préavis presté", form.get('preavis', 'Non applicable — CDD')),
+        ]),
+    ]
+
+    for titre, lignes in sections:
+        e.append(Paragraph(titre, sB))
+        t_data = [[Paragraph(l, sN), Paragraph(v, sN)] for l, v in lignes]
+        t = Table(t_data, colWidths=[6*cm, 10.5*cm])
+        t.setStyle(TableStyle([
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('LINEBELOW', (0,0), (-1,-2), 0.3, colors.HexColor('#eeeeee')),
+            ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#f9f9f9')),
+        ]))
+        e.append(t)
+        e.append(Spacer(1, 0.3*cm))
+
+    e.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#cccccc')))
+    e.append(Spacer(1, 0.3*cm))
+    e.append(Paragraph(
+        "<b>Important :</b> Ce formulaire C4 doit être remis au travailleur au plus tard le dernier "
+        "jour de travail, conformément à l'article 137 de l'AR du 25 novembre 1991. "
+        "Le travailleur le remet à son organisme de paiement (CAPAC ou syndicat) pour demander "
+        "ses allocations de chômage.", sN))
+    e.append(Spacer(1, 0.5*cm))
+    e.append(Paragraph(f"Fait à _____________________, le {date.today().strftime('%d/%m/%Y')}", sN))
+    e.append(Spacer(1, 1*cm))
+    sig = Table([[
+        Paragraph("<b>Signature employeur</b>\n\n\n_______________________", 
+                  ParagraphStyle('', fontName=FNB, fontSize=9)),
+        Paragraph("<b>Signature travailleur</b>\n\n\n_______________________",
+                  ParagraphStyle('', fontName=FNB, fontSize=9)),
+    ]], colWidths=[8*cm, 8*cm])
+    e.append(sig)
+
+    doc.build(e)
+    return send_file(filepath, as_attachment=False, download_name=filename, mimetype='application/pdf')

@@ -62,7 +62,7 @@ CP_INDEMNITES = {
         'onss_patronal': 0.2700,
     },
     'CP 140.03': {
-        'rgpt_heure': 1.63,                # exonéré ONSS, net
+        'rgpt_heure': 1.8175,                # exonéré ONSS, net
         'cheques_repas_jour': 3.09,        # depuis 01/07/2026, exonéré ONSS
         'indem_vetements_jour': 0.0,       # vêtements fournis et entretenus par employeur
         'indem_deplacement_jour': 0.0,     # selon km (calculé séparément)
@@ -99,21 +99,45 @@ def calcul_css(brut_imposable_mensuel, etat_civil='celibataire', nb_enfants=0):
     else:
         return 60.94
 
-def calcul_bonus_emploi(brut_mensuel):
+def calcul_bonus_emploi(brut_mensuel, heures_semaine_reel=38.0, heures_semaine_ref=38.0):
     """Bonus à l'emploi = réduction ONSS travailleur pour bas salaires 2026.
-    Formule officielle SPF Emploi 2026."""
-    if brut_mensuel > BONUS_EMPLOI_PLAFOND:
+    Formule officielle ONSS 2026 — deux volets A et B.
+    Pour temps partiel: conversion en équivalent temps plein d'abord."""
+    if heures_semaine_reel <= 0:
         return 0.0
-    # Formule officielle : diminue linéairement de 175.32 à 0
-    if brut_mensuel <= 1945.38:
-        bonus = 175.32
-    elif brut_mensuel <= BONUS_EMPLOI_PLAFOND:
-        bonus = round(175.32 * (BONUS_EMPLOI_PLAFOND - brut_mensuel) / (BONUS_EMPLOI_PLAFOND - 1945.38), 2)
+    
+    # Conversion en salaire équivalent temps plein
+    ratio = heures_semaine_reel / heures_semaine_ref
+    if ratio < 1.0 and ratio > 0:
+        brut_etp = brut_mensuel / ratio
     else:
-        bonus = 0.0
+        brut_etp = brut_mensuel
+    
+    # Volet A (bas salaires) — plafond 2 792,16 EUR/mois (temps plein)
+    SEUIL_A_BAS = 1945.38
+    SEUIL_A_HAUT = 2792.16
+    MAX_A = 229.01
+    
+    if brut_etp <= SEUIL_A_BAS:
+        bonus_a = MAX_A
+    elif brut_etp <= SEUIL_A_HAUT:
+        bonus_a = round(MAX_A * (SEUIL_A_HAUT - brut_etp) / (SEUIL_A_HAUT - SEUIL_A_BAS), 2)
+    else:
+        bonus_a = 0.0
+    
+    # Volet B (très bas salaires) — plafond 2 777,83 EUR/mois (temps plein)
+    SEUIL_B_BAS = 1945.38
+    SEUIL_B_HAUT = 2777.83
+    MAX_B = 0.0  # Volet B faible pour ouvriers — simplifié
+    
+    bonus_total_etp = bonus_a + MAX_B
+    
+    # Proratiser selon le régime temps partiel
+    bonus_proratise = round(bonus_total_etp * ratio, 2)
+    
     # Le bonus ne peut pas dépasser l'ONSS dû
     onss_du = round(brut_mensuel * ONSS_PERSONNEL, 2)
-    return min(bonus, onss_du)
+    return min(bonus_proratise, onss_du)
 
 def calcul_reduction_structurelle(brut_mensuel):
     """Réduction structurelle ONSS patronal 2026.
@@ -180,6 +204,7 @@ def calculer_fiche_paie(
     # Optionnels
     etat_civil='celibataire', nb_enfants=0,
     heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, type_contrat='CDD', is_etudiant=False,
+    premier_engagement=False,
     # Prestations du mois
     jours_prestes=0, heures_prestees=0.0,
     jours_feries_payes=0, heures_feries=0.0,
@@ -248,7 +273,7 @@ def calculer_fiche_paie(
     onss_travailleur = round(brut_onss * onss_taux, 2)
     
     # Bonus à l'emploi (réduit l'ONSS travailleur)
-    bonus_emploi = 0.0 if is_etudiant else calcul_bonus_emploi(brut_onss)
+    bonus_emploi = 0.0 if is_etudiant else calcul_bonus_emploi(brut_onss, heures_semaine_reel, heures_semaine)
     onss_net = round(max(0, onss_travailleur - bonus_emploi), 2)
     
     # ── IMPOSABLE ─────────────────────────────────────────────────
@@ -307,9 +332,9 @@ def calculer_fiche_paie(
         heures_rgpt = math.ceil(heures_prestees)  # arrondi à l'unité supérieure
         montant_rgpt = round(rgpt_heure * heures_rgpt, 2)
         lignes_indemn.append({
-            'libelle': 'Indemnité RGPT',
+            'libelle': f'Indemnité RGPT ({heures_rgpt}h)',
             'detail': f'{rgpt_heure:.4f} €/h',
-            'jours': heures_rgpt,
+            'jours': 0,
             'montant': montant_rgpt,
             'note': 'exonérée ONSS et IPP',
         })
@@ -367,7 +392,13 @@ def calculer_fiche_paie(
     # ── SECTION INFORMATION (charges employeur) ───────────────────
     onss_patronal_brut = round(brut_onss * onss_patronal_taux, 2)
     reduction_structurelle = calcul_reduction_structurelle(brut_onss)
-    onss_patronal_net = round(onss_patronal_brut - reduction_structurelle, 2)
+    # Réduction premier engagement
+    reduction_premier_engagement = 0.0
+    if premier_engagement:
+        max_mensuel = round(2000.0 / 3, 2)
+        ratio_tp = heures_semaine_reel / heures_semaine if heures_semaine > 0 else 1.0
+        reduction_premier_engagement = round(min(max_mensuel * ratio_tp, onss_patronal_brut), 2)
+    onss_patronal_net = round(max(0, onss_patronal_brut - reduction_structurelle - reduction_premier_engagement), 2)
     cout_employeur = round(brut_onss + onss_patronal_net + montant_vetements + montant_deplacement + montant_km + montant_rgpt + montant_arab + montant_cheques, 2)
     
     # Ancienneté
@@ -418,6 +449,8 @@ def calculer_fiche_paie(
         'salaire_net': salaire_net,
         # Section information
         'onss_patronal': onss_patronal_net,
+        'premier_engagement': premier_engagement,
+        'reduction_premier_engagement': reduction_premier_engagement,
         'ded_cot_onss_trav': bonus_emploi,
         'onss_bas_salaires_champ_b': reduction_structurelle,
         'cout_employeur': cout_employeur,

@@ -222,12 +222,16 @@ def update_dossier(dossier_id, data):
     cur.execute("""
         UPDATE dossiers SET nom=%s, bce=%s, rsz=%s, adresse=%s, email=%s,
         telephone=%s, cp_principale=%s, representant=%s, assurance_at=%s,
-        date_activation_rsz=%s, updated_at=NOW()
+        date_activation_rsz=%s, premier_engagement=%s, premier_engagement_depuis=%s,
+        updated_at=NOW()
         WHERE id=%s
     """, (data['nom'], data.get('bce'), data.get('rsz'), data.get('adresse'),
           data.get('email'), data.get('telephone'), data.get('cp_principale'),
           data.get('representant'), data.get('assurance_at'),
-          date_rsz, dossier_id))
+          date_rsz,
+          data.get('premier_engagement') == 'on',
+          data.get('premier_engagement_depuis') or None,
+          dossier_id))
     conn.commit()
     cur.close()
     conn.close()

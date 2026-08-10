@@ -123,7 +123,7 @@ def generer_fiche_paie_pdf(data, filepath):
     elems.append(Spacer(1, 0.2*cm))
     
     # ── TABLEAU ÉLÉMENTS DES SALAIRES ────────────────────────────
-    cols = [6.5*cm, 2.5*cm, 1.5*cm, 1.2*cm, 1.8*cm, 2*cm, 2.5*cm]
+    cols = [6.5*cm, 2.5*cm, 1.5*cm, 1.0*cm, 1.6*cm, 1.8*cm, 2.6*cm]
     
     def row_sal(libelle, base='', suppl='', pct='', jours='', heures='', montant='', bold=False):
         return [
@@ -231,21 +231,22 @@ def generer_fiche_paie_pdf(data, filepath):
     bottom = Table([[
         Table([
             [p('COMMUNICATION:', bold=True, size=8)],
-            [p('Un compte individuel peut être imprimé sur demande !', size=8, color=GRAY)],
+            [p('', size=8)],
             [p('')],
-            [p('Rédigé par: NexSocial — DuxSalary', size=7.5, color=GRAY)],
+            [p('Etabli par : DUXSALARY — Secrétariat Social Digital', size=7.5, color=GRAY)],
         ], colWidths=[9*cm]),
         Table([
             [p('DECOMPTE:', bold=True, size=8), ''],
-            [p('Salaire net', size=8), p(f"EUR  {data['salaire_net']:.2f}", bold=True, size=8, align=TA_RIGHT)],
-            [p('A payer', bold=True, size=9), p(f"EUR  {data['a_payer']:.2f}", bold=True, size=9, align=TA_RIGHT)],
-        ], colWidths=[5*cm, 4*cm]),
+            [p('Salaire net', size=8), p(f"{data['salaire_net']:.2f} EUR", bold=True, size=7.5, align=TA_RIGHT)],
+            [p('A payer', bold=True, size=8), p(f"{data['a_payer']:.2f} EUR", bold=True, size=8, align=TA_RIGHT)],
+        ], colWidths=[3.5*cm, 5.2*cm]),
     ]], colWidths=[9*cm, 9*cm])
     bottom.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('BOX', (1,0), (1,0), 0.5, LINE),
         ('TOPPADDING', (0,0), (-1,-1), 4),
-        ('LEFTPADDING', (1,0), (1,0), 8),
+        ('LEFTPADDING', (1,0), (1,0), 2),
+        ('RIGHTPADDING', (1,0), (1,0), 2),
     ]))
     elems.append(bottom)
     elems.append(Spacer(1, 0.3*cm))

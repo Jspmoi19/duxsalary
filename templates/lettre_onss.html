@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Lettre ONSS — {{ mois_nom }} {{ annee }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
+    <h2>Lettre ONSS — {{ mois_nom }} {{ annee }}</h2>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h3>Fiches de paie du mois</h3>
+    <div style="display:flex;gap:8px">
+      {% if mois > 1 %}
+      {% if mois > 1 %}<a href="/dossier/{{ dossier.id }}/lettre-onss?annee={{ annee }}&mois={{ mois-1 }}" class="btn btn-secondary btn-sm">← Mois précédent</a>{% else %}<a href="/dossier/{{ dossier.id }}/lettre-onss?annee={{ annee-1 }}&mois=12" class="btn btn-secondary btn-sm">← Mois précédent</a>{% endif %}
+      {% endif %}
+      {% if mois < 12 %}
+      <a href="/dossier/{{ dossier.id }}/lettre-onss?annee={{ annee }}&mois={{ mois+1 }}" class="btn btn-secondary btn-sm">Mois suivant →</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if fiches %}
+  <table class="data-table">
+    <thead>
+      <tr><th>Travailleur</th><th>Brut ONSS</th><th>ONSS pers.</th><th>ONSS pat.</th><th>Total ONSS</th></tr>
+    </thead>
+    <tbody>
+    {% for f in fiches %}
+    <tr>
+      <td>{{ f.nom_travailleur }}</td>
+      <td>{{ "%.2f"|format(f.salaire_brut or 0) }} €</td>
+      <td>{{ "%.2f"|format(f.onss_personnel or 0) }} €</td>
+      <td>{{ "%.2f"|format(f.onss_patronal or 0) }} €</td>
+      <td><strong>{{ "%.2f"|format((f.onss_personnel or 0) + (f.onss_patronal or 0)) }} €</strong></td>
+    </tr>
+    {% endfor %}
+    <tr style="background:#f0f9ff;font-weight:700">
+      <td>TOTAL</td>
+      <td>{{ "%.2f"|format(fiches|sum(attribute='salaire_brut') or 0) }} €</td>
+      <td>{{ "%.2f"|format(fiches|sum(attribute='onss_personnel') or 0) }} €</td>
+      <td>{{ "%.2f"|format(fiches|sum(attribute='onss_patronal') or 0) }} €</td>
+      <td>{{ "%.2f"|format((fiches|sum(attribute='onss_personnel') or 0) + (fiches|sum(attribute='onss_patronal') or 0)) }} €</td>
+    </tr>
+    </tbody>
+  </table>
+  <div style="padding:16px;text-align:right">
+    <form method="POST">
+      <button type="submit" class="btn btn-primary">📄 Générer la lettre ONSS PDF</button>
+    </form>
+  </div>
+  {% else %}
+  <div style="padding:32px;text-align:center;color:var(--text-muted)">
+    Aucune fiche de paie pour {{ mois_nom }} {{ annee }}.<br>
+    <small>Générez les fiches de paie depuis le calendrier de chaque travailleur.</small>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
