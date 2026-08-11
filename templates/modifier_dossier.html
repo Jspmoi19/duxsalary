@@ -78,6 +78,16 @@
             <label class="form-label">Assurance accidents du travail</label>
             <input type="text" name="assurance_at" class="form-control" value="{{ dossier.assurance_at or '' }}">
           </div>
+          <div class="form-group">
+            <label class="form-label">Région linguistique</label>
+            <select name="region_linguistique" class="form-control">
+              <option value="bruxelles_fr" {% if not dossier.region_linguistique or dossier.region_linguistique == 'bruxelles_fr' %}selected{% endif %}>Bruxelles — Français</option>
+              <option value="bruxelles_nl" {% if dossier.region_linguistique == 'bruxelles_nl' %}selected{% endif %}>Bruxelles — Nederlands</option>
+              <option value="flandre" {% if dossier.region_linguistique == 'flandre' %}selected{% endif %}>Flandre — Nederlands (verplicht)</option>
+              <option value="wallonie" {% if dossier.region_linguistique == 'wallonie' %}selected{% endif %}>Wallonie — Français</option>
+            </select>
+          </div>
+          </div>
           </div>
           <div class="form-group">
             <label class="form-label">Premier engagement ONSS</label>

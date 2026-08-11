@@ -133,6 +133,14 @@
 
 </div>
 
+<div class="form-group">
+  <label class="form-label">Langue du travailleur</label>
+  <select name="langue" class="form-control">
+    <option value="fr" {% if not travailleur.langue or travailleur.langue == 'fr' %}selected{% endif %}>Français</option>
+    <option value="nl" {% if travailleur.langue == 'nl' %}selected{% endif %}>Nederlands</option>
+  </select>
+  <div class="form-hint">Utilisé pour Bruxelles — détermine la langue des documents légaux</div>
+</div>
 <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;align-items:center">
   <form method="POST" action="/travailleur/{{ travailleur.id }}/supprimer"
         onsubmit="return confirm('Supprimer définitivement ce travailleur ?')" style="margin-right:auto">

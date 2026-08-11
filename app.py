@@ -12,6 +12,7 @@ import werkzeug.utils
 
 from cp_data import CP_DATABASE, get_heures_semaine, is_ouvrier, calcul_preavis_semaines
 from contrats import generer_contrat_cdi, generer_contrat_cdd
+from contrats_nl import generer_contrat_cdd_nl, generer_certificat_travail_nl, generer_c4_nl
 from database import (init_db, get_all_dossiers, get_dossier, create_dossier,
                       update_dossier, get_travailleurs, get_travailleur,
                       create_travailleur, get_contrats, create_contrat,
@@ -228,10 +229,11 @@ def modifier_travailleur(travailleur_id):
                 p = ddn.split('/'); ddn_db = f"{p[2]}-{p[1]}-{p[0]}"
             except: pass
         cur.execute("""UPDATE travailleurs SET prenom=%s, nom=%s, niss=%s, date_naissance=%s,
-            adresse=%s, iban=%s, email=%s, telephone=%s WHERE id=%s""",
+            adresse=%s, iban=%s, email=%s, telephone=%s, langue=%s WHERE id=%s""",
             (request.form['prenom'], request.form['nom'], request.form.get('niss'),
              ddn_db, request.form.get('adresse'), request.form.get('iban'),
-             request.form.get('email'), request.form.get('telephone'), travailleur_id))
+             request.form.get('email'), request.form.get('telephone'),
+             request.form.get('langue', 'fr'), travailleur_id))
         conn.commit(); cur.close(); conn.close()
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id))
     return render_template('modifier_travailleur.html', travailleur=travailleur, dossier=dossier, dossier_actif=dossier, cp_keys=list(CP_DATABASE.keys()), **ctx)
@@ -533,7 +535,13 @@ def nouveau_contrat_dossier(dossier_id):
             'jours_semaine': int(form.get('jours_semaine', 5) or 5),
         }
 
-        filepath, filename = (generer_contrat_cdi(data) if type_contrat == 'CDI' else generer_contrat_cdd(data))
+        # Détecter langue du travailleur
+        travailleur_obj = get_travailleur(travailleur_id)
+        langue_doc = get_langue_document(dossier, travailleur_obj)
+        if langue_doc == 'nl' and type_contrat in ('CDD',):
+            filepath, filename = generer_contrat_cdd_nl(data)
+        else:
+            filepath, filename = (generer_contrat_cdi(data) if type_contrat == 'CDI' else generer_contrat_cdd(data))
 
         def pd(d):
             if not d: return None
@@ -1208,6 +1216,14 @@ def get_context_base_tenant():
     ctx['tenant'] = get_tenant()
     return ctx
 
+def get_langue_document(dossier, travailleur=None):
+    region = (dossier.get('region_linguistique') or 'bruxelles_fr')
+    if region == 'flandre':
+        return 'nl'
+    elif region in ('bruxelles_nl',):
+        return (travailleur or {}).get('langue', 'fr') or 'fr'
+    return 'fr'
+
 # ── PORTAIL ADMIN NEXSOCIAL ───────────────────────────────────────────
 
 NEXSOCIAL_ADMIN_EMAIL = "leo@nexsocial.be"
@@ -1760,9 +1776,17 @@ def fin_contrat(contrat_id):
 
     if request.method == 'POST':
         doc_type = request.form.get('doc_type', 'certificat')
+        travailleur_lng = {'langue': contrat.get('langue', 'fr')}
+        dossier_lng = {'region_linguistique': contrat.get('region_linguistique', 'bruxelles_fr')}
+        langue_doc = get_langue_document(dossier_lng, travailleur_lng)
         if doc_type == 'certificat':
+            if langue_doc == 'nl':
+                return generer_certificat_travail_nl(dict(contrat))
             return generer_certificat_travail(dict(contrat))
         elif doc_type == 'c4':
+            if langue_doc == 'nl':
+                fp, fn = generer_c4_nl(dict(contrat), request.form)
+                return send_file(fp, as_attachment=False, download_name=fn, mimetype='application/pdf')
             return generer_c4(dict(contrat), request.form)
 
     return render_template('fin_contrat.html', contrat=contrat,

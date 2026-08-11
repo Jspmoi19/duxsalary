@@ -157,14 +157,14 @@ def generer_fiche_paie_pdf(data, filepath):
     sal_rows[-1][6] = p(f"EUR  {data['brut_onss']:.2f}", bold=True, size=8, align=TA_RIGHT, color=DARK)
     
     # ONSS travailleur
-    onss_brut = round(data['brut_onss'] * 0.1307, 2)
+    onss_brut = abs(data['onss_travailleur'])
     sal_rows.append(row_sal(
         f"ONSS TRAVAILLEUR (DEDUCTION): (Base calcul: {data['brut_onss']:.2f})",
         '', '', '', '', '', -onss_brut
     ))
     if data.get('bonus_emploi', 0) > 0:
         sal_rows.append(row_sal(
-            f"Bonus à l'emploi (réduction ONSS)",
+            f"Bonus a l'emploi (reduction ONSS)",
             '', '', '', '', '', data.get('bonus_emploi', 0)
         ))
     
