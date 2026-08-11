@@ -12,6 +12,7 @@
     <a href="/dossier/{{ dossier.id }}/travailleur/nouveau" class="btn btn-secondary">+ Travailleur</a>
     <a href="/dossier/{{ dossier.id }}/document/ajouter" class="btn btn-secondary">+ Document dossier</a>
     <a href="/dossier/{{ dossier.id }}/lettre-onss" class="btn btn-secondary">📊 Lettre ONSS</a>
+    <a href="/dossier/{{ dossier.id }}/lettres-onss" class="btn btn-secondary">📋 Historique ONSS</a>
     <a href="/dossier/{{ dossier.id }}/modifier" class="btn btn-secondary">Modifier</a>
   </div>
 </div>
@@ -36,37 +37,33 @@
 <div class="card">
   <div class="card-header"><h3>⚠️ Échéances et obligations</h3></div>
   <div class="card-body" id="echeances-list">
-    {% if echeances %}
-      {% for e in echeances %}
-      <div class="echeance-item echeance-{{ e.statut }}" id="ech-{{ e.id }}">
-        <div class="echeance-left">
-          {% if e.statut == 'fait' %}
-            <span class="echeance-icon">✅</span>
-          {% elif e.niveau == 'urgent' %}
-            <span class="echeance-icon">🔴</span>
-          {% else %}
-            <span class="echeance-icon">🟡</span>
-          {% endif %}
-          <div>
-            <div class="echeance-msg">{{ e.description }}</div>
-            {% if e.statut == 'fait' %}
-            <div class="echeance-sub">Complété le {{ e.date_realisation.strftime('%d/%m/%Y') if e.date_realisation else '—' }}
-              {% if e.document_nom %} · <a href="/echeance/{{ e.id }}/document" style="color:var(--accent)">📄 {{ e.document_nom }}</a>{% endif %}
-            </div>
-            {% else %}
-            <div class="echeance-sub">Échéance : {{ e.date_echeance.strftime('%d/%m/%Y') if e.date_echeance else '—' }}</div>
-            {% endif %}
-          </div>
-        </div>
-        {% if e.statut != 'fait' %}
-        <button onclick="ouvrirModal({{ e.id }}, '{{ e.description|replace("'", "\\'") }}')"
-                class="btn btn-success btn-sm">✓ Marquer fait</button>
-        {% endif %}
+    {% set ef = echeances|selectattr("statut","eq","en_attente")|list %}
+    {% set ed = echeances|selectattr("statut","eq","fait")|list %}
+    {% if ef %}{% for e in ef %}
+    <div class="echeance-item echeance-en_attente" id="ech-{{ e.id }}">
+      <div class="echeance-left">
+        {% if e.niveau == "urgent" %}<span class="echeance-icon">&#x1F534;</span>
+        {% else %}<span class="echeance-icon">&#x1F7E1;</span>{% endif %}
+        <div><div class="echeance-msg">{{ e.description }}</div>
+        <div class="echeance-sub">Echeance : {{ e.date_echeance.strftime("%d/%m/%Y") if e.date_echeance else "---" }}</div></div>
       </div>
-      {% endfor %}
-    {% else %}
-      <p style="color:var(--text-muted);font-size:13px">Aucune échéance urgente.</p>
+      {% if e.id > 0 %}<button onclick="ouvrirModal({{ e.id }}, '{{ e.description|replace("'","\x27") }}')" class="btn btn-success btn-sm">Marquer fait</button>{% endif %}
+    </div>
+    {% endfor %}{% else %}
+    <p style="color:var(--text-muted);font-size:13px">Aucune echeance en attente.</p>
     {% endif %}
+    {% if ed %}<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+      <details><summary style="cursor:pointer;font-size:12px;color:var(--text-muted)">Echeances completees ({{ ed|length }})</summary>
+      <div style="margin-top:8px">{% for e in ed %}
+      <div class="echeance-item echeance-fait" style="opacity:0.75">
+        <div class="echeance-left"><span class="echeance-icon">&#x2705;</span>
+        <div><div class="echeance-msg">{{ e.description }}</div>
+        <div class="echeance-sub">Complete le {{ e.date_realisation.strftime("%d/%m/%Y") if e.date_realisation else "---" }}
+        {% if e.document_nom %} - <a href="/echeance/{{ e.id }}/document">{{ e.document_nom }}</a>{% endif %}
+        </div></div></div>
+        <button onclick="retablir({{ e.id }})" class="btn btn-secondary btn-xs" style="opacity:0.6">Annuler</button>
+        </div>
+      {% endfor %}</div></details></div>{% endif %}
   </div>
 </div>
 
@@ -164,6 +161,11 @@ function fermerModal() {
   document.getElementById('modal-form').reset();
 }
 
+function retablir(id) {
+  if (!confirm('Remettre cette echeance en attente ?')) return;
+  fetch('/echeance/' + id + '/retablir', {method:'POST'})
+    .then(r => r.json()).then(d => { if(d.ok) location.reload(); });
+}
 function confirmerEcheance() {
   const file = document.getElementById('modal-file').files[0];
   if (!file) {

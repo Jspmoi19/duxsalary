@@ -818,18 +818,36 @@ def get_echeances_dossier(dossier_id):
 
     # ── 2. Échéances dynamiques (jamais stockées en base) ──
 
-    # ONSS mensuel
+    # ONSS mensuel — afficher les 2 derniers mois non payés
     from datetime import timedelta
-    premier_prochain = date(annee, mois, 1) + timedelta(days=32)
-    premier_prochain = premier_prochain.replace(day=1)
-    date_onss = date(premier_prochain.year, premier_prochain.month, 5)
-    if (date_onss - today).days <= 45:
-        echeances.append({
-            'id': -1, 'type_echeance': 'onss_mensuel',
-            'description': f"Paiement ONSS {premier_prochain.strftime('%B %Y')} — avant le {date_onss.strftime('%d/%m/%Y')}",
-            'date_echeance': date_onss, 'statut': 'en_attente', 'niveau': 'warn',
-            'date_realisation': None, 'document_nom': None,
-        })
+    MOIS_FR = ['','Janvier','Fevrier','Mars','Avril','Mai','Juin','Juillet','Aout','Septembre','Octobre','Novembre','Decembre']
+    for delta_mois in [1, 2]:
+        mois_onss = mois - delta_mois
+        annee_onss = annee
+        if mois_onss <= 0:
+            mois_onss += 12
+            annee_onss -= 1
+        # Date limite : 5 du mois suivant
+        mois_paiement = mois_onss + 1 if mois_onss < 12 else 1
+        annee_paiement = annee_onss if mois_onss < 12 else annee_onss + 1
+        date_onss = date(annee_paiement, mois_paiement, 5)
+        # Afficher seulement si la date limite est dans le futur ou récente (30 jours)
+        if (today - date_onss).days <= 30:
+            # Stocker en BDD si pas encore existant
+            cur.execute("SELECT id FROM echeances WHERE dossier_id=%s AND type_echeance='onss_mensuel' AND date_echeance=%s",
+                        (dossier_id, date_onss))
+            existing = cur.fetchone()
+            if not existing:
+                cur.execute("""INSERT INTO echeances (dossier_id, type_echeance, description, date_echeance, trimestre, annee, statut, niveau)
+                    VALUES (%s,'onss_mensuel',%s,%s,NULL,%s,'en_attente',%s) RETURNING id""",
+                    (dossier_id, f"Paiement ONSS {MOIS_FR[mois_onss]} {annee_onss} — avant le {date_onss.strftime('%d/%m/%Y')}",
+                     date_onss, annee_onss, 'urgent' if today > date_onss else 'warn'))
+                conn.commit()
+                existing = cur.fetchone()
+            if existing:
+                cur.execute("SELECT * FROM echeances WHERE id=%s", (existing['id'],))
+                ech = dict(cur.fetchone())
+                echeances.append(ech)
 
     # CDD/STU arrivant à échéance (1 seul par contrat actif)
     cur.execute("""
@@ -843,12 +861,20 @@ def get_echeances_dossier(dossier_id):
     """, (dossier_id,))
     for row in cur.fetchall():
         label = 'Contrat étudiant' if row['type_contrat'] == 'STU' else 'Contrat CDD'
-        echeances.append({
-            'id': -(row['contrat_id']+1000), 'type_echeance': 'cdd',
-            'description': f"{label} {row['prenom']} {row['nom']} — échéance {row['date_fin'].strftime('%d/%m/%Y')}",
-            'date_echeance': row['date_fin'], 'statut': 'en_attente', 'niveau': 'urgent',
-            'date_realisation': None, 'document_nom': None,
-        })
+        desc_cdd = f"{label} {row['prenom']} {row['nom']} — échéance {row['date_fin'].strftime('%d/%m/%Y')}"
+        type_ech = f"cdd_{row['contrat_id']}"
+        cur.execute("SELECT id, statut, date_realisation, document_nom FROM echeances WHERE dossier_id=%s AND type_echeance=%s AND annee=%s",
+                    (dossier_id, type_ech, annee))
+        existing_cdd = cur.fetchone()
+        if not existing_cdd:
+            cur.execute("""INSERT INTO echeances (dossier_id, type_echeance, description, date_echeance, trimestre, annee, statut, niveau)
+                VALUES (%s,%s,%s,%s,NULL,%s,'en_attente','urgent') RETURNING id""",
+                (dossier_id, type_ech, desc_cdd, row['date_fin'], annee))
+            conn.commit()
+            existing_cdd = cur.fetchone()
+        if existing_cdd:
+            cur.execute("SELECT * FROM echeances WHERE id=%s", (existing_cdd['id'],))
+            echeances.append(dict(cur.fetchone()))
 
     cur.close(); conn.close()
 
@@ -1683,13 +1709,26 @@ def generer_lettre_onss_pdf(dossier, fiches, annee, mois, mois_nom):
     e.append(Spacer(1, 0.3*cm))
     e.append(p('INSTRUCTIONS DE PAIEMENT', bold=True, size=10))
     e.append(Spacer(1, 0.15*cm))
-    e.append(p(f"Virement bancaire vers : BE76 6790 0001 9059 (ONSS)", size=9))
+    e.append(p(f"Virement bancaire vers : BE63 6790 2618 1108 (BIC: GEBABEBB)", size=9))
     e.append(p(f"Communication : {dossier.get('rsz','').replace('-','')} - {mois:02d}/{annee}", size=9))
     e.append(p(f"Date limite : avant le 5e jour ouvrable de {['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][(mois%12)+1]}", size=9))
     e.append(Spacer(1, 0.3*cm))
-    e.append(p(f"Document généré le {date.today().strftime('%d/%m/%Y')} via NexSocial — DuxSalary", size=8))
+    e.append(p(f"Etabli par : DuxSalary — Secrétariat Social Digital", size=8))
 
     doc.build(e)
+    # Sauvegarder en base
+    from psycopg2.extras import RealDictCursor as RDC
+    conn2 = get_conn()
+    cur2 = conn2.cursor()
+    cur2.execute('''INSERT INTO lettres_onss (dossier_id, mois, annee, total_brut, total_onss_personnel, total_onss_patronal, total_onss, pdf_path)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING''',
+        (dossier['id'], mois, annee,
+         round(sum(float(f.get('salaire_brut') or 0) for f in fiches), 2),
+         round(sum(float(f.get('onss_personnel') or 0) for f in fiches), 2),
+         round(sum(float(f.get('onss_patronal') or 0) for f in fiches), 2),
+         round(sum(float(f.get('onss_personnel') or 0) + float(f.get('onss_patronal') or 0) for f in fiches), 2),
+         filepath))
+    conn2.commit(); cur2.close(); conn2.close()
     return send_file(filepath, as_attachment=False, download_name=filename, mimetype='application/pdf')
 
 
@@ -1843,6 +1882,15 @@ def generer_c4(c, form):
     fin = c['date_fin'].strftime('%d/%m/%Y') if c.get('date_fin') else date.today().strftime('%d/%m/%Y')
     motif = form.get('motif_fin', 'Fin de contrat à durée déterminée')
     salaire_ref = form.get('salaire_reference', '')
+    if not salaire_ref:
+        from psycopg2.extras import RealDictCursor as RDC2
+        conn_ref = get_conn()
+        cur_ref = conn_ref.cursor(cursor_factory=RDC2)
+        cur_ref.execute("SELECT AVG(salaire_brut) as moy FROM fiches_paie WHERE travailleur_id=%s", (c['travailleur_id'],))
+        row_ref = cur_ref.fetchone()
+        cur_ref.close(); conn_ref.close()
+        if row_ref and row_ref['moy']:
+            salaire_ref = str(round(float(row_ref['moy']), 2))
 
     sections = [
         ("EMPLOYEUR", [
@@ -1863,7 +1911,7 @@ def generer_c4(c, form):
             ("Date de fin", fin),
             ("Fonction", c.get('fonction', '—')),
             ("Type de contrat", c.get('type_contrat', '—')),
-            ("Régime de travail", f"{c.get('heures_semaine', 38)}h/semaine"),
+            ("Régime de travail", f"{float(c.get('heures_jour') or 7.6):.1f}h/jour × {int(c.get('jours_semaine') or 5)}j = {float(c.get('heures_jour') or 7.6) * int(c.get('jours_semaine') or 5):.1f}h/semaine"),
             ("Salaire de référence brut", f"{salaire_ref} EUR/mois" if salaire_ref else "Voir fiches de paie"),
         ]),
         ("FIN DU CONTRAT", [
@@ -1906,3 +1954,50 @@ def generer_c4(c, form):
 
     doc.build(e)
     return send_file(filepath, as_attachment=False, download_name=filename, mimetype='application/pdf')
+
+
+@app.route('/echeance/<int:echeance_id>/retablir', methods=['POST'])
+@login_required
+def retablir_echeance(echeance_id):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""UPDATE echeances SET statut='en_attente', date_realisation=NULL,
+        document_path=NULL, document_nom=NULL, note=NULL, updated_at=NOW() WHERE id=%s""", (echeance_id,))
+    conn.commit(); cur.close(); conn.close()
+    return jsonlib.dumps({'ok': True})
+
+
+@app.route('/dossier/<int:dossier_id>/lettres-onss')
+@login_required
+def liste_lettres_onss(dossier_id):
+    from psycopg2.extras import RealDictCursor
+    dossier = get_dossier(dossier_id)
+    ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute('SELECT * FROM lettres_onss WHERE dossier_id=%s ORDER BY annee DESC, mois DESC', (dossier_id,))
+    lettres = [dict(r) for r in cur.fetchall()]
+    cur.close(); conn.close()
+    MOIS_FR = ['','Janvier','Fevrier','Mars','Avril','Mai','Juin','Juillet','Aout','Septembre','Octobre','Novembre','Decembre']
+    for l in lettres:
+        l['mois_nom'] = MOIS_FR[l['mois']]
+    return render_template('liste_lettres_onss.html', dossier=dossier, dossier_actif=dossier, lettres=lettres, **ctx)
+
+@app.route('/lettre-onss/<int:lettre_id>/download')
+@login_required
+def download_lettre_onss(lettre_id):
+    from psycopg2.extras import RealDictCursor
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute('SELECT * FROM lettres_onss WHERE id=%s', (lettre_id,))
+    lettre = cur.fetchone()
+    cur.close(); conn.close()
+    if lettre and lettre['pdf_path']:
+        path = lettre['pdf_path']
+        if not os.path.isabs(path):
+            path = os.path.join('/var/www/duxsalary', path)
+        if os.path.exists(path):
+            return send_file(path, as_attachment=True, download_name=os.path.basename(path))
+    return "Fichier introuvable", 404
+

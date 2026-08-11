@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Lettres ONSS — {{ dossier.nom }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
+    <h2>Lettres ONSS</h2>
+  </div>
+  <div class="page-actions">
+    <a href="/dossier/{{ dossier.id }}/lettre-onss" class="btn btn-primary">+ Nouvelle lettre</a>
+  </div>
+</div>
+<div class="card">
+  <table class="data-table">
+    <thead><tr><th>Période</th><th>Brut</th><th>ONSS pers.</th><th>ONSS pat.</th><th>Total ONSS</th><th></th></tr></thead>
+    <tbody>
+    {% for l in lettres %}
+    <tr>
+      <td><strong>{{ l.mois_nom }} {{ l.annee }}</strong></td>
+      <td>{{ "%.2f"|format(l.total_brut or 0) }} €</td>
+      <td>{{ "%.2f"|format(l.total_onss_personnel or 0) }} €</td>
+      <td>{{ "%.2f"|format(l.total_onss_patronal or 0) }} €</td>
+      <td><strong>{{ "%.2f"|format(l.total_onss or 0) }} €</strong></td>
+      <td><a href="/lettre-onss/{{ l.id }}/download" class="btn btn-secondary btn-xs">⬇ PDF</a></td>
+    </tr>
+    {% else %}
+    <tr class="empty"><td colspan="6">Aucune lettre ONSS générée</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
