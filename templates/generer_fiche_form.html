@@ -111,15 +111,23 @@
 </div>
 
 <div style="text-align:right;margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+  <div class="form-group" style="margin-bottom:12px">
+    <label style="font-size:13px;font-weight:600">Frais nets (exonérés ONSS et IPP)</label>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:6px">
+      <input type="number" name="frais_nets" step="0.01" min="0" value="0"
+             class="form-control" style="max-width:120px" placeholder="0.00">
+      <span style="font-size:13px;color:var(--text-muted)">€/mois (frais forfaitaires, GSM, bureau...)</span>
+    </div>
+  </div>
   <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois }}" class="btn btn-secondary">Annuler</a>
   <button type="submit" class="btn btn-primary">🧾 Générer la fiche de paie</button>
 </div>
 </form>
 
-{% endblock %}
 <script>
 function toggleKm(cb) {
   document.getElementById('km_group').style.display = cb.checked ? 'none' : '';
   document.getElementById('transport_group').style.display = cb.checked ? 'none' : '';
 }
 </script>
+{% endblock %}

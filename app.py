@@ -1490,6 +1490,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
             jours_feries_payes=jours_feries, heures_feries=heures_feries,
             jours_conge=jours_conge, jours_maladie=jours_maladie, jours_chomage=jours_chomage,
             premier_engagement=premier_engagement,
+            frais_nets=float(form.get('frais_nets', 0) or 0),
             km_domicile=km_domicile, moyen_transport=moyen_transport,
             vehicule_societe=vehicule_societe,
             rgpt_actif=rgpt_actif, arab_heure=arab_heure, cheques_repas=cheques_repas,

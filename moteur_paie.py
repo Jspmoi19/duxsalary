@@ -153,7 +153,7 @@ def calculer_fiche_paie(
     jours_feries_payes=0, heures_feries=0.0,
     jours_conge=0, jours_maladie=0, jours_chomage=0,
     km_domicile=0, moyen_transport='voiture', vehicule_societe=False,
-    rgpt_actif=True, arab_heure=0.0, cheques_repas=True,
+    rgpt_actif=True, arab_heure=0.0, cheques_repas=True, frais_nets=0.0, frais_nets=0.0,
     periode_debut=None, periode_fin=None,
 ):
     cp = CP_INDEMNITES.get(cp_key, {})
@@ -201,7 +201,14 @@ def calculer_fiche_paie(
 
     onss_trav_net = round(max(0, onss_trav_brut - bonus_a - bonus_b), 2)
     brut_imposable = round(brut_onss - onss_trav_net, 2)
-    precompte = 0.0 if is_etudiant else calcul_precompte(brut_imposable, etat_civil, nb_enfants)
+    precompte_brut = 0.0 if is_etudiant else calcul_precompte(brut_imposable, etat_civil, nb_enfants)
+    # Réduction précompte sur bonus emploi (AR 27/08/1993 art. 38§3quater)
+    # Taux 33.14% confirmé sur fiche Liantis
+    red_precompte_bonus = 0.0
+    if not is_etudiant and (bonus_a + bonus_b) > 0 and brut_imposable <= 3500:
+        red_precompte_bonus = round((bonus_a + bonus_b) * 0.3314, 2)
+        red_precompte_bonus = min(red_precompte_bonus, precompte_brut)
+    precompte = round(precompte_brut - red_precompte_bonus, 2)
     css = 0.0 if is_etudiant else calcul_css(brut_imposable)
 
     # ── INDEMNITÉS EXONÉRÉES ──────────────────────────────────────────
@@ -256,12 +263,26 @@ def calculer_fiche_paie(
         lignes_indemn.append({'libelle': f'Chèques-repas part coll. (-{cr_coll:.2f} €/j)',
             'detail': f'{cr_coll:.2f} €/jour', 'jours': jours_prestes, 'montant': montant_cr_ded})
 
+    # Frais nets forfaitaires
+    montant_frais_nets = 0.0
+    if frais_nets > 0:
+        montant_frais_nets = round(frais_nets, 2)
+        lignes_indemn.append({'libelle': 'Frais propres à l\'employeur',
+            'detail': 'Exonéré ONSS et IPP', 'jours': 0, 'montant': montant_frais_nets})
+
+    # Frais nets forfaitaires
+    montant_frais_nets = 0.0
+    if frais_nets > 0:
+        montant_frais_nets = round(frais_nets, 2)
+        lignes_indemn.append({'libelle': 'Frais propres à l\'employeur',
+            'detail': 'Exonéré ONSS et IPP', 'jours': 0, 'montant': montant_frais_nets})
+
     # CSS
     if css > 0:
         lignes_indemn.append({'libelle': 'Cotisation spéciale SS', 'montant': -css})
 
     # ── NET ───────────────────────────────────────────────────────────
-    total_indemn = montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + montant_cr_ded - css
+    total_indemn = montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + montant_cr_ded + montant_frais_nets - css
     salaire_net = round(brut_imposable - precompte + total_indemn, 2)
 
     # ── CHARGES PATRONALES ────────────────────────────────────────────
@@ -301,6 +322,8 @@ def calculer_fiche_paie(
         'bonus_emploi': bonus_a + bonus_b,
         'brut_imposable': brut_imposable,
         'precompte': -precompte,
+        'precompte_brut': -precompte_brut,
+        'red_precompte_bonus': red_precompte_bonus,
         'lignes_indemn': lignes_indemn,
         'salaire_net': salaire_net, 'a_payer': salaire_net,
         'onss_patronal_brut': onss_pat_brut,
@@ -311,6 +334,8 @@ def calculer_fiche_paie(
         'onss_bas_salaires_champ_b': red_struct,
         'cout_employeur': cout_empl,
         'cr_empl_total': cr_empl_total,
+        'frais_nets': montant_frais_nets,
+        'frais_nets': montant_frais_nets,
         'premier_engagement': premier_engagement,
     }
 
