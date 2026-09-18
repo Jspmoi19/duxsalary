@@ -162,12 +162,16 @@ def generer_fiche_paie_pdf(data, filepath):
         f"ONSS TRAVAILLEUR (DEDUCTION): (Base calcul: {data['brut_onss']:.2f})",
         '', '', '', '', '', -onss_brut
     ))
-    if data.get('bonus_emploi', 0) > 0:
+    if data.get('bonus_emploi_a', 0) > 0:
         sal_rows.append(row_sal(
-            f"Bonus a l'emploi (reduction ONSS)",
-            '', '', '', '', '', data.get('bonus_emploi', 0)
+            "Bonus a l'emploi - volet A",
+            '', '', '', '', '', data.get('bonus_emploi_a', 0)
         ))
-    
+    if data.get('bonus_emploi_b', 0) > 0:
+        sal_rows.append(row_sal(
+            "Bonus a l'emploi - volet B",
+            '', '', '', '', '', data.get('bonus_emploi_b', 0)
+        ))
     # Imposable
     sal_rows.append(row_sal('IMPOSABLE:', '', '', '', '', '', '', bold=False))
     sal_rows[-1][6] = p(f"EUR  {data['brut_imposable']:.2f}", bold=True, size=8, align=TA_RIGHT)
@@ -217,6 +221,10 @@ def generer_fiche_paie_pdf(data, filepath):
         [p('Déd. cot. ONSS trav.', size=8), '', p(f"{data['ded_cot_onss_trav']:.2f}", size=8, align=TA_RIGHT)],
         [p('ONSS bas salaires - Champ B', size=8), '', p(f"{data['onss_bas_salaires_champ_b']:.2f}", size=8, align=TA_RIGHT)],
     ]
+    if data.get('cr_empl_total', 0) > 0:
+        info_data.append([p('Cheques-repas part empl (sans ONSS)', size=8), '', p(f"{data['cr_empl_total']:.2f}", size=8, align=TA_RIGHT)])
+    if data.get('premier_engagement') and data.get('reduction_premier_engagement', 0) > 0:
+        info_data.append([p('Red. 1er engagement', size=8), '', p(f"{data['reduction_premier_engagement']:.2f}", size=8, align=TA_RIGHT)])
     info_table = Table(info_data, colWidths=[8*cm, 7*cm, 3*cm])
     info_table.setStyle(TableStyle([
         ('TOPPADDING', (0,0), (-1,-1), 2),
