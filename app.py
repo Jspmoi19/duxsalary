@@ -1710,7 +1710,7 @@ def generer_lettre_onss_pdf(dossier, fiches, annee, mois, mois_nom):
 
     # Récapitulatif à payer
     recap = [
-        ['ONSS personnel (13,07%)', f"{total_onss_pers:.2f} EUR"],
+        ['ONSS personnel', f"{total_onss_pers:.2f} EUR"],
         ['ONSS patronal (~27%)', f"{total_onss_pat:.2f} EUR"],
         ['TOTAL À PAYER À L\'ONSS', f"{total_onss:.2f} EUR"],
     ]
@@ -1729,6 +1729,9 @@ def generer_lettre_onss_pdf(dossier, fiches, annee, mois, mois_nom):
     e.append(p(f"Communication : {dossier.get('rsz','').replace('-','')} - {mois:02d}/{annee}", size=9))
     e.append(p(f"Date limite : avant le 5e jour ouvrable de {['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][(mois%12)+1]}", size=9))
     e.append(Spacer(1, 0.3*cm))
+    e.append(Spacer(1, 0.2*cm))
+    e.append(p("Note : Ce montant correspond aux cotisations ONSS de base. Des cotisations sectorielles CP 140.03 (Fonds de sécurité d'existence, formation) seront calculées et facturées directement par l'ONSS après introduction de la DmfA trimestrielle.", size=8))
+    e.append(Spacer(1, 0.1*cm))
     e.append(p(f"Etabli par : DuxSalary — Secrétariat Social Digital", size=8))
 
     doc.build(e)

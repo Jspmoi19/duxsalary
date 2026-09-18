@@ -89,41 +89,23 @@
   </div>
 </div>
 
-{% if calcul %}
+{% if stats %}
 <div class="card">
-  <div class="card-header"><h3>Recapitulatif &#8212; {{ mois_nom }} {{ annee }}</h3></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
-    <div style="padding:18px;border-right:1px solid var(--border)">
-      <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:12px">Prestations</div>
-      {% for label, val in [
-        ('Jours prestes', stats.jours_prestes ~ ' jours'),
-        ('Heures prestees', stats.heures_prestees|round(2) ~ ' h'),
-        ('Conges legaux', stats.jours_conge ~ ' jours'),
-        ('Jours feries', stats.jours_ferie ~ ' jours'),
-        ('Maladie', stats.jours_maladie ~ ' jours'),
-        ('Chomage', stats.jours_chomage ~ ' jours'),
-        ('Sans solde', stats.jours_cnp ~ ' jours'),
-      ] %}
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f2f5;font-size:13px">
-        <span style="color:var(--text-muted)">{{ label }}</span>
-        <span style="font-weight:500">{{ val }}</span>
-      </div>
-      {% endfor %}
+  <div class="card-header"><h3>Recapitulatif prestations &#8212; {{ mois_nom }} {{ annee }}</h3></div>
+  <div style="padding:18px">
+    {% for label, val in [
+      ('Jours prestes', stats.jours_prestes ~ ' jours'),
+      ('Heures prestees', stats.heures_prestees|round(2) ~ ' h'),
+      ('Conges legaux', stats.jours_conge ~ ' jours'),
+      ('Jours feries', stats.jours_ferie ~ ' jours'),
+      ('Maladie', stats.jours_maladie ~ ' jours'),
+      ('Chomage', stats.jours_chomage ~ ' jours'),
+    ] %}
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f2f5;font-size:13px">
+      <span style="color:var(--text-muted)">{{ label }}</span>
+      <span style="font-weight:500">{{ val }}</span>
     </div>
-    <div style="padding:18px">
-      <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:12px">Calcul de paie</div>
-      {% for label, val, bold in [
-        ('Salaire brut', calcul.salaire_brut|round(2) ~ ' EUR', False),
-        ('ONSS personnel (13,07%)', '- ' ~ calcul.onss_personnel|round(2) ~ ' EUR', False),
-        ('Imposable', calcul.imposable|round(2) ~ ' EUR', False),
-        ('Precompte professionnel', '- ' ~ calcul.precompte|round(2) ~ ' EUR', False),
-        ('NET A PAYER', calcul.net|round(2) ~ ' EUR', True),
-      ] %}
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f2f5;font-size:{% if bold %}15{% else %}13{% endif %}px;{% if bold %}font-weight:700;color:var(--accent){% endif %}">
-        <span>{{ label }}</span><span>{{ val }}</span>
-      </div>
-      {% endfor %}
-    </div>
+    {% endfor %}
   </div>
 </div>
 {% endif %}
