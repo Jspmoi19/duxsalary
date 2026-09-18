@@ -277,8 +277,8 @@ def calculer_fiche_paie(
     cout_empl = round(brut_onss + onss_pat_net + montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + cr_empl_total, 2)
 
     # Ancienneté
-    today = date.today()
-    anc = (today.year - date_entree.year) * 12 + today.month - date_entree.month if date_entree else 0
+    ref_date = periode_fin if periode_fin else date.today()
+    anc = (ref_date.year - date_entree.year) * 12 + ref_date.month - date_entree.month if date_entree else 0
 
     return {
         'periode_debut': periode_debut, 'periode_fin': periode_fin,
