@@ -10,7 +10,7 @@ import math
 ONSS_PERSONNEL = 0.1307
 ONSS_PATRONAL_BASE = 0.2700
 ONSS_ETUDIANT_PERSONNEL = 0.0271
-ONSS_ETUDIANT_PATRONAL = 0.0542
+ONSS_ETUDIANT_PATRONAL = 0.0543  # 5.42% solidarité + 0.01% fonds amiante
 
 # ── BONUS EMPLOI 2026 ─────────────────────────────────────────────────
 BONUS_A_BAS = 1945.38; BONUS_A_HAUT = 2792.16; BONUS_A_MAX = 229.01
@@ -153,13 +153,14 @@ def calculer_fiche_paie(
     jours_feries_payes=0, heures_feries=0.0,
     jours_conge=0, jours_maladie=0, jours_chomage=0,
     km_domicile=0, moyen_transport='voiture', vehicule_societe=False,
-    rgpt_actif=True, arab_heure=0.0, cheques_repas=True, frais_nets=0.0, frais_nets=0.0,
+    rgpt_actif=True, arab_heure=0.0, cheques_repas=True, frais_nets=0.0,
     periode_debut=None, periode_fin=None,
 ):
     cp = CP_INDEMNITES.get(cp_key, {})
     is_ouvrier = cp.get('type_travailleur', 'ouvrier') == 'ouvrier'
     onss_pers_taux = ONSS_ETUDIANT_PERSONNEL if is_etudiant else ONSS_PERSONNEL
     onss_pat_taux = ONSS_ETUDIANT_PATRONAL if is_etudiant else cp.get('onss_patronal', 0.27)
+    onss_pat_taux_base = onss_pat_taux
     heures_sem_reel = round(heures_jour * jours_semaine, 2)
     ratio_tp = min(1.0, heures_sem_reel / heures_semaine) if heures_semaine > 0 else 1.0
 
@@ -286,13 +287,17 @@ def calculer_fiche_paie(
     salaire_net = round(brut_imposable - precompte + total_indemn, 2)
 
     # ── CHARGES PATRONALES ────────────────────────────────────────────
-    onss_pat_brut = round(brut_onss * onss_pat_taux, 2)
-    red_struct = calcul_reduction_structurelle(brut_onss, onss_pat_taux)
+    # Coefficient 108% pour ouvriers (pécule vacances ONVA — source ONSS officiel)
+    coeff_ouvrier = 1.08 if (is_ouvrier and not is_etudiant) else 1.0
+    base_onss_pat = round(brut_onss * coeff_ouvrier, 2)
+    onss_pat_brut = round(base_onss_pat * onss_pat_taux_base, 2)
+    red_struct = 0.0 if is_etudiant else calcul_reduction_structurelle(base_onss_pat, onss_pat_taux_base)
 
     # Premier engagement
     red_pe = 0.0
-    if premier_engagement:
-        red_pe = round(min(round(2000/3, 2) * ratio_tp, onss_pat_brut), 2)
+    if premier_engagement and not is_etudiant:
+        reste_apres_struct = round(max(0, onss_pat_brut - red_struct), 2)
+        red_pe = round(min(round(2000/3, 2) * ratio_tp, reste_apres_struct), 2)
 
     onss_pat_net = round(max(0, onss_pat_brut - red_struct - red_pe), 2)
     cout_empl = round(brut_onss + onss_pat_net + montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + cr_empl_total, 2)

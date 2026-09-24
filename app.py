@@ -721,6 +721,8 @@ def nouvelle_fiche(dossier_id):
 @login_required
 def download(filename):
     filepath = os.path.join(OUTPUT_DIR, filename)
+    if not os.path.exists(filepath):
+        return "Fichier introuvable — veuillez regénérer la fiche.", 404
     return send_file(filepath, as_attachment=True)
 
 # ── ASSISTANT JURIDIQUE ───────────────────────────────────────────────
@@ -1510,9 +1512,9 @@ def generer_fiche_depuis_calendrier(dimona_id):
                 dossier_id, travailleur_id, contrat_id,
                 periode_debut, periode_fin,
                 salaire_brut, onss_personnel, precompte,
-                salaire_net, total_onss,
+                salaire_net, total_onss, onss_patronal,
                 cout_employeur, pdf_path, statut_paiement
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'genere')
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'genere')
             RETURNING id
         """, (
             dimona['dossier_id'], dimona['travailleur_id'],
@@ -1521,6 +1523,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
             data['brut_onss'], abs(data['onss_net']),
             abs(data['precompte']), data['salaire_net'],
             abs(data['onss_net']) + data['onss_patronal'],
+            data['onss_patronal'],
             data['cout_employeur'], filepath
         ))
         fiche_id = cur.fetchone()['id']
@@ -1712,7 +1715,7 @@ def generer_lettre_onss_pdf(dossier, fiches, annee, mois, mois_nom):
     # Récapitulatif à payer
     recap = [
         ['ONSS personnel', f"{total_onss_pers:.2f} EUR"],
-        ['ONSS patronal (~27%)', f"{total_onss_pat:.2f} EUR"],
+        ['ONSS patronal', f"{total_onss_pat:.2f} EUR"],
         ['TOTAL À PAYER À L\'ONSS', f"{total_onss:.2f} EUR"],
     ]
     for i, (label, val) in enumerate(recap):
