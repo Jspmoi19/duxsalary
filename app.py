@@ -1500,7 +1500,6 @@ def generer_fiche_depuis_calendrier(dimona_id):
             salaire_horaire=salaire_h,
             etat_civil=dimona.get('etat_civil', 'celibataire') or 'celibataire',
             nb_enfants=int(dimona.get('nb_enfants_charge', 0) or 0),
-            nb_enfants=int(dimona.get('nb_enfants_sans_handicap', 0) or 0) + int(dimona.get('nb_enfants_avec_handicap', 0) or 0),
             partenaire_revenus_pro=dimona.get('partenaire_revenus_pro', 'non') or 'non',
             partenaire_pensions=dimona.get('partenaire_pensions', 'non') or 'non',
             type_contrat=contrat['type_contrat'] if contrat else 'CDD',
