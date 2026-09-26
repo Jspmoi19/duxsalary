@@ -77,18 +77,31 @@ def _signatures(elements, data, sN, sB, sC):
         f"Fait à <b>{data['lieu_signature']}</b>, le <b>{data['date_signature']}</b>, "
         f"en deux exemplaires originaux, dont un exemplaire remis à chaque partie.", sN))
     elements.append(Spacer(1, 0.8*cm))
+    sig_style = TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+        ('LINEABOVE', (0,3), (0,3), 0.5, colors.black),
+        ('LINEABOVE', (1,3), (1,3), 0.5, colors.black),
+        ('TOPPADDING', (0,3), (1,3), 0),
+        ('BOTTOMPADDING', (0,2), (1,2), 12),
+    ])
+    sGrey = ParagraphStyle('grey', fontName='Helvetica', fontSize=9, alignment=TA_CENTER, textColor=colors.grey)
+    sSig = ParagraphStyle('sig', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)
+    sNc = ParagraphStyle('nc', fontName='Helvetica', fontSize=9, alignment=TA_CENTER)
     sig_data = [
-        [Paragraph("<b>L'EMPLOYEUR</b>", sC), Paragraph("<b>LE/LA TRAVAILLEUR(SE)</b>", sC)],
-        [Paragraph(data['nom_societe'], sC), Paragraph(data['nom_travailleur'], sC)],
-        [Paragraph(data['representant'], ParagraphStyle('', fontName='Helvetica', fontSize=9, alignment=TA_CENTER, textColor=colors.grey)), ''],
-        [Spacer(1, 1.5*cm), Spacer(1, 1.5*cm)],
-        [Paragraph("_______________________", sN), Paragraph("_______________________", sN)],
-        [Paragraph("Signature et cachet", sN), Paragraph("Signature", sN)],
-        [Spacer(1, 1*cm), Spacer(1, 1*cm)],
-        [Paragraph("Lu et approuvé :", sN), Paragraph("Lu et approuvé :", sN)],
+        [Paragraph("<b>L'EMPLOYEUR</b>", sSig), Paragraph("<b>LE/LA TRAVAILLEUR(SE)</b>", sSig)],
+        [Paragraph(data['nom_societe'], sNc), Paragraph(data['nom_travailleur'], sNc)],
+        [Paragraph(data['representant'], sGrey), Spacer(1, 0.1*cm)],
+        [Spacer(1, 2.0*cm), Spacer(1, 2.0*cm)],
+        [Paragraph("Signature et cachet de l'employeur", sGrey), Paragraph("Signature du travailleur", sGrey)],
+        [Spacer(1, 0.5*cm), Spacer(1, 0.5*cm)],
+        [Paragraph("Lu et approuvé,", sNc), Paragraph("Lu et approuvé,", sNc)],
     ]
-    sig_table = Table(sig_data, colWidths=[8.5*cm, 8.5*cm])
-    sig_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('TOPPADDING', (0,0), (-1,-1), 4)]))
+    sig_table = Table(sig_data, colWidths=[9*cm, 9*cm])
+    sig_table.setStyle(sig_style)
     elements.append(sig_table)
 
 
@@ -160,7 +173,7 @@ def generer_contrat_cdi(data):
          f"{'Pour le personnel roulant : application du règlement CE n° 561/2006.' if '140' in cp_key else ''}"),
 
         ("Article 5 – Rémunération",
-         f"La rémunération brute est fixée à <b>{data.get('salaire_horaire', '—')} € brut de l'heure</b> "
+         f"La rémunération brute est fixée à <b>{data.get('salaire_mensuel_affiche', str(round(float(data.get('salaire_horaire',0)) * 38 * 52 / 12, 2)) + ' €')} brut par mois</b>, "
          f"{'(soit ' + str(data.get('salaire_mensuel', '—')) + ' € brut/mois à temps plein)' if data.get('salaire_mensuel') else ''}, "
          f"conformément aux barèmes minimaux de la {cp_key}. "
          f"Le salaire est payé par virement bancaire, le dernier jour ouvrable du mois concerné. "
@@ -350,7 +363,7 @@ def generer_contrat_cdd(data):
          f"conformément au règlement de travail."),
 
         ("Article 6 – Rémunération",
-         f"La rémunération brute est fixée à <b>{data.get('salaire_horaire', '—')} € brut {'de l\'heure' if data.get('salaire_unite','horaire') == 'horaire' else 'par mois'}</b>, "
+         f"La rémunération brute est fixée à <b>{data.get('salaire_mensuel_affiche', str(round(float(data.get('salaire_horaire',0)) * 38 * 52 / 12, 2)) + ' €')} brut par mois</b>, "
          f"conformément aux barèmes de la {cp_key}. "
          f"Paiement par virement bancaire, le dernier jour ouvrable du mois."),
 
