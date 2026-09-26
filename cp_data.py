@@ -176,7 +176,7 @@ def get_salaire_min(cp_key, categorie=None):
     return None
 
 def calcul_preavis_semaines(anciennete_mois, est_employeur=True):
-    if anciennete_mois < 3: return 1 if est_employeur else 1
+    if int(anciennete_mois or 0) < 3: return 1 if est_employeur else 1
     semaines_emp = min(anciennete_mois // 3 * 1, 62)
     if anciennete_mois > 24:
         semaines_emp = 8 + ((anciennete_mois // 12) - 2) * 6

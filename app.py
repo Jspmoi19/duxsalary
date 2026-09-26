@@ -536,6 +536,7 @@ def nouveau_contrat_dossier(dossier_id):
             'fonction': form['fonction'], 'categorie': form.get('categorie', ''),
             'horaire_journalier': form.get('horaire_journalier', ''),
             'salaire_horaire': form.get('salaire_horaire', ''),
+            'salaire_unite': form.get('salaire_unite', 'horaire'),
             'salaire_mensuel': form.get('salaire_mensuel', '').replace(' €', ''),
             'lieu_travail': form.get('lieu_travail', dossier['adresse'] or ''),
             'lieu_signature': form.get('lieu_signature', 'Bruxelles'),

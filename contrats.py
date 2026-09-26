@@ -124,7 +124,7 @@ def generer_contrat_cdi(data):
     _parties(elements, data, cp_info, sN, sB, sJ)
 
     # Articles
-    preavis_semaines = calcul_preavis_semaines(cp_key, 0)  # Préavis départ à l'ancienneté 0
+    preavis_semaines = calcul_preavis_semaines(0, True)  # Préavis départ à l'ancienneté 0
 
     baremes = cp_info.get("baremes", {})
     min_horaire = data.get('salaire_horaire', '—')
@@ -350,7 +350,7 @@ def generer_contrat_cdd(data):
          f"conformément au règlement de travail."),
 
         ("Article 6 – Rémunération",
-         f"La rémunération brute est fixée à <b>{data.get('salaire_horaire', '—')} € brut de l'heure</b>, "
+         f"La rémunération brute est fixée à <b>{data.get('salaire_horaire', '—')} € brut {'de l\'heure' if data.get('salaire_unite','horaire') == 'horaire' else 'par mois'}</b>, "
          f"conformément aux barèmes de la {cp_key}. "
          f"Paiement par virement bancaire, le dernier jour ouvrable du mois."),
 

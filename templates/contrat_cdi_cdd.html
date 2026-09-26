@@ -39,7 +39,7 @@
             <div class="form-group">
               <label class="form-label">Date de fin du CDD</label>
               <input type="text" name="date_fin" class="form-control" placeholder="JJ/MM/AAAA"
-                     value="{{ prefill_contrat.date_fin.strftime('%d/%m/%Y') if prefill_contrat and prefill_contrat.date_fin else '' }}">
+                     value="{{ prefill_contrat.date_fin.strftime('%d/%m/%Y') if prefill_contrat and prefill_contrat.date_fin and prefill_contrat.type_contrat != 'STU' else '' }}">
             </div>
             <div class="form-group">
               <label class="form-label">Motif CDD</label>
@@ -145,7 +145,7 @@
             {% for cp_key, cp_val in cp_data.items() %}
             <option value="{{ cp_key }}"
               {% if prefill_contrat and prefill_contrat.cp_key == cp_key %}selected
-              {% elif profil.cp_principale == cp_key %}selected{% endif %}>
+              {% elif profil.cp_principale == cp_key %}selected{% elif not prefill_contrat and loop.first %}selected{% endif %}>
               {{ cp_key }} – {{ cp_val.meta.secteurs[0] if cp_val.meta.secteurs else '' }}
             </option>
             {% endfor %}
@@ -189,7 +189,11 @@
         </div>
         <div class="form-group">
           <label class="form-label">Salaire horaire brut (€) *</label>
-          <input type="number" name="salaire_horaire" step="0.0001" class="form-control"
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <label class="radio-item" style="padding:6px 10px"><input type="radio" name="salaire_unite" value="horaire" checked onchange="toggleSalaireUnite()"> €/heure</label>
+              <label class="radio-item" style="padding:6px 10px"><input type="radio" name="salaire_unite" value="mensuel" onchange="toggleSalaireUnite()"> €/mois</label>
+            </div>
+            <input type="number" name="salaire_horaire" id="salaire_horaire" step="0.0001" class="form-control" oninput="calcSalaire()"
                  value="{{ prefill_contrat.salaire_horaire if prefill_contrat else '' }}"
                  placeholder="Ex: 14.9255" oninput="calcSalaire()" required>
           <div class="form-hint" id="min_hint">Sélectionnez une CP</div>
@@ -237,6 +241,7 @@
 </div>
 </form>
 
+{% endblock %}
 {% block scripts %}
 
 const CP_INFO = {{ cp_json | safe }};
@@ -263,50 +268,174 @@ function prefillTravailleur(id) {
   document.getElementById('f_iban').value = t.iban || '';
 }
 
+// Règles CP
+const CP_REGLES = {
+  'CP 140.03': [
+    '✅ Chèques-repas: 8.00€/j (empl 6.91€ + coll 1.09€) — OBLIGATOIRE',
+    '✅ RGPT: 1.8175€/h (exonéré ONSS+IPP)',
+    '⚠️ Avantage repas 1.09€/j SOUMIS ONSS',
+    '👷 Statut OUVRIER — base ONSS patronal × 1.08',
+    '📅 Prochaine indexation: Janvier 2027',
+  ],
+  'CP 200': [
+    '⚠️ Chèques-repas PAS OBLIGATOIRES — accord entreprise nécessaire',
+    '👔 Statut EMPLOYÉ — ONSS patronal 25%',
+    '💰 Prime fin d\'année: 330.84\u20ac bruts/an (proratisée)',
+    '📚 Fonds formation: CEFORA',
+    '📅 Prochaine indexation: Janvier 2027',
+  ],
+  'CP 336': [
+    '✅ Chèques-repas: 6.91€/j (empl) + 1.09€/j (coll)',
+    '👔 Statut EMPLOYÉ — ONSS patronal 25%',
+    '💶 Minimum légal: 2141.59€/mois depuis 09/2026',
+    '📅 Prochaine indexation: Janvier 2027',
+  ],
+  'CP 302': [
+    '⚠️ Pas de chèques-repas sectoriels',
+    '✅ Indemnité vêtements: 2.20€/j + nuit: 1.62€/h',
+    '👷 Statut OUVRIER — base ONSS patronal × 1.08',
+    '📅 Dernière indexation: Janvier 2026 (+2.189%)',
+  ],
+  'CP 121': [
+    '✅ Chèques-repas OBLIGATOIRES depuis 01/01/2026: 3.09€/j',
+    '✅ RGPT: 1.63€/h',
+    '👷 Statut OUVRIER — base ONSS patronal × 1.08',
+    '📅 Dernière indexation: Juillet 2026',
+  ],
+};
+
 function updateCP() {
   const cp = document.getElementById('cp_select').value;
   const info = CP_INFO[cp];
   if (!info) return;
   const h = info.duree_travail.heures_semaine;
-  document.getElementById('cp_info_box').style.display = 'block';
-  document.getElementById('cp_info_box').innerHTML =
-    `<b>${info.meta.nom}</b> — ${info.meta.type_travailleur.toUpperCase()} — ${h}h/semaine`;
 
+  document.getElementById('cp_info_box').style.display = 'block';
+
+  // Barèmes
   const baremes = info.baremes;
   let rows = '';
+  let minH = Infinity;
   for (const [cat, val] of Object.entries(baremes)) {
     if (typeof val !== 'object' || !val.horaire) continue;
     rows += `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid #eee">
-      <span>${cat}</span><span style="font-weight:700">${val.horaire} €/h</span></div>`;
+      <span>${cat}</span><span style="font-weight:700">${val.horaire} €/h${val.mensuel ? ' — ' + val.mensuel + ' €/mois' : ''}</span></div>`;
+    if (val.horaire < minH && !cat.toLowerCase().includes('tudiant')) minH = val.horaire;
   }
+
+  // Règles CP
+  const regles = CP_REGLES[cp] || [];
+  let reglesHtml = regles.length ? '<div style="margin-top:10px;padding:10px;background:#f0f9f0;border-radius:6px;border:1px solid #a3d9a5"><div style="font-weight:700;font-size:11px;color:#1F4E79;margin-bottom:6px;text-transform:uppercase">Règles & obligations</div>' + regles.map(r => `<div style="font-size:12px;padding:2px 0">${r}</div>`).join('') + '</div>' : '';
+
+  document.getElementById('cp_info_box').innerHTML =
+    `<b>${info.meta.nom}</b> — ${info.meta.type_travailleur.toUpperCase()} — ${h}h/semaine` + reglesHtml;
+
+  const minEl = document.getElementById('min_hint');
+  if (minH !== Infinity && minEl) {
+    minEl.textContent = `Minimum légal CP : ${minH.toFixed(4)} €/h`;
+    minEl.dataset.min = minH;
+  }
+
   if (rows) {
     document.getElementById('bareme_rows').innerHTML = rows;
     document.getElementById('bareme_table').style.display = 'block';
   }
-  const mins = Object.values(baremes).filter(v => typeof v === 'object' && v.horaire);
-  if (mins.length > 0) {
-    const minH = Math.min(...mins.map(v => v.horaire));
-    document.getElementById('min_hint').textContent = `Minimum légal CP : ${minH.toFixed(4)} €/h`;
-  }
   calcSalaire();
+}
+
+function toggleSalaireUnite() {
+  const unite = document.querySelector('[name=salaire_unite]:checked').value;
+  const cp = document.getElementById('cp_select').value;
+  const info = CP_INFO[cp];
+  const hsem = info ? info.duree_travail.heures_semaine : 38;
+  const hmois = hsem * 52 / 12;
+  const h = parseFloat(document.getElementById('salaire_horaire').value) || 0;
+  if (unite === 'mensuel') {
+    document.querySelector('[name=salaire_horaire]').placeholder = 'Salaire mensuel brut (€)';
+    if (h > 0) document.getElementById('sal_mensuel').value = h.toFixed(2) + ' €';
+  } else {
+    document.querySelector('[name=salaire_horaire]').placeholder = 'Salaire horaire (€)';
+    if (h > 0) document.getElementById('sal_mensuel').value = (h * hmois).toFixed(2) + ' €';
+  }
 }
 
 function calcSalaire() {
   const cp = document.getElementById('cp_select').value;
   const info = CP_INFO[cp];
   const h = parseFloat(document.querySelector('[name=salaire_horaire]').value) || 0;
+  const minEl = document.getElementById('min_hint');
+  const minH = minEl ? parseFloat(minEl.dataset.min || 0) : 0;
+
+  // Alerte minimum légal
+  let alertEl = document.getElementById('salaire_alert');
+  if (!alertEl) {
+    alertEl = document.createElement('div');
+    alertEl.id = 'salaire_alert';
+    alertEl.style.cssText = 'margin-top:8px;padding:10px;border-radius:6px;font-size:13px;font-weight:600;display:none;border:1px solid';
+    document.querySelector('[name=salaire_horaire]').parentNode.appendChild(alertEl);
+  }
+  if (h > 0 && minH > 0) {
+    if (h < minH) {
+      alertEl.style.display = 'block';
+      alertEl.style.background = '#fde8e8';
+      alertEl.style.borderColor = '#e74c3c';
+      alertEl.style.color = '#c0392b';
+      alertEl.innerHTML = `⛔ SALAIRE SOUS LE MINIMUM LÉGAL ! Min CP: ${minH.toFixed(4)} €/h — Votre salaire: ${h.toFixed(4)} €/h`;
+    } else {
+      alertEl.style.display = 'block';
+      alertEl.style.background = '#f0f9f0';
+      alertEl.style.borderColor = '#27ae60';
+      alertEl.style.color = '#27ae60';
+      alertEl.innerHTML = `✅ Salaire conforme au minimum légal (min: ${minH.toFixed(4)} €/h)`;
+    }
+  } else {
+    alertEl.style.display = 'none';
+  }
+
   if (h && info) {
+    const unite = document.querySelector('[name=salaire_unite]:checked')?.value || 'horaire';
     const hsem = info.duree_travail.heures_semaine;
     const hmois = hsem * 52 / 12;
-    document.getElementById('sal_mensuel').value = (h * hmois).toFixed(2) + ' €';
+    const minH = minEl ? parseFloat(minEl.dataset.min || 0) : 0;
+    const hHoraire = unite === 'mensuel' ? h / hmois : h;
+    document.getElementById('sal_mensuel').value = unite === 'mensuel' ? h.toFixed(2) + ' €' : (h * hmois).toFixed(2) + ' €';
+    // Alerte sur base horaire
+    if (hHoraire > 0 && minH > 0) {
+      if (hHoraire < minH) {
+        alertEl.style.display = 'block';
+        alertEl.style.background = '#fde8e8';
+        alertEl.style.borderColor = '#e74c3c';
+        alertEl.style.color = '#c0392b';
+        alertEl.innerHTML = '⛔ SALAIRE SOUS LE MINIMUM LÉGAL ! Min CP: ' + minH.toFixed(4) + ' €/h — Équivalent horaire: ' + hHoraire.toFixed(4) + ' €/h';
+      } else {
+        alertEl.style.display = 'block';
+        alertEl.style.background = '#f0f9f0';
+        alertEl.style.borderColor = '#27ae60';
+        alertEl.style.color = '#27ae60';
+        alertEl.innerHTML = '✅ Salaire conforme au minimum légal (min: ' + minH.toFixed(4) + ' €/h)';
+      }
+    }
   }
 }
 
+// Convertir salaire mensuel en horaire avant soumission
+document.querySelector('form').addEventListener('submit', function(e) {
+  const unite = document.querySelector('[name=salaire_unite]:checked')?.value || 'horaire';
+  if (unite === 'mensuel') {
+    const cp = document.getElementById('cp_select').value;
+    const info = CP_INFO[cp];
+    const hsem = info ? info.duree_travail.heures_semaine : 38;
+    const hmois = hsem * 52 / 12;
+    const mensuel = parseFloat(document.getElementById('salaire_horaire').value) || 0;
+    document.getElementById('salaire_horaire').value = (mensuel / hmois).toFixed(4);
+  }
+});
+
 // Init
+console.log('JS contrat chargé OK');
 updateCP();
 {% if prefill_travailleur_id %}
 prefillTravailleur({{ prefill_travailleur_id }});
 {% endif %}
 
-{% endblock %}
 {% endblock %}
