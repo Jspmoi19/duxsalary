@@ -229,11 +229,21 @@ def modifier_travailleur(travailleur_id):
                 p = ddn.split('/'); ddn_db = f"{p[2]}-{p[1]}-{p[0]}"
             except: pass
         cur.execute("""UPDATE travailleurs SET prenom=%s, nom=%s, niss=%s, date_naissance=%s,
-            adresse=%s, iban=%s, email=%s, telephone=%s, langue=%s WHERE id=%s""",
+            adresse=%s, iban=%s, email=%s, telephone=%s, langue=%s,
+            etat_civil=%s, partenaire_revenus_pro=%s, partenaire_pensions=%s,
+            nb_enfants_sans_handicap=%s, nb_enfants_avec_handicap=%s, nb_personnes_charge_66=%s
+            WHERE id=%s""",
             (request.form['prenom'], request.form['nom'], request.form.get('niss'),
              ddn_db, request.form.get('adresse'), request.form.get('iban'),
              request.form.get('email'), request.form.get('telephone'),
-             request.form.get('langue', 'fr'), travailleur_id))
+             request.form.get('langue', 'fr'),
+             request.form.get('etat_civil', 'celibataire'),
+             request.form.get('partenaire_revenus_pro', 'non'),
+             request.form.get('partenaire_pensions', 'non'),
+             int(request.form.get('nb_enfants_sans_handicap', 0) or 0),
+             int(request.form.get('nb_enfants_avec_handicap', 0) or 0),
+             int(request.form.get('nb_personnes_charge_66', 0) or 0),
+             travailleur_id))
         conn.commit(); cur.close(); conn.close()
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id))
     return render_template('modifier_travailleur.html', travailleur=travailleur, dossier=dossier, dossier_actif=dossier, cp_keys=list(CP_DATABASE.keys()), **ctx)
@@ -1386,7 +1396,9 @@ def generer_fiche_depuis_calendrier(dimona_id):
                t.km_domicile_travail, t.moyen_transport, t.vehicule_societe,
                dos.nom as dossier_nom, dos.adresse as dossier_adresse,
                dos.bce, dos.rsz, dos.id as dossier_id,
-               dos.premier_engagement, dos.premier_engagement_depuis
+               dos.premier_engagement, dos.premier_engagement_depuis,
+               t.etat_civil, t.partenaire_revenus_pro, t.partenaire_pensions,
+               t.nb_enfants_sans_handicap, t.nb_enfants_avec_handicap, t.nb_personnes_charge_66
         FROM dimona d
         JOIN travailleurs t ON t.id = d.travailleur_id
         JOIN dossiers dos ON dos.id = d.dossier_id
@@ -1466,6 +1478,9 @@ def generer_fiche_depuis_calendrier(dimona_id):
         heures_jour = float(contrat.get('heures_jour') or 7.6) if contrat else 7.6
         jours_semaine = int(contrat.get('jours_semaine') or 5) if contrat else 5
         is_etudiant = contrat['type_contrat'] == 'STU' if contrat else False
+        # Situation familiale pour calcul précompte
+        etat_civil_trav = dimona.get('etat_civil', 'celibataire') or 'celibataire'
+        nb_enfants = int((dimona.get('nb_enfants_sans_handicap') or 0)) + int((dimona.get('nb_enfants_avec_handicap') or 0))
 
         import calendar as cal
         periode_debut = date(annee, mois, 1)
@@ -1485,7 +1500,9 @@ def generer_fiche_depuis_calendrier(dimona_id):
             salaire_horaire=salaire_h,
             etat_civil=dimona.get('etat_civil', 'celibataire') or 'celibataire',
             nb_enfants=int(dimona.get('nb_enfants_charge', 0) or 0),
-            heures_semaine=heures_sem, heures_jour=heures_jour, jours_semaine=jours_semaine,
+            nb_enfants=int(dimona.get('nb_enfants_sans_handicap', 0) or 0) + int(dimona.get('nb_enfants_avec_handicap', 0) or 0),
+            partenaire_revenus_pro=dimona.get('partenaire_revenus_pro', 'non') or 'non',
+            partenaire_pensions=dimona.get('partenaire_pensions', 'non') or 'non',
             type_contrat=contrat['type_contrat'] if contrat else 'CDD',
             is_etudiant=is_etudiant,
             jours_prestes=jours_prestes, heures_prestees=heures_prestees,

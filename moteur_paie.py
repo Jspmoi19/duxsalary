@@ -48,10 +48,11 @@ CP_INDEMNITES = {
     'CP 200': {
         'avantage_repas_jour': 0.0,
         'cr_part_coll_jour': 1.09,
-        'cr_part_empl_jour': 5.82,
+        'cr_part_empl_jour': 6.91,
         'onss_patronal': 0.2500,
         'type_travailleur': 'employe',
         'sal_bareme_mensuel_etp': 2242.81,
+        'prime_annuelle': 330.84,
     },
     'CP 336': {
         'avantage_repas_jour': 0.0,
@@ -128,11 +129,33 @@ def calcul_css(brut_imposable):
     else: return 60.94
 
 
-def calcul_precompte(brut_imposable, etat_civil='celibataire', nb_enfants=0):
-    """Précompte professionnel 2026."""
+def calcul_precompte(brut_imposable, etat_civil='celibataire', nb_enfants=0,
+                     partenaire_revenus_pro='non', partenaire_pensions='non'):
+    """Précompte professionnel 2026 — barèmes officiels SPF Finances."""
     annuel = brut_imposable * 12
-    quotite = {'celibataire': 10160, 'marie_1_revenu': 11320, 'isole_enfant': 10160}.get(etat_civil, 10160)
+
+    # Quotité exemptée selon état civil
+    # Célibataire/divorcé/veuf/séparé : 10160€
+    # Marié/cohabitant légal avec partenaire sans revenus ou revenus limités : 11320€
+    etats_seuls = ['celibataire', 'divorce', 'veuf', 'separe_fait', 'separe_corps']
+    etats_couple = ['marie', 'cohabitation_legale']
+
+    if etat_civil in etats_couple:
+        # Partenaire avec revenus professionnels > 290€/mois → quotité normale 10160
+        if partenaire_revenus_pro == 'oui':
+            quotite = 10160
+        elif partenaire_revenus_pro == 'oui_max290':
+            quotite = 11320  # partenaire revenus limités → transfert partiel
+        else:
+            quotite = 11320  # partenaire sans revenus → quotité majorée
+    else:
+        quotite = 10160
+
+    # Réduction pour enfants à charge 2026
     red_enf = {1: 1850, 2: 4760, 3: 10660, 4: 16000, 5: 21000}.get(min(nb_enfants, 5), 0)
+    if nb_enfants > 5:
+        red_enf = 21000 + (nb_enfants - 5) * 5000
+
     base = max(0, annuel - quotite)
     pp = 0.0
     for bas, haut, taux in [(10160,14850,0.2675),(14850,24800,0.3765),(24800,40480,0.4360),(40480,float('inf'),0.4930)]:
@@ -147,6 +170,7 @@ def calculer_fiche_paie(
     nom_societe, adresse_societe, bce_societe, rsz_societe,
     cp_key, categorie, salaire_horaire,
     etat_civil='celibataire', nb_enfants=0,
+    partenaire_revenus_pro='non', partenaire_pensions='non',
     heures_semaine=38.0, heures_jour=7.6, jours_semaine=5,
     type_contrat='CDD', is_etudiant=False, premier_engagement=False,
     jours_prestes=0, heures_prestees=0.0,
@@ -202,7 +226,7 @@ def calculer_fiche_paie(
 
     onss_trav_net = round(max(0, onss_trav_brut - bonus_a - bonus_b), 2)
     brut_imposable = round(brut_onss - onss_trav_net, 2)
-    precompte_brut = 0.0 if is_etudiant else calcul_precompte(brut_imposable, etat_civil, nb_enfants)
+    precompte_brut = 0.0 if is_etudiant else calcul_precompte(brut_imposable, etat_civil, nb_enfants, partenaire_revenus_pro, partenaire_pensions)
     # Réduction précompte sur bonus emploi (AR 27/08/1993 art. 38§3quater)
     # Taux 33.14% confirmé sur fiche Liantis
     red_precompte_bonus = 0.0
