@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Déclaration nouveau travailleur — {{ portail.dossier_nom }}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f5f7fa; color: #1a1a1a; }
+.header { background: #1F4E79; color: white; padding: 20px 32px; display: flex; align-items: center; gap: 16px; }
+.header h1 { font-size: 20px; font-weight: 700; }
+.header p { font-size: 13px; opacity: 0.8; }
+.container { max-width: 860px; margin: 32px auto; padding: 0 16px; }
+.card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 24px; overflow: hidden; }
+.card-header { background: #1F4E79; color: white; padding: 14px 24px; font-weight: 700; font-size: 14px; letter-spacing: 0.5px; }
+.card-body { padding: 24px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+.form-grid.full { grid-template-columns: 1fr; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group.full { grid-column: 1 / -1; }
+label { font-size: 12px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.3px; }
+input[type=text], input[type=email], input[type=date], input[type=number], select, textarea {
+  border: 1px solid #dde3ea; border-radius: 8px; padding: 10px 12px; font-size: 14px;
+  transition: border-color 0.2s; width: 100%; background: #fafbfc;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: #1F4E79; background: white; }
+.checkbox-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.checkbox-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border: 1px solid #dde3ea; border-radius: 8px; cursor: pointer; font-size: 13px;
+  background: #fafbfc; transition: all 0.15s; }
+.checkbox-item:hover { border-color: #1F4E79; background: #e8f0f8; }
+.checkbox-item input { margin: 0; width: 16px; height: 16px; cursor: pointer; }
+.radio-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.radio-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+  border: 2px solid #dde3ea; border-radius: 8px; cursor: pointer; font-size: 13px;
+  background: white; transition: all 0.15s; }
+.radio-item:hover { border-color: #1F4E79; }
+.radio-item input[type=radio]:checked + span { color: #1F4E79; font-weight: 600; }
+.radio-item:has(input:checked) { border-color: #1F4E79; background: #e8f0f8; }
+.section-sub { font-size: 12px; font-weight: 700; color: #1F4E79; text-transform: uppercase; 
+  letter-spacing: 0.5px; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #e8f0f8; }
+.hidden { display: none; }
+.btn-submit { background: #1F4E79; color: white; border: none; padding: 14px 32px;
+  border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; width: 100%;
+  margin-top: 8px; transition: background 0.2s; }
+.btn-submit:hover { background: #163d61; }
+.note { font-size: 12px; color: #888; font-style: italic; margin-top: 4px; }
+.required { color: #e74c3c; }
+@media (max-width: 600px) { .form-grid, .form-grid.three { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>DuxSalary — Déclaration Nouveau Travailleur</h1>
+    <p>{{ portail.dossier_nom }} — Ce document sert de base au calcul du salaire. Complétez-le intégralement.</p>
+  </div>
+</div>
+
+<div class="container">
+<form method="POST" action="/portail/{{ token }}/nouveau-travailleur">
+
+<!-- CADRE I — INFORMATIONS PERSONNELLES -->
+<div class="card">
+  <div class="card-header">CADRE I — INFORMATIONS OBLIGATOIRES</div>
+  <div class="card-body">
+    <div class="form-grid three">
+      <div class="form-group"><label>Nom <span class="required">*</span></label><input type="text" name="nom" required></div>
+      <div class="form-group"><label>Prénom <span class="required">*</span></label><input type="text" name="prenom" required></div>
+      <div class="form-group"><label>Initiale 2e prénom</label><input type="text" name="initiale2"></div>
+    </div>
+    <div class="form-grid" style="margin-top:16px">
+      <div class="form-group full"><label>Adresse <span class="required">*</span></label><input type="text" name="adresse" required></div>
+      <div class="form-group"><label>Code postal</label><input type="text" name="code_postal"></div>
+      <div class="form-group"><label>Localité</label><input type="text" name="localite"></div>
+      <div class="form-group"><label>Pays</label><input type="text" name="pays" value="Belgique"></div>
+      <div class="form-group"><label>E-mail</label><input type="email" name="email"></div>
+    </div>
+    <div style="margin-top:16px">
+      <div class="section-sub">Identification</div>
+      <div class="form-grid three">
+        <div class="form-group"><label>N° National (NISS) <span class="required">*</span></label><input type="text" name="niss" placeholder="XX.XX.XX-XXX.XX" required></div>
+        <div class="form-group"><label>Date de naissance <span class="required">*</span></label><input type="date" name="date_naissance" required></div>
+        <div class="form-group"><label>Lieu de naissance</label><input type="text" name="lieu_naissance"></div>
+        <div class="form-group"><label>Nationalité</label><input type="text" name="nationalite"></div>
+        <div class="form-group"><label>Date d'entrée <span class="required">*</span></label><input type="date" name="date_entree" required></div>
+        <div class="form-group"><label>IBAN <span class="required">*</span></label><input type="text" name="iban" placeholder="BE XX XXXX XXXX XXXX" required></div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="section-sub">Sexe</div>
+        <div class="radio-group">
+          <label class="radio-item"><input type="radio" name="sexe" value="M"><span>Masculin</span></label>
+          <label class="radio-item"><input type="radio" name="sexe" value="F" checked><span>Féminin</span></label>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="section-sub">Langue</div>
+        <div class="radio-group">
+          <label class="radio-item"><input type="radio" name="langue" value="fr" checked><span>Français</span></label>
+          <label class="radio-item"><input type="radio" name="langue" value="nl"><span>Néerlandais</span></label>
+          <label class="radio-item"><input type="radio" name="langue" value="de"><span>Allemand</span></label>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <div class="section-sub">Diplôme le plus élevé</div>
+      <div class="radio-group">
+        <label class="radio-item"><input type="radio" name="diplome" value="primaire"><span>Primaire ou sans</span></label>
+        <label class="radio-item"><input type="radio" name="diplome" value="sec_inf"><span>Secondaire inférieur</span></label>
+        <label class="radio-item"><input type="radio" name="diplome" value="sec_sup_esg"><span>Secondaire sup. ESG</span></label>
+        <label class="radio-item"><input type="radio" name="diplome" value="sec_sup_esp"><span>Secondaire sup. ESP/EST/ESA</span></label>
+        <label class="radio-item"><input type="radio" name="diplome" value="sup_court"><span>Supérieur non univ. court</span></label>
+        <label class="radio-item"><input type="radio" name="diplome" value="sup_long"><span>Supérieur non univ. long</span></label>
+        <label class="radio-item"><input type="radio" name="diplome" value="univ"><span>Universitaire</span></label>
+        <label class="radio-item"><input type="radio" name="diplome" value="post_univ"><span>Post-universitaire</span></label>
+        <label class="radio-item"><input type="radio" name="diplome" value="doctorat"><span>Doctorat</span></label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CADRE II — SITUATION FAMILIALE -->
+<div class="card">
+  <div class="card-header">CADRE II — SITUATION FAMILIALE</div>
+  <div class="card-body">
+    <div class="section-sub">État civil</div>
+    <div class="radio-group">
+      <label class="radio-item"><input type="radio" name="etat_civil" value="celibataire" checked onchange="togglePartenaire()"><span>Célibataire</span></label>
+      <label class="radio-item"><input type="radio" name="etat_civil" value="cohabitation_legale" onchange="togglePartenaire()"><span>Cohabitation légale</span></label>
+      <label class="radio-item"><input type="radio" name="etat_civil" value="marie" onchange="togglePartenaire()"><span>Marié(e)</span></label>
+      <label class="radio-item"><input type="radio" name="etat_civil" value="separe_fait" onchange="togglePartenaire()"><span>Séparé(e) de fait</span></label>
+      <label class="radio-item"><input type="radio" name="etat_civil" value="separe_corps" onchange="togglePartenaire()"><span>Séparé(e) de corps et de biens</span></label>
+      <label class="radio-item"><input type="radio" name="etat_civil" value="divorce" onchange="togglePartenaire()"><span>Divorcé(e)</span></label>
+      <label class="radio-item"><input type="radio" name="etat_civil" value="veuf" onchange="togglePartenaire()"><span>Veuf/Veuve</span></label>
+    </div>
+
+    <div id="bloc_partenaire" class="hidden" style="margin-top:16px;padding:16px;background:#f5f7fa;border-radius:8px">
+      <div class="section-sub">Partenaire/Conjoint</div>
+      <p style="font-size:12px;color:#888;margin-bottom:12px">Valable à partir du : <input type="date" name="partenaire_depuis" style="width:160px;display:inline-block"></p>
+      
+      <div style="margin-bottom:12px">
+        <label style="font-size:13px;font-weight:600;color:#333">Revenus professionnels (autres que pensions)</label>
+        <div class="radio-group" style="margin-top:8px">
+          <label class="radio-item"><input type="radio" name="partenaire_revenus_pro" value="non" checked><span>Non</span></label>
+          <label class="radio-item"><input type="radio" name="partenaire_revenus_pro" value="oui"><span>Oui</span></label>
+          <label class="radio-item"><input type="radio" name="partenaire_revenus_pro" value="oui_max290"><span>Oui — ≤ 290€/mois nets imposable</span></label>
+        </div>
+      </div>
+      
+      <div>
+        <label style="font-size:13px;font-weight:600;color:#333">Pensions, rentes ou revenus similaires</label>
+        <div class="radio-group" style="margin-top:8px">
+          <label class="radio-item"><input type="radio" name="partenaire_pensions" value="non" checked><span>Non</span></label>
+          <label class="radio-item"><input type="radio" name="partenaire_pensions" value="max174"><span>Oui — ≤ 174€/mois</span></label>
+          <label class="radio-item"><input type="radio" name="partenaire_pensions" value="174_579"><span>Oui — entre 174€ et 579€/mois</span></label>
+          <label class="radio-item"><input type="radio" name="partenaire_pensions" value="plus579"><span>Oui — > 579€/mois</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="section-sub">Personnes fiscalement à charge</div>
+      <div class="form-grid three">
+        <div class="form-group"><label>Enfants sans handicap</label><input type="number" name="nb_enfants_sans_handicap" min="0" value="0"></div>
+        <div class="form-group"><label>Enfants avec handicap</label><input type="number" name="nb_enfants_avec_handicap" min="0" value="0"></div>
+        <div class="form-group"><label>Personnes +66 ans à charge</label><input type="number" name="nb_personnes_charge_66" min="0" value="0"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CADRE III — DONNÉES CONTRACTUELLES -->
+<div class="card">
+  <div class="card-header">CADRE III — DONNÉES CONTRACTUELLES</div>
+  <div class="card-body">
+    <div class="section-sub">Statut</div>
+    <div class="checkbox-group">
+      <label class="checkbox-item"><input type="radio" name="statut" value="employe"><span>Employé</span></label>
+      <label class="checkbox-item"><input type="radio" name="statut" value="ouvrier"><span>Ouvrier</span></label>
+      <label class="checkbox-item"><input type="radio" name="statut" value="stu_employe"><span>Étudiant employé</span></label>
+      <label class="checkbox-item"><input type="radio" name="statut" value="stu_ouvrier"><span>Étudiant ouvrier</span></label>
+      <label class="checkbox-item"><input type="radio" name="statut" value="flexi"><span>Flexi-job</span></label>
+      <label class="checkbox-item"><input type="radio" name="statut" value="extra"><span>Extra</span></label>
+      <label class="checkbox-item"><input type="radio" name="statut" value="occasionnel"><span>Travailleur occasionnel</span></label>
+      <label class="checkbox-item"><input type="radio" name="statut" value="artiste"><span>Artiste/Sportif/Arbitre</span></label>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="section-sub">Durée du contrat</div>
+      <div class="radio-group">
+        <label class="radio-item"><input type="radio" name="duree_contrat" value="CDI"><span>Durée indéterminée (CDI)</span></label>
+        <label class="radio-item"><input type="radio" name="duree_contrat" value="CDD"><span>Durée déterminée (CDD)</span></label>
+        <label class="radio-item"><input type="radio" name="duree_contrat" value="remplacement"><span>Remplacement</span></label>
+        <label class="radio-item"><input type="radio" name="duree_contrat" value="tnd"><span>Travail nettement défini</span></label>
+      </div>
+    </div>
+
+    <div class="form-grid" style="margin-top:16px">
+      <div class="form-group"><label>Date de sortie (CDD/étudiant)</label><input type="date" name="date_sortie"></div>
+      <div class="form-group"><label>Lieu d'occupation</label><input type="text" name="lieu_occupation"></div>
+      <div class="form-group full"><label>Fonction chez l'employeur <span class="required">*</span></label><input type="text" name="fonction" required></div>
+      <div class="form-group"><label>Commission paritaire (CP)</label><input type="text" name="cp" placeholder="Ex: CP 200"></div>
+      <div class="form-group"><label>Classification selon la CP</label><input type="text" name="classification"></div>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="section-sub">Horaire de travail</div>
+      <div class="form-grid three">
+        <div class="form-group"><label>Heures/semaine <span class="required">*</span></label><input type="number" name="heures_semaine" step="0.5" required></div>
+        <div class="form-group"><label>Heures/jour</label><input type="number" name="heures_jour" step="0.5"></div>
+        <div class="form-group"><label>Jours/semaine</label><input type="number" name="jours_semaine" min="1" max="7" value="5"></div>
+      </div>
+      <div class="radio-group" style="margin-top:12px">
+        <label class="radio-item"><input type="radio" name="type_horaire" value="fixe" checked><span>Horaire fixe</span></label>
+        <label class="radio-item"><input type="radio" name="type_horaire" value="variable"><span>Horaire variable</span></label>
+        <label class="radio-item"><input type="radio" name="type_horaire" value="plusieurs_semaines"><span>Sur plusieurs semaines</span></label>
+      </div>
+      <div class="form-grid" style="margin-top:12px" id="bloc_horaire_fixe">
+        <div class="form-group"><label>Lundi</label><input type="text" name="h_lundi" placeholder="09:00-17:00"></div>
+        <div class="form-group"><label>Mardi</label><input type="text" name="h_mardi" placeholder="09:00-17:00"></div>
+        <div class="form-group"><label>Mercredi</label><input type="text" name="h_mercredi" placeholder="09:00-17:00"></div>
+        <div class="form-group"><label>Jeudi</label><input type="text" name="h_jeudi" placeholder="09:00-17:00"></div>
+        <div class="form-group"><label>Vendredi</label><input type="text" name="h_vendredi" placeholder="09:00-17:00"></div>
+        <div class="form-group"><label>Samedi</label><input type="text" name="h_samedi" placeholder=""></div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="section-sub">Activité par rapport au risque (Assurance AT)</div>
+      <div class="radio-group">
+        <label class="radio-item"><input type="radio" name="risque_at" value="1"><span>Ouvrier sédentaire / en atelier</span></label>
+        <label class="radio-item"><input type="radio" name="risque_at" value="2"><span>Ouvrier sur chantier</span></label>
+        <label class="radio-item"><input type="radio" name="risque_at" value="401"><span>Employé sédentaire</span></label>
+        <label class="radio-item"><input type="radio" name="risque_at" value="402"><span>Employé missions ext. occasionnelles</span></label>
+        <label class="radio-item"><input type="radio" name="risque_at" value="403"><span>Employé missions ext. fréquentes</span></label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CADRE IV — DONNÉES SALARIALES -->
+<div class="card">
+  <div class="card-header">CADRE IV — DONNÉES SALARIALES</div>
+  <div class="card-body">
+    <div class="section-sub">Rémunération</div>
+    <div class="form-grid three">
+      <div class="form-group"><label>Salaire brut <span class="required">*</span></label><input type="number" name="salaire_brut" step="0.01" required></div>
+      <div class="form-group">
+        <label>Unité</label>
+        <div class="radio-group" style="margin-top:4px">
+          <label class="radio-item"><input type="radio" name="salaire_unite" value="heure" checked><span>Par heure</span></label>
+          <label class="radio-item"><input type="radio" name="salaire_unite" value="mois"><span>Par mois</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="section-sub">Transport domicile / lieu de travail</div>
+      <div class="form-grid three">
+        <div class="form-group"><label>Km trajet unique (voiture privée)</label><input type="number" name="km_voiture" min="0" value="0"></div>
+        <div class="form-group"><label>Km trajet unique (vélo)</label><input type="number" name="km_velo" min="0" value="0"></div>
+        <div class="form-group"><label>Km trajet unique (transport commun)</label><input type="number" name="km_commun" min="0" value="0"></div>
+      </div>
+      <div class="section-sub" style="margin-top:12px">Type transport en commun</div>
+      <div class="checkbox-group">
+        <label class="checkbox-item"><input type="checkbox" name="transport_train"><span>Train / TEC / Autres</span></label>
+        <label class="checkbox-item"><input type="checkbox" name="transport_sncb"><span>Omnipass + SNCB</span></label>
+        <label class="checkbox-item"><input type="checkbox" name="transport_stib"><span>MIVB / STIB</span></label>
+        <label class="checkbox-item"><input type="checkbox" name="transport_delijn"><span>Omnipass De Lijn</span></label>
+        <label class="checkbox-item"><input type="checkbox" name="transport_mtb"><span>MTB</span></label>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="section-sub">Autres composantes salariales</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Chèques-repas</label>
+          <div class="radio-group" style="margin-top:4px">
+            <label class="radio-item"><input type="radio" name="cheques_repas" value="non" checked><span>Non</span></label>
+            <label class="radio-item"><input type="radio" name="cheques_repas" value="oui" onchange="toggleCR()"><span>Oui</span></label>
+          </div>
+        </div>
+      </div>
+      <div id="bloc_cr" class="hidden" style="margin-top:12px">
+        <div class="form-grid three">
+          <div class="form-group"><label>Valeur totale du chèque (€/jour)</label><input type="number" name="cr_valeur" step="0.01" placeholder="8.00"></div>
+          <div class="form-group"><label>Part employeur (€/jour)</label><input type="number" name="cr_employeur" step="0.01" placeholder="6.91"></div>
+          <div class="form-group"><label>Retenue travailleur (€/jour)</label><input type="number" name="cr_travailleur" step="0.01" placeholder="1.09"></div>
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-top:12px">
+        <div class="form-group"><label>Frais propres à l'employeur (€/mois)</label><input type="number" name="frais_nets" step="0.01" value="0" placeholder="0"></div>
+        <div class="form-group"><label>Autre avantage — Nature</label><input type="text" name="avantage_nature"></div>
+        <div class="form-group"><label>Autre avantage — Montant mensuel (€)</label><input type="number" name="avantage_montant" step="0.01" value="0"></div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="section-sub">Voiture de société</div>
+      <div class="radio-group">
+        <label class="radio-item"><input type="radio" name="voiture_societe" value="non" checked><span>Non</span></label>
+        <label class="radio-item"><input type="radio" name="voiture_societe" value="oui" onchange="toggleVoiture()"><span>Oui</span></label>
+      </div>
+      <div id="bloc_voiture" class="hidden" style="margin-top:12px">
+        <div class="form-grid three">
+          <div class="form-group"><label>Plaque immatriculation</label><input type="text" name="voiture_plaque"></div>
+          <div class="form-group"><label>Valeur catalogue (€ TTC)</label><input type="number" name="voiture_valeur" step="0.01"></div>
+          <div class="form-group"><label>CO2 (g/km)</label><input type="number" name="voiture_co2"></div>
+          <div class="form-group"><label>Date 1ère immatriculation</label><input type="date" name="voiture_date_immat"></div>
+          <div class="form-group">
+            <label>Carburant</label>
+            <select name="voiture_carburant">
+              <option value="">— Choisir —</option>
+              <option>Essence</option><option>Diesel</option><option>Électrique</option>
+              <option>LPG/Gaz</option><option>Hybride</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Contribution personnelle travailleur</label>
+            <select name="voiture_contrib">
+              <option value="aucune">Aucune</option>
+              <option value="complete">Oui — complète</option>
+              <option value="autre">Oui — autre montant</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CADRE V — RÉDUCTIONS & INFOS COMPLÉMENTAIRES -->
+<div class="card">
+  <div class="card-header">CADRE V — RÉDUCTIONS & INFORMATIONS COMPLÉMENTAIRES</div>
+  <div class="card-body">
+    <div class="section-sub">Réductions ONSS</div>
+    <div class="checkbox-group">
+      <label class="checkbox-item"><input type="checkbox" name="reduction_activa"><span>Activa (joindre carte de travail)</span></label>
+      <label class="checkbox-item"><input type="checkbox" name="reduction_premier_emploi"><span>Carte de premier emploi</span></label>
+      <label class="checkbox-item"><input type="checkbox" name="reduction_premier_engagement"><span>Premier engagement (1er travailleur)</span></label>
+    </div>
+    <div class="form-group" style="margin-top:12px"><label>Autre réduction</label><input type="text" name="reduction_autre" placeholder="Précisez..."></div>
+
+    <div style="margin-top:16px">
+      <div class="section-sub">Numéro Dimona (si déjà effectuée)</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Numéro Dimona</label><input type="text" name="num_dimona"></div>
+        <div class="form-group"><label>Date de début Dimona</label><input type="date" name="date_debut_dimona"></div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="section-sub">Remarques / Informations complémentaires</div>
+      <div class="form-group">
+        <textarea name="remarques" rows="4" placeholder="Toute information utile pour le calcul du salaire..."></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <p class="note">⚠️ Ce document sert de base au calcul du salaire. S'il n'est pas complété correctement et intégralement, cela peut produire des effets sur le calcul du salaire.</p>
+    <button type="submit" class="btn-submit">✅ Envoyer la déclaration</button>
+  </div>
+</div>
+
+</form>
+</div>
+
+<script>
+function togglePartenaire() {
+  const val = document.querySelector('[name=etat_civil]:checked')?.value;
+  const show = ['marie','cohabitation_legale','separe_fait','separe_corps'].includes(val);
+  document.getElementById('bloc_partenaire').classList.toggle('hidden', !show);
+}
+function toggleCR() {
+  const val = document.querySelector('[name=cheques_repas]:checked')?.value;
+  document.getElementById('bloc_cr').classList.toggle('hidden', val !== 'oui');
+}
+function toggleVoiture() {
+  const val = document.querySelector('[name=voiture_societe]:checked')?.value;
+  document.getElementById('bloc_voiture').classList.toggle('hidden', val !== 'oui');
+}
+</script>
+</body>
+</html>

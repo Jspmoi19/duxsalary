@@ -2048,3 +2048,163 @@ def download_lettre_onss(lettre_id):
             return send_file(path, as_attachment=True, download_name=os.path.basename(path))
     return "Fichier introuvable", 404
 
+
+import secrets
+import json as jsonlib
+
+# ── GÉNÉRATION TOKEN PORTAIL CLIENT ──────────────────────────────────
+
+@app.route('/dossier/<int:dossier_id>/portail', methods=['GET', 'POST'])
+@login_required
+def portail_client(dossier_id):
+    from psycopg2.extras import RealDictCursor
+    dossier = get_dossier(dossier_id)
+    ctx = get_context_base()
+    ctx['tenant'] = get_tenant()
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'generer':
+            token = secrets.token_urlsafe(32)
+            cur.execute("""INSERT INTO portail_clients (dossier_id, token) 
+                VALUES (%s, %s) ON CONFLICT DO NOTHING RETURNING token""", (dossier_id, token))
+            conn.commit()
+        elif action == 'desactiver':
+            cur.execute("UPDATE portail_clients SET actif=FALSE WHERE dossier_id=%s", (dossier_id,))
+            conn.commit()
+        elif action == 'reactiver':
+            cur.execute("UPDATE portail_clients SET actif=TRUE WHERE dossier_id=%s", (dossier_id,))
+            conn.commit()
+        cur.close(); conn.close()
+        return redirect(url_for('portail_client', dossier_id=dossier_id))
+    
+    cur.execute("SELECT * FROM portail_clients WHERE dossier_id=%s ORDER BY created_at DESC LIMIT 1", (dossier_id,))
+    portail = cur.fetchone()
+    cur.execute("SELECT * FROM portail_demandes WHERE dossier_id=%s ORDER BY created_at DESC", (dossier_id,))
+    demandes = [dict(r) for r in cur.fetchall()]
+    cur.close(); conn.close()
+    
+    base_url = request.host_url.rstrip('/')
+    return render_template('portail_client.html', dossier=dossier, dossier_actif=dossier,
+                           portail=portail, demandes=demandes, base_url=base_url, **ctx)
+
+
+@app.route('/portail/<token>')
+def portail_public(token):
+    from psycopg2.extras import RealDictCursor
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("""SELECT p.*, d.nom as dossier_nom, d.adresse as dossier_adresse
+        FROM portail_clients p JOIN dossiers d ON d.id = p.dossier_id
+        WHERE p.token = %s AND p.actif = TRUE""", (token,))
+    portail = cur.fetchone()
+    if not portail:
+        cur.close(); conn.close()
+        return render_template('portail_invalide.html'), 404
+    cur.execute("UPDATE portail_clients SET last_access=NOW() WHERE token=%s", (token,))
+    conn.commit()
+    cur.execute("SELECT * FROM portail_demandes WHERE dossier_id=%s AND statut='en_attente' ORDER BY created_at DESC", (portail['dossier_id'],))
+    demandes = [dict(r) for r in cur.fetchall()]
+    cur.close(); conn.close()
+    return render_template('portail_public.html', portail=portail, token=token, demandes=demandes)
+
+
+@app.route('/portail/<token>/nouveau-travailleur', methods=['GET', 'POST'])
+def portail_nouveau_travailleur(token):
+    from psycopg2.extras import RealDictCursor
+    import smtplib, ssl, os
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from dotenv import load_dotenv
+    load_dotenv('/var/www/duxsalary/.env')
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("""SELECT p.*, d.nom as dossier_nom FROM portail_clients p 
+        JOIN dossiers d ON d.id = p.dossier_id WHERE p.token=%s AND p.actif=TRUE""", (token,))
+    portail = cur.fetchone()
+    cur.close(); conn.close()
+    if not portail:
+        return render_template('portail_invalide.html'), 404
+    
+    if request.method == 'POST':
+        data = dict(request.form)
+        # Construire le corps de l'email
+        lines = [f"<h2>Nouvelle déclaration travailleur — {portail['dossier_nom']}</h2>"]
+        sections = {
+            'Informations personnelles': ['nom','prenom','initiale2','adresse','code_postal','localite','pays','email','niss','date_naissance','lieu_naissance','nationalite','date_entree','iban','sexe','langue','diplome'],
+            'Situation familiale': ['etat_civil','partenaire_depuis','partenaire_revenus_pro','partenaire_pensions','nb_enfants_sans_handicap','nb_enfants_avec_handicap','nb_personnes_charge_66'],
+            'Données contractuelles': ['statut','duree_contrat','date_sortie','lieu_occupation','fonction','cp','classification','heures_semaine','heures_jour','jours_semaine','type_horaire','h_lundi','h_mardi','h_mercredi','h_jeudi','h_vendredi','h_samedi','risque_at'],
+            'Données salariales': ['salaire_brut','salaire_unite','km_voiture','km_velo','km_commun','transport_train','transport_sncb','transport_stib','transport_delijn','transport_mtb','cheques_repas','cr_valeur','cr_employeur','cr_travailleur','frais_nets','avantage_nature','avantage_montant','voiture_societe','voiture_plaque','voiture_valeur','voiture_co2','voiture_carburant'],
+            'Réductions & Compléments': ['reduction_activa','reduction_premier_emploi','reduction_premier_engagement','reduction_autre','num_dimona','date_debut_dimona','remarques'],
+        }
+        for section, fields in sections.items():
+            lines.append(f"<h3 style='color:#1F4E79;border-bottom:1px solid #ddd;padding-bottom:6px;margin-top:20px'>{section}</h3>")
+            lines.append("<table style='width:100%;border-collapse:collapse'>")
+            for f in fields:
+                val = data.get(f, '')
+                if val and val not in ['0','']:
+                    lines.append(f"<tr><td style='padding:6px 12px;background:#f5f7fa;font-weight:600;width:40%'>{f.replace('_',' ').title()}</td><td style='padding:6px 12px;border-bottom:1px solid #eee'>{val}</td></tr>")
+            lines.append("</table>")
+        
+        body = ''.join(lines)
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"[DuxSalary] Nouveau travailleur — {portail['dossier_nom']} — {data.get('prenom','')} {data.get('nom','')}"
+        msg['From'] = os.getenv('SMTP_FROM', 'info@duxsalary.be')
+        msg['To'] = os.getenv('NOTIFY_EMAIL', 'info@duxsalary.be')
+        msg.attach(MIMEText(body, 'html'))
+        
+        try:
+            with smtplib.SMTP(os.getenv('SMTP_HOST','ex2.mail.ovh.net'), int(os.getenv('SMTP_PORT',587))) as server:
+                server.starttls()
+                server.login(os.getenv('SMTP_USER'), os.getenv('SMTP_PASSWORD'))
+                server.sendmail(msg['From'], msg['To'], msg.as_string())
+        except Exception as ex:
+            app.logger.error(f"Email portail error: {ex}")
+            # Fallback: sauvegarder en BDD si email échoue
+            try:
+                conn2 = get_conn()
+                cur2 = conn2.cursor()
+                cur2.execute("""INSERT INTO portail_demandes (dossier_id, token, type_demande, data, statut, notes)
+                    VALUES (%s, %s, 'nouveau_travailleur', %s, 'en_attente', 'Email échoué - à traiter manuellement')""",
+                    (portail['dossier_id'], token, jsonlib.dumps(data)))
+                conn2.commit(); cur2.close(); conn2.close()
+            except: pass
+        
+        return render_template('portail_confirmation.html', portail=portail, token=token)
+    
+    return render_template('portail_formulaire.html', portail=portail, token=token)
+
+
+@app.route('/dossier/<int:dossier_id>/portail/demande/<int:demande_id>', methods=['GET', 'POST'])
+@login_required
+def traiter_demande(dossier_id, demande_id):
+    from psycopg2.extras import RealDictCursor
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM portail_demandes WHERE id=%s AND dossier_id=%s", (demande_id, dossier_id))
+    demande = cur.fetchone()
+    if not demande:
+        cur.close(); conn.close()
+        return "Introuvable", 404
+    
+    data = demande['data'] if isinstance(demande['data'], dict) else jsonlib.loads(demande['data'])
+    
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'valider':
+            cur.execute("UPDATE portail_demandes SET statut='traite', traite_at=NOW() WHERE id=%s", (demande_id,))
+            conn.commit()
+        elif action == 'rejeter':
+            cur.execute("UPDATE portail_demandes SET statut='rejete', traite_at=NOW(), notes=%s WHERE id=%s",
+                       (request.form.get('notes', ''), demande_id))
+            conn.commit()
+        cur.close(); conn.close()
+        return redirect(url_for('portail_client', dossier_id=dossier_id))
+    
+    cur.close(); conn.close()
+    dossier = get_dossier(dossier_id)
+    ctx = get_context_base(); ctx['tenant'] = get_tenant()
+    return render_template('portail_demande.html', demande=demande, data=data,
+                           dossier=dossier, dossier_actif=dossier, **ctx)

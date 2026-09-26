@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Portail client — {{ dossier.nom }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
+    <h2>Portail client</h2>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3>Lien d'accès client</h3></div>
+  <div class="card-body" style="padding:20px">
+    {% if portail and portail.actif %}
+    <div style="background:#f0f9f0;border:1px solid #a3d9a5;border-radius:8px;padding:16px;margin-bottom:16px">
+      <div style="font-size:12px;color:#555;margin-bottom:8px">Lien à partager avec le client :</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" value="{{ base_url }}/portail/{{ portail.token }}" readonly
+               style="flex:1;padding:10px;border:1px solid #dde3ea;border-radius:6px;font-size:13px;background:white"
+               onclick="this.select()">
+        <button onclick="navigator.clipboard.writeText('{{ base_url }}/portail/{{ portail.token }}')" 
+                class="btn btn-secondary btn-sm">📋 Copier</button>
+        <a href="{{ base_url }}/portail/{{ portail.token }}" target="_blank" class="btn btn-secondary btn-sm">Ouvrir</a>
+      </div>
+      {% if portail.last_access %}
+      <div style="font-size:11px;color:#888;margin-top:8px">Dernier accès : {{ portail.last_access.strftime('%d/%m/%Y à %H:%M') }}</div>
+      {% endif %}
+    </div>
+    <form method="POST" style="display:inline">
+      <input type="hidden" name="action" value="desactiver">
+      <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Désactiver le lien ?')">🔒 Désactiver le lien</button>
+    </form>
+    {% elif portail and not portail.actif %}
+    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:16px;margin-bottom:16px">
+      <p style="color:#856404">⚠️ Le lien est actuellement désactivé.</p>
+    </div>
+    <form method="POST" style="display:inline">
+      <input type="hidden" name="action" value="reactiver">
+      <button type="submit" class="btn btn-success btn-sm">🔓 Réactiver le lien</button>
+    </form>
+    {% else %}
+    <p style="color:var(--text-muted);margin-bottom:16px">Aucun lien actif. Générez un lien unique pour ce client.</p>
+    <form method="POST">
+      <input type="hidden" name="action" value="generer">
+      <button type="submit" class="btn btn-primary">🔗 Générer un lien client</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if demandes %}
+<div class="card">
+  <div class="card-header"><h3>Demandes reçues ({{ demandes|length }})</h3></div>
+  <table class="data-table">
+    <thead><tr><th>Date</th><th>Type</th><th>Travailleur</th><th>Statut</th><th></th></tr></thead>
+    <tbody>
+    {% for d in demandes %}
+    {% set data = d.data %}
+    <tr>
+      <td>{{ d.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+      <td>Nouveau travailleur</td>
+      <td>{{ data.get('prenom', '') }} {{ data.get('nom', '') }}</td>
+      <td>
+        {% if d.statut == 'en_attente' %}<span style="color:#e67e22;font-weight:600">⏳ En attente</span>
+        {% elif d.statut == 'traite' %}<span style="color:#27ae60;font-weight:600">✅ Traité</span>
+        {% else %}<span style="color:#e74c3c;font-weight:600">❌ Rejeté</span>{% endif %}
+      </td>
+      <td><a href="/dossier/{{ dossier.id }}/portail/demande/{{ d.id }}" class="btn btn-secondary btn-xs">Voir</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

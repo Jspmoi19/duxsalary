@@ -69,7 +69,7 @@ CP_INDEMNITES = {
         'rgpt_heure': 1.63,
         'onss_patronal': 0.2700,
         'type_travailleur': 'ouvrier',
-        'sal_bareme_mensuel_etp': 2600.0,
+        'sal_bareme_mensuel_etp': 2696.49,  # indexé 01/07/2026
     },
     'CP 124': {
         'avantage_repas_jour': 0.0,

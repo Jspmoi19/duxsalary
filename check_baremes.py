@@ -10,12 +10,12 @@ import urllib.request, json, os, smtplib, re
 from email.mime.text import MIMEText
 from datetime import datetime
 
-EMAIL_TO   = "Info@duxsalary.be"
-EMAIL_FROM = "duxsalary@gmail.com"
-SMTP_HOST  = "smtp.gmail.com"
-SMTP_PORT  = 465
-SMTP_USER  = "duxsalary@gmail.com"
-SMTP_PASS  = os.environ.get("EMAIL_PASSWORD", "")
+EMAIL_TO   = "info@duxsalary.be"
+EMAIL_FROM = "info@duxsalary.be"
+SMTP_HOST  = "ex2.mail.ovh.net"
+SMTP_PORT  = 587
+SMTP_USER  = "info@duxsalary.be"
+SMTP_PASS  = "Duxleo2024." 
 STATE_FILE = "/var/www/duxsalary/baremes_state.json"
 
 # ── Barèmes de référence actuels ──────────────────────────────────────
@@ -132,7 +132,8 @@ def send_email(subject, body):
         msg['Subject'] = subject
         msg['From'] = EMAIL_FROM
         msg['To'] = EMAIL_TO
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
+            smtp.starttls()
             smtp.login(SMTP_USER, SMTP_PASS)
             smtp.send_message(msg)
         print(f"Email envoyé : {subject}")

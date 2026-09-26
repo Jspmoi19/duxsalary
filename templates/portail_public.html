@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portail — {{ portail.dossier_nom }}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f5f7fa; color: #1a1a1a; min-height: 100vh; }
+.header { background: #1F4E79; color: white; padding: 20px 32px; }
+.header h1 { font-size: 22px; font-weight: 700; }
+.header p { font-size: 13px; opacity: 0.8; margin-top: 4px; }
+.container { max-width: 700px; margin: 48px auto; padding: 0 16px; text-align: center; }
+.card { background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 40px; }
+.icon { font-size: 48px; margin-bottom: 16px; }
+h2 { font-size: 22px; margin-bottom: 12px; color: #1F4E79; }
+p { color: #555; line-height: 1.6; margin-bottom: 24px; }
+.btn { display: inline-block; background: #1F4E79; color: white; padding: 14px 32px;
+  border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 15px;
+  transition: background 0.2s; }
+.btn:hover { background: #163d61; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>DuxSalary — Secrétariat Social Digital</h1>
+  <p style='color:rgba(255,255,255,0.9);font-size:14px;margin-top:4px'>Portail client — {{ portail.dossier_nom }}</p>
+</div>
+<div class="container">
+  <div class="card">
+    <div class="icon">👋</div>
+    <h2>Bienvenue, {{ portail.dossier_nom }}</h2>
+    <p>Bienvenue sur votre portail client DuxSalary. Vous pouvez ici déclarer un nouveau travailleur. Vos informations seront transmises directement à votre secrétariat social.</p>
+    <a href="/portail/{{ token }}/nouveau-travailleur" class="btn">➕ Déclarer un nouveau travailleur</a>
+  </div>
+</div>
+</body>
+</html>
