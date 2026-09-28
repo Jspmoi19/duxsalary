@@ -78,7 +78,10 @@ def generer_fiche_paie_pdf(data, filepath):
         ['Travailleur :', f"{data['prenom']} {data['nom']}"],
         ['Statut/Profession :', data.get('categorie', '—')[:30]],
         ['Régime/Système :', f"{jours_sem}j/sem · {heures_j}h/j"],
-        ['Salaire de base :', f"{data['salaire_horaire']:.4f}/heure"],
+        ['Salaire mensuel de base :' if not data.get('is_ouvrier') and not data.get('is_etudiant') else 'Salaire de base :',
+            f"{data.get('salaire_mensuel_fixe', round(data['salaire_horaire'] * data.get('heures_semaine', 38) * 52 / 12, 2)):.2f} €"
+            if not data.get('is_ouvrier') and not data.get('is_etudiant')
+            else f"{data['salaire_horaire']:.4f} €/heure"],
         ['Genre travail :', genre],
         ['Heures :', f"{h_sem_reel:.2f}/{data['heures_semaine']:.2f}"],
         ['Commission Paritaire :', f"{data['cp_key']}"],

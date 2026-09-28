@@ -383,14 +383,25 @@ def nouvelle_dimona(travailleur_id):
         form = request.form
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute("""INSERT INTO dimona (dossier_id, travailleur_id, type_dimona, date_debut, date_fin, numero_reference, notes)
-            VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+        contrat_id = form.get('contrat_id') or None
+        if contrat_id: contrat_id = int(contrat_id)
+        cur.execute("""INSERT INTO dimona (dossier_id, travailleur_id, type_dimona, date_debut, date_fin, numero_reference, notes, contrat_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
             (travailleur['dossier_id'], travailleur_id, form['type_dimona'], form['date_debut'],
-             form.get('date_fin') or None, form.get('numero_reference') or None, form.get('notes') or None))
+             form.get('date_fin') or None, form.get('numero_reference') or None, form.get('notes') or None, contrat_id))
         did = cur.fetchone()[0]
         conn.commit(); cur.close(); conn.close()
         return redirect(url_for('calendrier_prestations', dimona_id=did))
-    return render_template('nouvelle_dimona.html', travailleur=travailleur, dossier=dossier, dossier_actif=dossier, **ctx)
+    # Récupérer les contrats actifs du travailleur pour le sélecteur
+    from psycopg2.extras import RealDictCursor
+    conn2 = get_conn()
+    cur2 = conn2.cursor(cursor_factory=RealDictCursor)
+    cur2.execute("""SELECT id, type_contrat, salaire_horaire, date_debut FROM contrats 
+        WHERE travailleur_id=%s AND statut='actif' ORDER BY date_debut DESC""", (travailleur_id,))
+    contrats_actifs = cur2.fetchall()
+    cur2.close(); conn2.close()
+    return render_template('nouvelle_dimona.html', travailleur=travailleur, dossier=dossier, 
+                           dossier_actif=dossier, contrats_actifs=contrats_actifs, **ctx)
 
 # ── CALENDRIER PRESTATIONS ────────────────────────────────────────────
 @app.route('/dimona/<int:dimona_id>/prestations')
@@ -1409,14 +1420,19 @@ def generer_fiche_depuis_calendrier(dimona_id):
     if not dimona:
         return "Dimona introuvable", 404
 
-    # Récupérer le contrat actif du travailleur
-    cur.execute("""
-        SELECT * FROM contrats 
-        WHERE travailleur_id = %s AND statut = 'actif'
-        ORDER BY created_at DESC LIMIT 1
-    """, (dimona['travailleur_id'],))
-    contrat = cur.fetchone()
-
+    # Récupérer le contrat lié à la dimona en priorité, sinon le contrat actif
+    if dimona.get('contrat_id'):
+        cur.execute('SELECT * FROM contrats WHERE id = %s', (dimona['contrat_id'],))
+        contrat = cur.fetchone()
+    else:
+        cur.execute("""SELECT * FROM contrats WHERE travailleur_id = %s AND statut = 'actif'
+            AND type_contrat = %s ORDER BY date_debut DESC LIMIT 1""",
+            (dimona['travailleur_id'], dimona['type_dimona']))
+        contrat = cur.fetchone()
+        if not contrat:
+            cur.execute("""SELECT * FROM contrats WHERE travailleur_id = %s AND statut = 'actif'
+                ORDER BY created_at DESC LIMIT 1""", (dimona['travailleur_id'],))
+            contrat = cur.fetchone()
     annee = request.args.get('annee', date.today().year, type=int)
     mois = request.args.get('mois', date.today().month, type=int)
 
@@ -1499,6 +1515,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
             rsz_societe=dimona['rsz'] or '—',
             cp_key=cp_key, categorie=contrat['categorie'] if contrat else '—',
             salaire_horaire=salaire_h,
+            salaire_mensuel_fixe=float(contrat.get('salaire_mensuel') or 0) if contrat else 0.0,
             etat_civil=dimona.get('etat_civil', 'celibataire') or 'celibataire',
             nb_enfants=int(dimona.get('nb_enfants_charge', 0) or 0),
             partenaire_revenus_pro=dimona.get('partenaire_revenus_pro', 'non') or 'non',

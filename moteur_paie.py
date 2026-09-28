@@ -171,6 +171,7 @@ def calculer_fiche_paie(
     cp_key, categorie, salaire_horaire,
     etat_civil='celibataire', nb_enfants=0,
     partenaire_revenus_pro='non', partenaire_pensions='non',
+    salaire_mensuel_fixe=0.0,
     heures_semaine=38.0, heures_jour=7.6, jours_semaine=5,
     type_contrat='CDD', is_etudiant=False, premier_engagement=False,
     jours_prestes=0, heures_prestees=0.0,
@@ -190,7 +191,32 @@ def calculer_fiche_paie(
 
     # ── LIGNES SOUMISES ONSS ──────────────────────────────────────────
     lignes_salaire = []
-    if jours_prestes > 0:
+    # Employé CDI/CDD temps plein → salaire mensuel fixe
+    # Ouvrier ou étudiant → salaire calculé sur heures prestées
+    is_employe_fixe = (not is_ouvrier and not is_etudiant and type_contrat in ('CDI', 'CDD'))
+    if is_employe_fixe:
+        # Salaire mensuel fixe = salaire_horaire × heures_semaine × 52 / 12
+        sal_mensuel_brut = salaire_mensuel_fixe if salaire_mensuel_fixe and salaire_mensuel_fixe > 0 else round(salaire_horaire * heures_semaine * 52 / 12, 2)
+        # Déduction congé sans solde uniquement
+        deduction_cnp = 0.0
+        if jours_chomage > 0:
+            # Calcul jours ouvrables du mois (base de division)
+            from datetime import date, timedelta
+            if periode_debut and periode_fin:
+                jours_ouv_mois = sum(1 for n in range((periode_fin - periode_debut).days + 1)
+                    if (periode_debut + timedelta(n)).weekday() < 5)
+            else:
+                jours_ouv_mois = round(jours_semaine * 52 / 12)
+            deduction_cnp = round(sal_mensuel_brut / jours_ouv_mois * jours_chomage, 2)
+        sal_mensuel = round(sal_mensuel_brut - deduction_cnp, 2)
+        lignes_salaire.append({'libelle': 'Salaire mensuel', 'base': salaire_horaire,
+            'jours': jours_prestes, 'heures': heures_prestees,
+            'montant': sal_mensuel, 'soumis_onss': True})
+        if deduction_cnp > 0:
+            lignes_salaire.append({'libelle': f'Congé sans solde ({jours_chomage}j)',
+                'base': 0, 'jours': jours_chomage, 'heures': 0,
+                'montant': -deduction_cnp, 'soumis_onss': True})
+    elif jours_prestes > 0:
         lignes_salaire.append({'libelle': 'Prestation (jours-heures)', 'base': salaire_horaire,
             'jours': jours_prestes, 'heures': heures_prestees,
             'montant': round(salaire_horaire * heures_prestees, 2), 'soumis_onss': True})
@@ -296,12 +322,6 @@ def calculer_fiche_paie(
             'detail': 'Exonéré ONSS et IPP', 'jours': 0, 'montant': montant_frais_nets})
 
     # Frais nets forfaitaires
-    montant_frais_nets = 0.0
-    if frais_nets > 0:
-        montant_frais_nets = round(frais_nets, 2)
-        lignes_indemn.append({'libelle': 'Frais propres à l\'employeur',
-            'detail': 'Exonéré ONSS et IPP', 'jours': 0, 'montant': montant_frais_nets})
-
     # CSS
     if css > 0:
         lignes_indemn.append({'libelle': 'Cotisation spéciale SS', 'montant': -css})
@@ -342,7 +362,8 @@ def calculer_fiche_paie(
         'heures_semaine': heures_semaine, 'heures_semaine_reel': heures_sem_reel,
         'heures_jour': heures_jour, 'jours_semaine': jours_semaine,
         'regime_str': f"{jours_semaine}j/sem · {heures_jour}h/j",
-        'type_contrat': type_contrat, 'is_etudiant': is_etudiant,
+        'type_contrat': type_contrat, 'is_etudiant': is_etudiant, 'is_ouvrier': is_ouvrier,
+        'salaire_mensuel_fixe': salaire_mensuel_fixe,
         'lignes_salaire': lignes_salaire,
         'brut_onss': brut_onss,
         'onss_travailleur': -onss_trav_brut,

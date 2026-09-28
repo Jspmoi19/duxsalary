@@ -174,9 +174,7 @@ def generer_contrat_cdi(data):
 
         ("Article 5 – Rémunération",
          f"La rémunération brute est fixée à <b>{data.get('salaire_mensuel_affiche', str(round(float(data.get('salaire_horaire',0)) * 38 * 52 / 12, 2)) + ' €')} brut par mois</b>, "
-         f"{'(soit ' + str(data.get('salaire_mensuel', '—')) + ' € brut/mois à temps plein)' if data.get('salaire_mensuel') else ''}, "
          f"conformément aux barèmes minimaux de la {cp_key}. "
-         f"Le salaire est payé par virement bancaire, le dernier jour ouvrable du mois concerné. "
          f"{'Les cotisations ONSS ordinaires sont appliquées (part personnelle 13,07% + part patronale ~25%).' if not ouvrier else 'Régime ouvrier : cotisations ONSS + pécule de vacances via Office National des Vacances Annuelles (ONVA).'}"
          ),
 
