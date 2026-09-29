@@ -521,10 +521,23 @@ def nouveau_contrat_dossier(dossier_id):
     travailleurs = get_travailleurs(dossier_id)
     ctx = get_context_base()
     ctx['tenant'] = get_tenant()
-    cp_json = jsonlib.dumps({k: {'meta': v['meta'], 'duree_travail': v['duree_travail'],
-        'baremes': {cat: {kk: vv for kk, vv in val.items() if kk in ['horaire','mensuel','fonctions']}
-                    for cat, val in v['baremes'].items() if isinstance(val, dict)}}
-        for k, v in CP_DATABASE.items()})
+    # Barèmes depuis BDD en priorité
+    from psycopg2.extras import RealDictCursor
+    conn_cp = get_conn(); cur_cp = conn_cp.cursor(cursor_factory=RealDictCursor)
+    cur_cp.execute("SELECT * FROM baremes_cp ORDER BY cp_key, montant_mensuel")
+    baremes_bdd = {}
+    for r in cur_cp.fetchall():
+        cp_k = r['cp_key']
+        if cp_k not in baremes_bdd: baremes_bdd[cp_k] = {}
+        baremes_bdd[cp_k][r['categorie']] = {'horaire': float(r['montant_horaire']), 'mensuel': float(r['montant_mensuel'])}
+    cur_cp.close(); conn_cp.close()
+    
+    cp_data_merged = {}
+    for k, v in CP_DATABASE.items():
+        baremes = baremes_bdd.get(k, {cat: {kk: vv for kk, vv in val.items() if kk in ['horaire','mensuel']}
+                    for cat, val in v['baremes'].items() if isinstance(val, dict)})
+        cp_data_merged[k] = {'meta': v['meta'], 'duree_travail': v['duree_travail'], 'baremes': baremes}
+    cp_json = jsonlib.dumps(cp_data_merged)
     prefill_travailleur_id = request.args.get('travailleur_id', type=int)
 
     if request.method == 'POST':
@@ -746,6 +759,72 @@ def download(filename):
     if not os.path.exists(filepath):
         return "Fichier introuvable — veuillez regénérer la fiche.", 404
     return send_file(filepath, as_attachment=True)
+
+# ── BASE CP ──────────────────────────────────────────────────────────
+@app.route('/base-cp')
+@login_required
+def base_cp():
+    from cp_data import CP_DATABASE
+    from datetime import datetime
+    from psycopg2.extras import RealDictCursor
+    ctx = get_context_base(); ctx['tenant'] = get_tenant()
+    
+    # Lire barèmes depuis BDD
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM baremes_cp ORDER BY cp_key, montant_mensuel")
+    baremes_db = {}
+    for r in cur.fetchall():
+        cp = r['cp_key']
+        if cp not in baremes_db: baremes_db[cp] = []
+        baremes_db[cp].append(dict(r))
+    cur.execute("SELECT cp_key, MAX(updated_at) as last FROM baremes_cp GROUP BY cp_key")
+    last_updates = {r['cp_key']: r['last'].strftime('%d/%m/%Y') for r in cur.fetchall()}
+    cur.close(); conn.close()
+    
+    # Enrichir avec cp_data
+    cp_enrichi = {}
+    for k, v in CP_DATABASE.items():
+        cp_enrichi[k] = dict(v)
+        cp_enrichi[k]['baremes_db'] = baremes_db.get(k, [])
+        cp_enrichi[k]['last_update'] = last_updates.get(k, '—')
+    
+    last_update = datetime.now().strftime('%d/%m/%Y')
+    return render_template('base_cp.html', cp_data=cp_enrichi, last_update=last_update, **ctx)
+
+@app.route('/base-cp/modifier/<int:bareme_id>', methods=['POST'])
+@login_required
+def modifier_bareme(bareme_id):
+    from psycopg2.extras import RealDictCursor
+    conn = get_conn(); cur = conn.cursor()
+    mensuel = float(request.form.get('montant_mensuel', 0))
+    horaire = float(request.form.get('montant_horaire', 0))
+    date_vigueur = request.form.get('date_vigueur')
+    source = request.form.get('source', 'Manuel')
+    cur.execute("""UPDATE baremes_cp SET montant_mensuel=%s, montant_horaire=%s, 
+        date_vigueur=%s, source=%s, updated_at=NOW() WHERE id=%s""",
+        (mensuel, horaire, date_vigueur, source, bareme_id))
+    conn.commit(); cur.close(); conn.close()
+    return redirect(url_for('base_cp'))
+
+@app.route('/base-cp/ajouter', methods=['POST'])
+@login_required
+def ajouter_bareme():
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("""INSERT INTO baremes_cp (cp_key, categorie, montant_mensuel, montant_horaire, date_vigueur, source)
+        VALUES (%s,%s,%s,%s,%s,%s)""",
+        (request.form['cp_key'], request.form['categorie'],
+         float(request.form.get('montant_mensuel',0)),
+         float(request.form.get('montant_horaire',0)),
+         request.form.get('date_vigueur'), request.form.get('source','Manuel')))
+    conn.commit(); cur.close(); conn.close()
+    return redirect(url_for('base_cp'))
+
+@app.route('/base-cp/update')
+@login_required
+def base_cp_update():
+    import subprocess
+    subprocess.Popen(['/var/www/duxsalary/venv/bin/python3', '/var/www/duxsalary/check_baremes.py'])
+    return redirect(url_for('base_cp'))
 
 # ── ASSISTANT JURIDIQUE ───────────────────────────────────────────────
 import anthropic as anthropic_client

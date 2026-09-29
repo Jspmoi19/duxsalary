@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Base CP — DuxSalary{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>📚 Base de données CP</h2>
+    <p style="color:var(--text-muted);font-size:13px">Barèmes officiels — modifiez directement quand vous recevez une alerte</p>
+  </div>
+  <div>
+    <a href="/base-cp/update" class="btn btn-secondary btn-sm">🔄 Lancer vérification barèmes</a>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <div class="card-body" style="padding:12px 16px">
+    <input type="text" id="search_cp" placeholder="🔍 Rechercher une CP..." 
+           class="form-control" oninput="filterCP()" style="max-width:400px;display:inline-block">
+  </div>
+</div>
+
+{% for cp_key, cp in cp_data.items() %}
+<div class="card cp-card" data-cp="{{ cp_key }}" style="margin-bottom:16px;border-top:3px solid #1F4E79">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <span style="font-weight:700;font-size:16px">{{ cp_key }}</span>
+      <span style="margin-left:8px;font-size:11px;background:{% if cp.meta.type_travailleur == 'ouvrier' %}#fff3cd{% else %}#e8f0f8{% endif %};padding:2px 8px;border-radius:10px">
+        {{ cp.meta.type_travailleur|upper }}
+      </span>
+      <span style="margin-left:8px;font-size:12px;color:var(--text-muted)">{{ cp.meta.nom }}</span>
+    </div>
+    <span style="font-size:11px;color:var(--text-muted)">Mis à jour: {{ cp.last_update }}</span>
+  </div>
+  <div class="card-body" style="padding:16px">
+    
+    <!-- Barèmes depuis BDD -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:#1F4E79;text-transform:uppercase;margin-bottom:8px">Barèmes minimaux</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f5f7fa">
+            <th style="padding:8px;text-align:left;border-bottom:1px solid #dde3ea">Catégorie</th>
+            <th style="padding:8px;text-align:right;border-bottom:1px solid #dde3ea">Mensuel</th>
+            <th style="padding:8px;text-align:right;border-bottom:1px solid #dde3ea">Horaire</th>
+            <th style="padding:8px;text-align:center;border-bottom:1px solid #dde3ea">En vigueur</th>
+            <th style="padding:8px;text-align:center;border-bottom:1px solid #dde3ea">Source</th>
+            <th style="padding:8px;border-bottom:1px solid #dde3ea"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in cp.baremes_db %}
+          <tr id="row_{{ b.id }}" style="border-bottom:1px solid #f0f2f5">
+            <td style="padding:8px">{{ b.categorie }}</td>
+            <td style="padding:8px;text-align:right;font-weight:700;color:#1F4E79">{{ "%.2f"|format(b.montant_mensuel) }} €</td>
+            <td style="padding:8px;text-align:right;color:#555">{{ "%.4f"|format(b.montant_horaire) }} €/h</td>
+            <td style="padding:8px;text-align:center;font-size:12px;color:#888">{{ b.date_vigueur.strftime('%d/%m/%Y') if b.date_vigueur else '—' }}</td>
+            <td style="padding:8px;text-align:center;font-size:11px;color:#aaa">{{ b.source }}</td>
+            <td style="padding:8px;text-align:right">
+              <button onclick="toggleEdit({{ b.id }})" class="btn btn-secondary btn-xs">✏️</button>
+            </td>
+          </tr>
+          <tr id="edit_{{ b.id }}" style="display:none;background:#f0f9f0">
+            <td colspan="6" style="padding:12px">
+              <form method="POST" action="/base-cp/modifier/{{ b.id }}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <input type="number" name="montant_mensuel" step="0.01" value="{{ b.montant_mensuel }}" 
+                       class="form-control" style="width:120px" placeholder="Mensuel €">
+                <input type="number" name="montant_horaire" step="0.0001" value="{{ b.montant_horaire }}"
+                       class="form-control" style="width:120px" placeholder="Horaire €">
+                <input type="date" name="date_vigueur" value="{{ b.date_vigueur.strftime('%Y-%m-%d') if b.date_vigueur else '' }}"
+                       class="form-control" style="width:140px">
+                <input type="text" name="source" value="{{ b.source }}"
+                       class="form-control" style="width:160px" placeholder="Source">
+                <button type="submit" class="btn btn-primary btn-sm">💾 Sauvegarder</button>
+                <button type="button" onclick="toggleEdit({{ b.id }})" class="btn btn-secondary btn-sm">Annuler</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Règles CP -->
+    {% if cp.avantages %}
+    <div style="margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;color:#1F4E79;text-transform:uppercase;margin-bottom:6px">Règles & avantages</div>
+      {% for av in cp.avantages %}<div style="font-size:12px;padding:2px 0">✅ {{ av }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if cp.indexation %}
+    <div style="font-size:11px;color:#888;padding:6px 10px;background:#f5f7fa;border-radius:4px;margin-top:8px">
+      📅 {{ cp.indexation }}
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endfor %}
+
+<script>
+function toggleEdit(id) {
+  const row = document.getElementById('edit_' + id);
+  row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+function filterCP() {
+  const q = document.getElementById('search_cp').value.toLowerCase();
+  document.querySelectorAll('.cp-card').forEach(c => {
+    c.style.display = c.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

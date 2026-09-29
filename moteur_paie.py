@@ -167,6 +167,24 @@ def calcul_precompte(brut_imposable, etat_civil='celibataire', nb_enfants=0,
     return round(max(0, pp - red_enf) / 12, 2)
 
 
+def get_cp_from_db(cp_key):
+    """Récupère les barèmes depuis la BDD si disponibles."""
+    try:
+        import sys; sys.path.insert(0, '/var/www/duxsalary')
+        from database import get_conn
+        from psycopg2.extras import RealDictCursor
+        conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM baremes_cp WHERE cp_key=%s ORDER BY montant_mensuel", (cp_key,))
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+        if rows:
+            # Reconstruire le dict barèmes
+            baremes = {r['categorie']: {'horaire': float(r['montant_horaire']), 'mensuel': float(r['montant_mensuel'])} for r in rows}
+            return {'baremes': baremes, 'min_mensuel': min(float(r['montant_mensuel']) for r in rows)}
+    except:
+        pass
+    return None
+
 def calculer_fiche_paie(
     prenom, nom, niss, adresse, iban, date_naissance, date_entree,
     nom_societe, adresse_societe, bce_societe, rsz_societe,
@@ -184,6 +202,11 @@ def calculer_fiche_paie(
     periode_debut=None, periode_fin=None,
 ):
     cp = CP_INDEMNITES.get(cp_key, {})
+    # Override avec barèmes BDD si disponibles
+    cp_db = get_cp_from_db(cp_key)
+    if cp_db:
+        cp = dict(cp)
+        cp['sal_bareme_mensuel_etp'] = cp_db['min_mensuel']
     is_ouvrier = cp.get('type_travailleur', 'ouvrier') == 'ouvrier'
     onss_pers_taux = ONSS_ETUDIANT_PERSONNEL if is_etudiant else ONSS_PERSONNEL
     onss_pat_taux = ONSS_ETUDIANT_PATRONAL if is_etudiant else cp.get('onss_patronal', 0.27)
