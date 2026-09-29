@@ -37,8 +37,28 @@ ONSS = {
 # Formule: réduction dégressive avec le salaire trimestriel, plafonnée à ce montant
 # pour les bas salaires, décroît ensuite. On applique le plafond si S_trim <= seuil bas.
 REDUCTION_STRUCTURELLE = {
-    'plafond_trimestriel_bas_salaire': 521.47,   # € — vérifié sur fiche FDLR Liantis 2025
-    'seuil_salaire_bas_mensuel': 2000.0,          # au-delà, réduction dégressive (approximation actuelle)
+    # Formule DEGRESSIVE officielle (Instructions administratives ONSS 2026/2,
+    # categorie 1 -- secteur prive marchand general), remplace l'ancien
+    # montant FIXE de 521.47EUR qui ne variait jamais avec le salaire (faux).
+    #
+    # R_trimestriel = 0.14 x (11687.74 - S) + 0.16 x (9738.14 - S)
+    # -- chaque terme a 0 si negatif, S = salaire TRIMESTRIEL de reference.
+    #
+    # ⚠️ Ecart residuel non resolu: teste contre une simulation Group S reelle
+    # (Ciwan, CP336, 2257EUR/mois) -- notre formule donne 387.70EUR/mois,
+    # Group S annonce 398.98EUR/mois (ecart 11.28EUR). Les coefficients ONSS
+    # sont mis a jour plusieurs fois par an (au moins 4 versions en 2026: T1,
+    # avril, T2, instructions intermediaires) -- la version exacte en vigueur
+    # au 01/10/2026 n'est pas confirmee a 100%. A revalider avant un dossier
+    # a fort volume si cette precision devient critique.
+    'categorie_1': {
+        'seuil_bas': 11687.74,
+        'coeff_bas': 0.14,
+        'seuil_tres_bas': 9738.14,
+        'coeff_tres_bas': 0.16,
+    },
+    # Ancien montant fixe conserve en fallback si jamais besoin de comparer
+    'ancien_montant_fixe_deprecated': 521.47,
 }
 
 # Premier engagement — réduction groupe-cible (loi du 27/06/1969)

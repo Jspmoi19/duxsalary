@@ -195,10 +195,27 @@ class ProfilTravailleur:
         red_b = bonus_b * BONUS_EMPLOI['reduction_precompte_taux_volet_b']
         return round(red_a + red_b, 2)
 
-    def reduction_structurelle(self, onss_patronal_brut: float) -> float:
+    def reduction_structurelle(self, onss_patronal_brut: float, base_salariale_mensuelle: float = None) -> float:
+        """Reduction structurelle -- formule DEGRESSIVE officielle (Instructions
+        ONSS 2026/2), pas un montant fixe. Si base_salariale_mensuelle n'est
+        pas fournie, retombe sur l'ancien comportement (montant fixe) --
+        garde la compatibilite mais degrade la precision, a eviter.
+        Voir regles_cp.REDUCTION_STRUCTURELLE pour l'ecart residuel connu
+        (non-resolu au 29/09/2026, ~11EUR/mois sur un cas teste)."""
         if not self.reduction_structurelle_applicable:
             return 0.0
-        return round(min(onss_patronal_brut, REDUCTION_STRUCTURELLE['plafond_trimestriel_bas_salaire']), 2)
+        if base_salariale_mensuelle is None:
+            # Fallback ancien comportement (deprecated) si base non fournie
+            return round(min(onss_patronal_brut,
+                REDUCTION_STRUCTURELLE['ancien_montant_fixe_deprecated']), 2)
+
+        cat1 = REDUCTION_STRUCTURELLE['categorie_1']
+        s_trim = base_salariale_mensuelle * 3
+        terme_bas = max(0.0, cat1['coeff_bas'] * (cat1['seuil_bas'] - s_trim))
+        terme_tres_bas = max(0.0, cat1['coeff_tres_bas'] * (cat1['seuil_tres_bas'] - s_trim))
+        r_trim = terme_bas + terme_tres_bas
+        r_mensuel = round(r_trim / 3, 2)
+        return round(min(onss_patronal_brut, r_mensuel), 2)
 
     def reduction_premier_engagement(self, onss_patronal_apres_struct: float, ratio_temps_partiel: float = 1.0) -> float:
         if not self.premier_engagement_applicable:

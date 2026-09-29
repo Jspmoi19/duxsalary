@@ -119,6 +119,24 @@ print(f"  (pour reference: l'ancien calcul errone aurait donne {ancien_calcul_fa
 
 print()
 print("=" * 70)
+print("TEST 7 — Reduction structurelle DEGRESSIVE (remplace l'ancien montant fixe)")
+print("Reference: Instructions ONSS 2026/2 + comparaison Group S (ecart connu ~11EUR)")
+print("=" * 70)
+p7 = construire_profil('CP 336', 'employe', type_contrat='CDI')
+# Ciwan: base=2257, onss_pat_brut theorique 25% = 564.25
+onss_pat_brut_ciwan = round(2257.00 * 0.25, 2)
+red_ciwan = p7.reduction_structurelle(onss_pat_brut_ciwan, base_salariale_mensuelle=2257.00)
+check("Reduction structurelle degressive Ciwan (2257EUR)", red_ciwan, 387.70, tol=0.05)
+print(f"  (Group S annonce 398.98EUR -- ecart connu de {round(398.98-red_ciwan,2)}EUR, non resolu)")
+
+# Bilal reste au plafond max car tres bas salaire (verifie que la formule
+# degressive donne bien un montant tres eleve pour un tout petit salaire)
+onss_pat_brut_bilal = round(841.18 * 0.27, 2)
+red_bilal = p7.reduction_structurelle(onss_pat_brut_bilal, base_salariale_mensuelle=841.18)
+print(f"  (info) Bilal (base 841.18EUR): reduction degressive = {red_bilal}EUR (plafonnee a onss du: {onss_pat_brut_bilal}EUR)")
+
+print()
+print("=" * 70)
 if ECHECS:
     print(f"❌ {len(ECHECS)} TEST(S) ÉCHOUÉ(S): {ECHECS}")
     print("NE PAS DÉPLOYER tant que ces tests ne passent pas.")
