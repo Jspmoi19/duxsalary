@@ -99,6 +99,20 @@ check("Précompte isolé (comparaison) — imposable 2500€", pp5b, 381.01, tol
 
 print()
 print("=" * 70)
+print("TEST 6 — Reduction precompte bonus emploi: DEUX taux distincts (A vs B)")
+print("Source: 4 references independantes, 33.14% volet A / 52.54% volet B")
+print("=" * 70)
+# Ouvrier avec un salaire assez eleve pour avoir un vrai precompte (pas 0)
+p6 = construire_profil('CP 140.03', 'ouvrier', type_contrat='CDI')
+bonus_a_test, bonus_b_test = 50.0, 20.0
+red = p6.reduction_precompte_bonus(bonus_a_test, bonus_b_test, brut_imposable=2500.0)
+attendu = round(50.0*0.3314 + 20.0*0.5254, 2)
+check(f"Reduction precompte (bonus_a=50, bonus_b=20)", red, attendu)
+ancien_calcul_faux = round((50.0+20.0)*0.3314, 2)
+print(f"  (pour reference: l'ancien calcul errone aurait donne {ancien_calcul_faux}EUR -- ecart de {round(attendu-ancien_calcul_faux,2)}EUR)")
+
+print()
+print("=" * 70)
 if ECHECS:
     print(f"❌ {len(ECHECS)} TEST(S) ÉCHOUÉ(S): {ECHECS}")
     print("NE PAS DÉPLOYER tant que ces tests ne passent pas.")

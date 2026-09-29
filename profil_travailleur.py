@@ -173,11 +173,18 @@ class ProfilTravailleur:
         return volet_a, volet_b
 
     def reduction_precompte_bonus(self, bonus_a: float, bonus_b: float, brut_imposable: float) -> float:
+        """Reduction precompte sur bonus emploi -- DEUX taux distincts:
+        33.14% sur le volet A, 52.54% sur le volet B (ouvriers uniquement,
+        jamais nul pour un employe). Confirme par 4 sources independantes
+        le 29/09/2026 -- avant cette correction, le code appliquait a tort
+        33.14% aux deux volets combines."""
         if not self.precompte_applicable:
             return 0.0
         if brut_imposable > BONUS_EMPLOI['reduction_precompte_plafond_imposable']:
             return 0.0
-        return round((bonus_a + bonus_b) * BONUS_EMPLOI['reduction_precompte_taux'], 2)
+        red_a = bonus_a * BONUS_EMPLOI['reduction_precompte_taux_volet_a']
+        red_b = bonus_b * BONUS_EMPLOI['reduction_precompte_taux_volet_b']
+        return round(red_a + red_b, 2)
 
     def reduction_structurelle(self, onss_patronal_brut: float) -> float:
         if not self.reduction_structurelle_applicable:

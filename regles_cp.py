@@ -57,7 +57,9 @@ BONUS_EMPLOI = {
     'volet_a_max': 229.01,              # tous statuts (ouvrier+employé), formule linéaire entre les 2 seuils
     'volet_b_max': 69.93,               # OUVRIERS SEULEMENT, seuils propres au volet B
     'applicable_etudiant': False,
-    'reduction_precompte_taux': 0.3314,  # 33,14% du bonus emploi = réduction précompte pro
+    'reduction_precompte_taux_volet_a': 0.3314,  # 33,14% du volet A (confirme 4 sources independantes)
+    'reduction_precompte_taux_volet_b': 0.5254,  # 52,54% du volet B -- OUVRIERS uniquement, taux DIFFERENT du volet A
+                                                   # (source: monsalaire-net.be, calculateur-de-salaire.be, macalculatriceenligne.com)
     'reduction_precompte_plafond_imposable': 3500.0,  # au-delà, pas de réduction précompte
 }
 
