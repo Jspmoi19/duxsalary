@@ -5,6 +5,8 @@ Validé sur base fiche Liantis FDLR Logistics CP 140.03
 """
 from datetime import date
 import math
+import sys as _sys; _sys.path.insert(0, '/var/www/duxsalary')
+from profil_travailleur import construire_profil
 
 # ── TAUX ONSS 2026 ────────────────────────────────────────────────────
 ONSS_PERSONNEL = 0.1307
@@ -208,9 +210,14 @@ def calculer_fiche_paie(
         cp = dict(cp)
         cp['sal_bareme_mensuel_etp'] = cp_db['min_mensuel']
     is_ouvrier = cp.get('type_travailleur', 'ouvrier') == 'ouvrier'
-    onss_pers_taux = ONSS_ETUDIANT_PERSONNEL if is_etudiant else ONSS_PERSONNEL
-    onss_pat_taux = ONSS_ETUDIANT_PATRONAL if is_etudiant else cp.get('onss_patronal', 0.27)
-    onss_pat_taux_base = onss_pat_taux
+
+    # ── PROFIL TRAVAILLEUR — source unique pour les décisions ONSS/précompte/bonus ──
+    statut_profil = 'etudiant' if is_etudiant else ('ouvrier' if is_ouvrier else 'employe')
+    profil = construire_profil(cp_key, statut_profil, type_contrat=type_contrat,
+                                heures_semaine=heures_semaine, jours_semaine=jours_semaine)
+
+    onss_pers_taux = profil.onss_personnel_taux
+    onss_pat_taux_base = profil.onss_patronal_taux_base
     heures_sem_reel = round(heures_jour * jours_semaine, 2)
     ratio_tp = min(1.0, heures_sem_reel / heures_semaine) if heures_semaine > 0 else 1.0
 
@@ -218,7 +225,7 @@ def calculer_fiche_paie(
     lignes_salaire = []
     # Employé CDI/CDD temps plein → salaire mensuel fixe
     # Ouvrier ou étudiant → salaire calculé sur heures prestées
-    is_employe_fixe = (not is_ouvrier and not is_etudiant and type_contrat in ('CDI', 'CDD'))
+    is_employe_fixe = profil.salaire_est_mensuel_fixe
     if is_employe_fixe:
         # Salaire mensuel fixe = salaire_horaire × heures_semaine × 52 / 12
         sal_mensuel_brut = salaire_mensuel_fixe if salaire_mensuel_fixe and salaire_mensuel_fixe > 0 else round(salaire_horaire * heures_semaine * 52 / 12, 2)
@@ -265,9 +272,10 @@ def calculer_fiche_paie(
 
     # Bonus emploi sur salaire barémique ETP
     bonus_a, bonus_b = 0.0, 0.0
-    if not is_etudiant:
-        sal_bar_etp = cp.get('sal_bareme_mensuel_etp', salaire_horaire * heures_semaine * 52/12)
-        bonus_a, bonus_b = calcul_bonus_emploi(sal_bar_etp, ratio_tp, is_ouvrier)
+    if profil.bonus_emploi_applicable:
+        # Salaire PROPRE du travailleur en ETP (pas le minimum sectoriel — corrigé 29/09/2026)
+        sal_propre_etp = salaire_horaire * heures_semaine * 52 / 12
+        bonus_a, bonus_b = profil.bonus_emploi(sal_propre_etp, ratio_tp)
         # Plafonner au max de l'ONSS dû
         total_bonus = min(bonus_a + bonus_b, onss_trav_brut)
         if bonus_a + bonus_b > 0:
@@ -277,15 +285,12 @@ def calculer_fiche_paie(
 
     onss_trav_net = round(max(0, onss_trav_brut - bonus_a - bonus_b), 2)
     brut_imposable = round(brut_onss - onss_trav_net, 2)
-    precompte_brut = 0.0 if is_etudiant else calcul_precompte(brut_imposable, etat_civil, nb_enfants, partenaire_revenus_pro, partenaire_pensions)
-    # Réduction précompte sur bonus emploi (AR 27/08/1993 art. 38§3quater)
-    # Taux 33.14% confirmé sur fiche Liantis
-    red_precompte_bonus = 0.0
-    if not is_etudiant and (bonus_a + bonus_b) > 0 and brut_imposable <= 3500:
-        red_precompte_bonus = round((bonus_a + bonus_b) * 0.3314, 2)
-        red_precompte_bonus = min(red_precompte_bonus, precompte_brut)
+    precompte_brut = profil.precompte_brut(brut_imposable, etat_civil, nb_enfants, partenaire_revenus_pro)
+    # Réduction précompte sur bonus emploi (AR 27/08/1993 art. 38§3quater, taux 33.14% confirmé Liantis)
+    red_precompte_bonus = profil.reduction_precompte_bonus(bonus_a, bonus_b, brut_imposable)
+    red_precompte_bonus = min(red_precompte_bonus, precompte_brut)
     precompte = round(precompte_brut - red_precompte_bonus, 2)
-    css = 0.0 if is_etudiant else calcul_css(brut_imposable)
+    css = profil.css(brut_imposable)
 
     # ── INDEMNITÉS EXONÉRÉES ──────────────────────────────────────────
     lignes_indemn = []
@@ -357,7 +362,7 @@ def calculer_fiche_paie(
 
     # ── CHARGES PATRONALES ────────────────────────────────────────────
     # Coefficient 108% pour ouvriers (pécule vacances ONVA — source ONSS officiel)
-    coeff_ouvrier = 1.08 if (is_ouvrier and not is_etudiant) else 1.0
+    coeff_ouvrier = profil.coeff_base_onss_patronal
     base_onss_pat = round(brut_onss * coeff_ouvrier, 2)
     onss_pat_brut = round(base_onss_pat * onss_pat_taux_base, 2)
     red_struct = 0.0 if is_etudiant else calcul_reduction_structurelle(base_onss_pat, onss_pat_taux_base)
@@ -388,6 +393,7 @@ def calculer_fiche_paie(
         'heures_jour': heures_jour, 'jours_semaine': jours_semaine,
         'regime_str': f"{jours_semaine}j/sem · {heures_jour}h/j",
         'type_contrat': type_contrat, 'is_etudiant': is_etudiant, 'is_ouvrier': is_ouvrier,
+        'libelle_salaire_base': profil.libelle_salaire_base,
         'salaire_mensuel_fixe': salaire_mensuel_fixe,
         'lignes_salaire': lignes_salaire,
         'brut_onss': brut_onss,

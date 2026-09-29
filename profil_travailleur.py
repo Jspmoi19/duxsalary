@@ -150,24 +150,25 @@ class ProfilTravailleur:
         if not self.bonus_emploi_applicable:
             return 0.0, 0.0
         seuil_bas = BONUS_EMPLOI['seuil_bas_mensuel']
-        seuil_haut = BONUS_EMPLOI['seuil_haut_mensuel']
+        seuil_haut_a = BONUS_EMPLOI['seuil_haut_mensuel_a']
+        seuil_haut_b = BONUS_EMPLOI['seuil_haut_mensuel_b']
         s = salaire_propre_etp_mensuel
         if s <= seuil_bas:
             volet_a = BONUS_EMPLOI['volet_a_max']
-        elif s >= seuil_haut:
+        elif s >= seuil_haut_a:
             volet_a = 0.0
         else:
-            volet_a = round(BONUS_EMPLOI['volet_a_max'] * (seuil_haut - s) / (seuil_haut - seuil_bas), 2)
+            volet_a = round(BONUS_EMPLOI['volet_a_max'] * (seuil_haut_a - s) / (seuil_haut_a - seuil_bas), 2)
         volet_a = round(volet_a * ratio_temps_partiel, 2)
 
         volet_b = 0.0
         if self.bonus_emploi_volet_b_applicable:
             if s <= seuil_bas:
                 volet_b = BONUS_EMPLOI['volet_b_max']
-            elif s >= seuil_haut:
+            elif s >= seuil_haut_b:
                 volet_b = 0.0
             else:
-                volet_b = round(BONUS_EMPLOI['volet_b_max'] * (seuil_haut - s) / (seuil_haut - seuil_bas), 2)
+                volet_b = round(BONUS_EMPLOI['volet_b_max'] * (seuil_haut_b - s) / (seuil_haut_b - seuil_bas), 2)
             volet_b = round(volet_b * ratio_temps_partiel, 2)
         return volet_a, volet_b
 
@@ -192,26 +193,52 @@ class ProfilTravailleur:
 
     def precompte_brut(self, brut_imposable_mensuel: float, etat_civil: str = 'celibataire',
                         nb_enfants: int = 0, partenaire_revenus_pro: str = 'non') -> float:
+        """Precompte professionnel -- formule-cle officielle (Annexe III, depuis 2023).
+        Formule verifiee le 29/09/2026 via execution reelle du simulateur Excel
+        verrouille du SPF Finances (pas une reconstitution manuelle).
+        Deux mecanismes distincts selon la situation familiale:
+        - isole (ou marie/cohabitant dont le conjoint a aussi des revenus propres):
+          impot = tranches(revenu net imposable) - 2987.98EUR, une fois.
+        - marie/cohabitant dont le conjoint N'A PAS de revenus propres: quotient
+          conjugal -- le revenu est scinde en deux parts imposees separement,
+          puis 5975.96EUR (le double) est soustrait de la somme des deux impots.
+        """
         if not self.precompte_applicable:
             return 0.0
-        annuel = brut_imposable_mensuel * 12
+
+        annuel_imposable = brut_imposable_mensuel * 12
+        frais = min(annuel_imposable * PRECOMPTE['frais_forfaitaires_taux'],
+                    PRECOMPTE['frais_forfaitaires_plafond_annuel'])
+        revenu_net_imposable = max(0.0, annuel_imposable - frais)
+
+        def impot_tranches(base):
+            impot = 0.0
+            for bas, haut, taux, fixe_cumule in PRECOMPTE['tranches_annuelles']:
+                if base <= bas:
+                    break
+                tranche_haut = min(base, haut) if haut != float('inf') else base
+                impot = fixe_cumule + (tranche_haut - bas) * taux
+            return impot
+
         etats_couple = ('marie', 'cohabitation_legale')
-        if etat_civil in etats_couple and partenaire_revenus_pro in ('non', 'oui_max290'):
-            quotite = PRECOMPTE['quotite_couple_sans_revenus_partenaire']
+        conjoint_sans_revenus = (etat_civil in etats_couple and partenaire_revenus_pro == 'non')
+
+        if conjoint_sans_revenus:
+            part_conjoint = round(min(revenu_net_imposable * PRECOMPTE['quotient_conjugal_taux'],
+                                       PRECOMPTE['quotient_conjugal_plafond_annuel']), 2)
+            part_travailleur = revenu_net_imposable - part_conjoint
+            impot_total = round(impot_tranches(part_travailleur), 2) + round(impot_tranches(part_conjoint), 2)
+            impot = max(0.0, impot_total - PRECOMPTE['reduction_base_couple_annuelle'])
         else:
-            quotite = PRECOMPTE['quotite_isole']
-        base = max(0.0, annuel - quotite)
-        pp = 0.0
-        for bas, haut, taux in PRECOMPTE['tranches_annuelles']:
-            if base <= 0:
-                break
-            tranche = min(base, (haut - bas) if haut != float('inf') else base)
-            pp += tranche * taux
-            base -= tranche
-        red_enfants = PRECOMPTE['reduction_enfants_charge'].get(min(nb_enfants, 5), 0.0)
-        if nb_enfants > 5:
-            red_enfants += (nb_enfants - 5) * 5000.0
-        return round(max(0.0, pp - red_enfants) / 12, 2)
+            impot_brut = round(impot_tranches(revenu_net_imposable), 2)
+            impot = max(0.0, impot_brut - PRECOMPTE['reduction_base_isole_annuelle'])
+
+        red_enfants = PRECOMPTE['reduction_enfants_charge'].get(min(nb_enfants, 8), 0.0)
+        if nb_enfants > 8:
+            red_enfants += (nb_enfants - 8) * PRECOMPTE['reduction_enfant_supplementaire_au_dela_8']
+
+        impot_final_annuel = max(0.0, impot - red_enfants)
+        return round(impot_final_annuel / 12, 2)
 
     def css(self, brut_imposable_mensuel: float) -> float:
         if not self.css_applicable:

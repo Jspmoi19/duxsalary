@@ -76,6 +76,29 @@ onss_net3 = round(onss_pat_brut3 - p3.onss_personnel(brut_onss3), 2)  # sanity o
 
 print()
 print("=" * 70)
+print("TEST 4 — Précompte professionnel, isolé sans enfant, employé CP 200")
+print("Référence: tableau indépendant (calculateur-de-salaire.be), hors zone bonus emploi")
+print("=" * 70)
+p4 = construire_profil('CP 200', 'employe', type_contrat='CDI')
+
+for brut, attendu in [(3500.0, 617.41), (4000.0, 826.70), (5000.0, 1245.27)]:
+    onss = round(brut * 0.1307, 2)
+    imposable = round(brut - onss, 2)
+    pp = p4.precompte_brut(imposable, etat_civil='celibataire', nb_enfants=0)
+    check(f"Précompte isolé — brut {brut:.0f}€", pp, attendu, tol=0.05)
+
+print()
+print("=" * 70)
+print("TEST 5 — Précompte, marié/cohabitant conjoint SANS revenus (quotient conjugal)")
+print("Référence: simulateur SPF Finances verrouillé, execute reellement le 29/09/2026")
+print("=" * 70)
+pp5 = p4.precompte_brut(2500.0, etat_civil='marie', nb_enfants=0, partenaire_revenus_pro='non')
+check("Précompte marié conjoint sans revenus — imposable 2500€", pp5, 35.99, tol=0.05)
+pp5b = p4.precompte_brut(2500.0, etat_civil='celibataire', nb_enfants=0)
+check("Précompte isolé (comparaison) — imposable 2500€", pp5b, 381.01, tol=0.05)
+
+print()
+print("=" * 70)
 if ECHECS:
     print(f"❌ {len(ECHECS)} TEST(S) ÉCHOUÉ(S): {ECHECS}")
     print("NE PAS DÉPLOYER tant que ces tests ne passent pas.")

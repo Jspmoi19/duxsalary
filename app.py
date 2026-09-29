@@ -437,7 +437,17 @@ def calendrier_prestations(dimona_id):
 
     date_debut_dimona = dimona['date_debut']
     date_fin_dimona = dimona['date_fin']
-    heures_jour = get_heures_semaine(dossier.get('cp_principale', 'CP 336')) / 5
+    # Heures/jour depuis le contrat réel du travailleur (pas le défaut CP du dossier)
+    conn_c = get_conn(); cur_c = conn_c.cursor(cursor_factory=RealDictCursor)
+    if dimona.get('contrat_id'):
+        cur_c.execute("SELECT heures_jour FROM contrats WHERE id=%s", (dimona['contrat_id'],))
+    else:
+        cur_c.execute("""SELECT heures_jour FROM contrats WHERE travailleur_id=%s AND statut='actif'
+            AND type_contrat=%s ORDER BY date_debut DESC LIMIT 1""",
+            (dimona['travailleur_id'], dimona['type_dimona']))
+    row_c = cur_c.fetchone()
+    cur_c.close(); conn_c.close()
+    heures_jour = float(row_c['heures_jour']) if row_c and row_c.get('heures_jour') else get_heures_semaine(dossier.get('cp_principale', 'CP 336')) / 5
 
     for j in range(1, nb_jours + 1):
         d = date(annee, mois, j)
@@ -1600,6 +1610,9 @@ def generer_fiche_depuis_calendrier(dimona_id):
             partenaire_revenus_pro=dimona.get('partenaire_revenus_pro', 'non') or 'non',
             partenaire_pensions=dimona.get('partenaire_pensions', 'non') or 'non',
             type_contrat=contrat['type_contrat'] if contrat else 'CDD',
+            heures_jour=heures_jour,
+            heures_semaine=float(contrat.get('heures_semaine') or 38.0) if contrat else 38.0,
+            jours_semaine=int(contrat.get('jours_semaine') or 5) if contrat else 5,
             is_etudiant=is_etudiant,
             jours_prestes=jours_prestes, heures_prestees=heures_prestees,
             jours_feries_payes=jours_feries, heures_feries=heures_feries,

@@ -44,28 +44,72 @@ PREMIER_ENGAGEMENT = {
 
 # Bonus à l'emploi 2026 — réduction ONSS personnelle pour bas/moyens salaires
 BONUS_EMPLOI = {
-    'seuil_bas_mensuel': 1945.38,       # sous ce seuil ETP: bonus maximal
-    'seuil_haut_mensuel': 2792.16,      # au-delà: bonus = 0
+    'seuil_bas_mensuel': 1945.38,       # sous ce seuil ETP: bonus maximal (volet A et B)
+    'seuil_haut_mensuel_a': 2792.16,    # volet A: au-delà, bonus = 0
+    'seuil_haut_mensuel_b': 2777.83,    # volet B: seuil DIFFÉRENT — validé fiche Bilal 98'H BARBER
     'volet_a_max': 229.01,              # tous statuts (ouvrier+employé), formule linéaire entre les 2 seuils
-    'volet_b_max': 69.93,               # OUVRIERS SEULEMENT, même logique de seuils
+    'volet_b_max': 69.93,               # OUVRIERS SEULEMENT, seuils propres au volet B
     'applicable_etudiant': False,
     'reduction_precompte_taux': 0.3314,  # 33,14% du bonus emploi = réduction précompte pro
     'reduction_precompte_plafond_imposable': 3500.0,  # au-delà, pas de réduction précompte
 }
 
-# Précompte professionnel — quotités exemptées annuelles 2026 (SPF Finances)
-# ATTENTION: à remplacer par la vraie clé de calcul Annexe III dès qu'on l'a
-# récupérée officiellement — ceci reste une approximation par tranches.
+# Précompte professionnel — "formule-clé" 2026 (Annexe III AR/CIR92, applicable
+# depuis le 01/01/2023, publiée au Moniteur belge du 29/12/2025).
+# Architecture officielle en 4 étapes — remplace l'ancien système par barèmes
+# mensuels arrondis (abandonné depuis 2023):
+#   1. Revenu annuel brut imposable = (brut mensuel imposable) × 12
+#   2. − frais professionnels forfaitaires: 30% du revenu annuel, plafonnés
+#   3. Impôt = tranches progressives appliquées au revenu net obtenu
+#   4. − "tranche non imposée" (crédit d'impôt, PAS une exemption sur le revenu)
+#      puis ÷ 12 = précompte mensuel
+#
+# ⚠️ Confiance calibrée: architecture et taux confirmés par 3 sources
+# indépendantes citant l'Annexe III (calculateur-de-salaire.be, monsalaire-net.be,
+# securex.be). Le cas ISOLÉ SANS ENFANT a été recoupé contre un tableau
+# d'exemples chiffrés indépendant (2500/3000/3500/4000€ bruts) avec un écart
+# résiduel de quelques euros non totalement expliqué (probablement un effet
+# bonus-emploi ou un arrondi de constante officielle qu'on n'a pas pu vérifier
+# au caractère près). Le cas MARIÉ/COHABITANT reste moins solide — le
+# "quotient conjugal" (30% du revenu attribué au partenaire sans revenus,
+# plafonné à 13.790€/an) n'est PAS encore implémenté, seule la tranche non
+# imposée est doublée en approximation. À valider avant un premier dossier
+# marié réel.
 PRECOMPTE = {
-    'quotite_isole': 10160.0,
-    'quotite_couple_sans_revenus_partenaire': 11320.0,
+    'frais_forfaitaires_taux': 0.30,
+    'frais_forfaitaires_plafond_annuel': 6070.0,
     'tranches_annuelles': [
-        (10160.0, 14850.0, 0.2675),
-        (14850.0, 24800.0, 0.3765),
-        (24800.0, 40480.0, 0.4360),
-        (40480.0, float('inf'), 0.4930),
+        # (bas, haut, taux, montant_fixe_cumule_avant_la_tranche) — vérifié via
+        # le simulateur EXCEL VERROUILLÉ officiel du SPF Finances (formule-clé
+        # 2026), recalculé formule par formule le 29/09/2026, pas une source tierce.
+        (0.0, 16710.0, 0.2675, 0.0),
+        (16710.0, 29500.0, 0.4280, 4469.93),
+        (29500.0, 51050.0, 0.4815, 9944.05),
+        (51050.0, float('inf'), 0.5350, 20320.38),
     ],
-    'reduction_enfants_charge': {1: 1850.0, 2: 4760.0, 3: 10660.0, 4: 16000.0, 5: 21000.0},
+    # Isolé (et marié/cohabitant dont le conjoint a AUSSI des revenus propres):
+    # cette réduction est soustraite DIRECTEMENT DE L'IMPÔT calculé sur le
+    # revenu net imposable complet — PAS du revenu avant application des tranches.
+    'reduction_base_isole_annuelle': 2987.98,
+    # Marié/cohabitant dont le conjoint N'A PAS de revenus professionnels propres
+    # (ou seulement une pension ≤174€ nets/mois): mécanisme du QUOTIENT CONJUGAL.
+    # 30% du revenu net imposable du travailleur est attribué fictivement au
+    # conjoint (plafonné), chaque part est imposée séparément selon les mêmes
+    # tranches, puis cette réduction (le double de la réduction isolé) est
+    # soustraite de la SOMME des deux impôts ainsi obtenus.
+    'quotient_conjugal_taux': 0.30,
+    'quotient_conjugal_plafond_annuel': 13790.0,
+    'reduction_base_couple_annuelle': 5975.96,
+    # Réduction pour enfants à charge — montant ANNUEL, soustrait de l'impôt
+    # après la réduction de base ci-dessus (Annexe 3, vérifiée sur le fichier officiel)
+    'reduction_enfants_charge': {1: 624.0, 2: 1656.0, 3: 4404.0, 4: 7620.0, 5: 11100.0,
+                                  6: 14592.0, 7: 18120.0, 8: 21996.0},
+    'reduction_enfant_supplementaire_au_dela_8': 3864.0,
+    # Autres réductions (Annexe 4/5) — NON implémentées finement (handicap,
+    # personne à charge 66+ ans, conjoint à faibles revenus propres). Ces cas
+    # ne concernent aucun dossier actif au 29/09/2026. Si un jour un travailleur
+    # ou son conjoint correspond à l'une de ces situations (voir Annexe 4/5 du
+    # simulateur SPF), il faudra les ajouter avant de facturer ce dossier.
     'applicable_etudiant': False,   # précompte toujours 0 pour étudiant STU
 }
 
