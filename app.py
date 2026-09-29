@@ -1622,6 +1622,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
             km_domicile=km_domicile, moyen_transport=moyen_transport,
             vehicule_societe=vehicule_societe,
             rgpt_actif=rgpt_actif, arab_heure=arab_heure, cheques_repas=cheques_repas,
+            taux_km=float(form.get('taux_km', 0.4444) or 0.4444),
             periode_debut=periode_debut, periode_fin=periode_fin,
         )
 

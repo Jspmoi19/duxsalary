@@ -201,6 +201,7 @@ def calculer_fiche_paie(
     jours_conge=0, jours_maladie=0, jours_chomage=0,
     km_domicile=0, moyen_transport='voiture', vehicule_societe=False,
     rgpt_actif=True, arab_heure=0.0, cheques_repas=True, frais_nets=0.0,
+    taux_km=0.4444,
     periode_debut=None, periode_fin=None,
 ):
     cp = CP_INDEMNITES.get(cp_key, {})
@@ -285,12 +286,21 @@ def calculer_fiche_paie(
 
     onss_trav_net = round(max(0, onss_trav_brut - bonus_a - bonus_b), 2)
     brut_imposable = round(brut_onss - onss_trav_net, 2)
-    precompte_brut = profil.precompte_brut(brut_imposable, etat_civil, nb_enfants, partenaire_revenus_pro)
+    # Plafond fiscal 500EUR/an sur indemnite km voiture (precompte uniquement,
+    # PAS l'ONSS) -- source Securex + fin.belgium.be, annee de revenus 2026.
+    montant_km_imposable_precompte = 0.0
+    if km_domicile > 0 and moyen_transport == 'voiture' and not vehicule_societe and not cp.get('indem_deplacement_jour'):
+        montant_km_estime = round(taux_km * km_domicile * 2 * jours_prestes, 2)
+        plafond_mensuel_km = round(500.0 / 12, 2)
+        if montant_km_estime > plafond_mensuel_km:
+            montant_km_imposable_precompte = round(montant_km_estime - plafond_mensuel_km, 2)
+    brut_imposable_precompte = round(brut_imposable + montant_km_imposable_precompte, 2)
+    precompte_brut = profil.precompte_brut(brut_imposable_precompte, etat_civil, nb_enfants, partenaire_revenus_pro)
     # Réduction précompte sur bonus emploi (AR 27/08/1993 art. 38§3quater, taux 33.14% confirmé Liantis)
     red_precompte_bonus = profil.reduction_precompte_bonus(bonus_a, bonus_b, brut_imposable)
     red_precompte_bonus = min(red_precompte_bonus, precompte_brut)
     precompte = round(precompte_brut - red_precompte_bonus, 2)
-    css = profil.css(brut_imposable)
+    css = profil.css(brut_imposable_precompte)
 
     # ── INDEMNITÉS EXONÉRÉES ──────────────────────────────────────────
     lignes_indemn = []
@@ -329,9 +339,9 @@ def calculer_fiche_paie(
     # Km voiture personnelle
     montant_km = 0.0
     if km_domicile > 0 and moyen_transport == 'voiture' and not vehicule_societe and not cp.get('indem_deplacement_jour'):
-        montant_km = round(0.4444 * km_domicile * 2 * jours_prestes, 2)
+        montant_km = round(taux_km * km_domicile * 2 * jours_prestes, 2)
         lignes_indemn.append({'libelle': f'Indemnité km ({km_domicile} km)',
-            'detail': '0.4444 €/km', 'jours': jours_prestes, 'montant': montant_km})
+            'detail': f'{taux_km:.4f} €/km', 'jours': jours_prestes, 'montant': montant_km})
 
     # Chèques-repas — déduction part collectivité uniquement
     montant_cr_ded = 0.0
