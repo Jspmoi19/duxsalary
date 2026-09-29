@@ -280,7 +280,8 @@ def calculer_fiche_paie(
         # jusqu'a 0, PUIS volet A si toujours insuffisant -- PAS une reduction
         # proportionnelle des deux (erreur corrigee le 29/09/2026, verifiee
         # au centime contre une simulation Group S reelle CP336 employe).
-        bonus_a, bonus_b = profil.bonus_emploi(sal_propre_etp, ratio_tp, onss_du=onss_trav_brut)
+        ref_date_params = periode_fin if periode_fin else date.today()
+        bonus_a, bonus_b = profil.bonus_emploi(sal_propre_etp, ratio_tp, onss_du=onss_trav_brut, reference_date=ref_date_params)
 
     onss_trav_net = round(max(0, onss_trav_brut - bonus_a - bonus_b), 2)
     brut_imposable = round(brut_onss - onss_trav_net, 2)
@@ -373,7 +374,8 @@ def calculer_fiche_paie(
     coeff_ouvrier = profil.coeff_base_onss_patronal
     base_onss_pat = round(brut_onss * coeff_ouvrier, 2)
     onss_pat_brut = round(base_onss_pat * onss_pat_taux_base, 2)
-    red_struct = 0.0 if is_etudiant else profil.reduction_structurelle(onss_pat_brut, base_salariale_mensuelle=base_onss_pat)
+    ref_date_struct = periode_fin if periode_fin else date.today()
+    red_struct = 0.0 if is_etudiant else profil.reduction_structurelle(onss_pat_brut, base_salariale_mensuelle=base_onss_pat, reference_date=ref_date_struct)
 
     # Premier engagement
     red_pe = 0.0
