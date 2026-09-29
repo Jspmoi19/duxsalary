@@ -8,6 +8,7 @@ ce fichier avant d'être déployée. Lancer: python3 test_profils.py
 import sys
 sys.path.insert(0, '.')
 from profil_travailleur import construire_profil
+from datetime import date
 
 ECHECS = []
 
@@ -32,8 +33,16 @@ check("ONSS personnel brut", onss_pers, 101.80)
 # Assertion retiree ici (etait basee sur une structure pre-reforme fausse) --
 # a re-verifier si besoin de regenerer une fiche de juillet 2026 exactement.
 ratio_bilal = 15 / 38
-bonus_a, bonus_b = p.bonus_emploi(2457.73, ratio_temps_partiel=ratio_bilal, onss_du=101.80)
-print(f"  (info) Bonus emploi Bilal recalcule avec table SEPTEMBRE 2026 (pas juillet): A={bonus_a} B={bonus_b} -- non compare, tables datees non modelisees pour juillet")
+bonus_a, bonus_b = p.bonus_emploi(2457.73, ratio_temps_partiel=ratio_bilal, onss_du=101.80,
+                                    reference_date=date(2026, 7, 31))
+# CORRECTION 29/09/2026: les valeurs 35.70/10.61 initialement "validees" en
+# debut de session utilisaient l'ancienne structure PRE-reforme 2024 (jamais
+# croisee avec une source externe). Avec la vraie table de juillet 2026,
+# le bonus emploi efface ENTIEREMENT l'ONSS de Bilal (54.37+47.43=101.80).
+# ==> LA FICHE DE BILAL DEJA ENVOYEE AU CLIENT EST A CORRIGER.
+check("Bonus emploi volet A (vraie table JUILLET 2026)", bonus_a, 54.37, tol=0.02)
+check("Bonus emploi volet B (vraie table JUILLET 2026, ecrete)", bonus_b, 47.43, tol=0.02)
+check("Total bonus = ONSS du (extinction complete)", round(bonus_a+bonus_b,2), 101.80, tol=0.02)
 
 onss_pat_brut = p.onss_patronal_brut(brut_onss)
 check("ONSS patronal brut (×1.08 coeff)", onss_pat_brut, 227.12, tol=0.5)
@@ -75,7 +84,7 @@ check("ONSS patronal brut employé (pas de coeff 108%)", onss_pat_brut3, round(2
 # hypothese "volet B ouvrier uniquement" -- remplace par la vraie structure
 # 2024+ validee contre une simulation Group S REELLE (2257EUR brut, meme
 # scenario Ciwan/CP336, au 01/09/2026):
-bonus_a3, bonus_b3 = p3.bonus_emploi(2257.00, onss_du=294.99)
+bonus_a3, bonus_b3 = p3.bonus_emploi(2257.00, onss_du=294.99, reference_date=date(2026, 9, 29))
 check("Bonus emploi volet A employé (Group S: 127.54)", bonus_a3, 127.54, tol=0.02)
 check("Bonus emploi volet B employé apres ecretement (Group S: 167.45)", bonus_b3, 167.45, tol=0.02)
 onss_net3 = round(onss_pat_brut3 - p3.onss_personnel(brut_onss3), 2)  # sanity only
@@ -125,14 +134,14 @@ print("=" * 70)
 p7 = construire_profil('CP 336', 'employe', type_contrat='CDI')
 # Ciwan: base=2257, onss_pat_brut theorique 25% = 564.25
 onss_pat_brut_ciwan = round(2257.00 * 0.25, 2)
-red_ciwan = p7.reduction_structurelle(onss_pat_brut_ciwan, base_salariale_mensuelle=2257.00)
+red_ciwan = p7.reduction_structurelle(onss_pat_brut_ciwan, base_salariale_mensuelle=2257.00, reference_date=date(2026, 9, 29))
 check("Reduction structurelle degressive Ciwan (2257EUR)", red_ciwan, 387.70, tol=0.05)
 print(f"  (Group S annonce 398.98EUR -- ecart connu de {round(398.98-red_ciwan,2)}EUR, non resolu)")
 
 # Bilal reste au plafond max car tres bas salaire (verifie que la formule
 # degressive donne bien un montant tres eleve pour un tout petit salaire)
 onss_pat_brut_bilal = round(841.18 * 0.27, 2)
-red_bilal = p7.reduction_structurelle(onss_pat_brut_bilal, base_salariale_mensuelle=841.18)
+red_bilal = p7.reduction_structurelle(onss_pat_brut_bilal, base_salariale_mensuelle=841.18, reference_date=date(2026, 7, 31))
 print(f"  (info) Bilal (base 841.18EUR): reduction degressive = {red_bilal}EUR (plafonnee a onss du: {onss_pat_brut_bilal}EUR)")
 
 print()

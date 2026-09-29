@@ -16,6 +16,8 @@ Utilisation:
 
 from dataclasses import dataclass, field
 from regles_cp import get_regles_cp, ONSS, REDUCTION_STRUCTURELLE, PREMIER_ENGAGEMENT, BONUS_EMPLOI, PRECOMPTE, CSSS
+from parametres_dates import get_bonus_emploi_params, get_reduction_structurelle_params
+from datetime import date as _date
 
 STATUTS_VALIDES = ('ouvrier', 'etudiant', 'employe')
 
@@ -141,37 +143,32 @@ class ProfilTravailleur:
     def onss_personnel(self, brut_onss: float) -> float:
         return round(brut_onss * self.onss_personnel_taux, 2)
 
-    def bonus_emploi(self, salaire_propre_etp_mensuel, ratio_temps_partiel=1.0, onss_du=None):
-        """Bonus a l'emploi -- structure 2024+ (post-reforme 01/04/2024).
-        Volet A (bas salaires) ET volet B (tres bas salaires) s'appliquent
-        DESORMAIS aux employes ET aux ouvriers, chacun avec ses propres
-        seuils/montants (4 tableaux distincts, pas 3 comme avant correction).
-        Verifie au centime contre une simulation Group S reelle le 29/09/2026.
-
-        Ecretement: si volet_a + volet_b depasse l'ONSS personnel du, on
-        ecrete D'ABORD le volet B (jusqu'a 0 si necessaire), PUIS le volet A
-        si ca ne suffit toujours pas -- PAS une reduction proportionnelle des
-        deux (erreur corrigee le 29/09/2026, confirmee par l'exemple Group S).
-        """
+    def bonus_emploi(self, salaire_propre_etp_mensuel, ratio_temps_partiel=1.0,
+                      onss_du=None, reference_date=None):
+        """Bonus a l'emploi -- structure 2024+, parametres VERSIONNES PAR DATE
+        (voir parametres_dates.py). reference_date = date de la periode de
+        paie (periode_fin recommande) -- si omise, utilise la date du jour
+        (comportement de secours, a eviter pour regenerer une fiche passee)."""
         if not self.bonus_emploi_applicable:
             return 0.0, 0.0
+        ref = reference_date or _date.today()
+        params = get_bonus_emploi_params(ref)
         statut_key = 'ouvrier' if self.is_ouvrier else 'employe'
         s = salaire_propre_etp_mensuel
 
-        def montant_volet(params):
-            if s <= params['seuil_bas']:
-                m = params['montant_max']
-            elif s <= params['seuil_haut']:
-                m = params['montant_max'] - (params['pente'] * (s - params['seuil_bas']))
+        def montant_volet(p):
+            if s <= p['seuil_bas']:
+                m = p['montant_max']
+            elif s <= p['seuil_haut']:
+                m = p['montant_max'] - (p['pente'] * (s - p['seuil_bas']))
             else:
                 m = 0.0
             return max(0.0, round(m, 2))
 
-        volet_a = round(montant_volet(BONUS_EMPLOI['volet_a'][statut_key]) * ratio_temps_partiel, 2)
-        volet_b = round(montant_volet(BONUS_EMPLOI['volet_b'][statut_key]) * ratio_temps_partiel, 2)
+        volet_a = round(montant_volet(params['volet_a'][statut_key]) * ratio_temps_partiel, 2)
+        volet_b = round(montant_volet(params['volet_b'][statut_key]) * ratio_temps_partiel, 2)
 
         if onss_du is not None and (volet_a + volet_b) > onss_du:
-            # Ecretement: volet B en premier, jusqu'a 0, puis volet A si besoin
             exces = round((volet_a + volet_b) - onss_du, 2)
             reduction_b = min(volet_b, exces)
             volet_b = round(volet_b - reduction_b, 2)
@@ -195,26 +192,22 @@ class ProfilTravailleur:
         red_b = bonus_b * BONUS_EMPLOI['reduction_precompte_taux_volet_b']
         return round(red_a + red_b, 2)
 
-    def reduction_structurelle(self, onss_patronal_brut: float, base_salariale_mensuelle: float = None) -> float:
-        """Reduction structurelle -- formule DEGRESSIVE officielle (Instructions
-        ONSS 2026/2), pas un montant fixe. Si base_salariale_mensuelle n'est
-        pas fournie, retombe sur l'ancien comportement (montant fixe) --
-        garde la compatibilite mais degrade la precision, a eviter.
-        Voir regles_cp.REDUCTION_STRUCTURELLE pour l'ecart residuel connu
-        (non-resolu au 29/09/2026, ~11EUR/mois sur un cas teste)."""
+    def reduction_structurelle(self, onss_patronal_brut, base_salariale_mensuelle=None, reference_date=None):
+        """Reduction structurelle DEGRESSIVE, parametres VERSIONNES PAR DATE
+        (voir parametres_dates.py). Sans base_salariale_mensuelle, retombe
+        sur l'ancien montant fixe (deprecated, imprecis)."""
         if not self.reduction_structurelle_applicable:
             return 0.0
         if base_salariale_mensuelle is None:
-            # Fallback ancien comportement (deprecated) si base non fournie
             return round(min(onss_patronal_brut,
                 REDUCTION_STRUCTURELLE['ancien_montant_fixe_deprecated']), 2)
 
-        cat1 = REDUCTION_STRUCTURELLE['categorie_1']
+        ref = reference_date or _date.today()
+        p = get_reduction_structurelle_params(ref)
         s_trim = base_salariale_mensuelle * 3
-        terme_bas = max(0.0, cat1['coeff_bas'] * (cat1['seuil_bas'] - s_trim))
-        terme_tres_bas = max(0.0, cat1['coeff_tres_bas'] * (cat1['seuil_tres_bas'] - s_trim))
-        r_trim = terme_bas + terme_tres_bas
-        r_mensuel = round(r_trim / 3, 2)
+        terme_bas = max(0.0, p['coeff_bas'] * (p['seuil_bas'] - s_trim))
+        terme_tres_bas = max(0.0, p['coeff_tres_bas'] * (p['seuil_tres_bas'] - s_trim))
+        r_mensuel = round((terme_bas + terme_tres_bas) / 3, 2)
         return round(min(onss_patronal_brut, r_mensuel), 2)
 
     def reduction_premier_engagement(self, onss_patronal_apres_struct: float, ratio_temps_partiel: float = 1.0) -> float:
