@@ -141,7 +141,7 @@
       </div>
       {% if prime_suggestion and prime_suggestion.droit %}
       <div style="font-size:12px;background:white;border:1px solid #f39c12;border-radius:4px;padding:6px 10px;margin-bottom:8px">
-        💡 <b>Indication CP {{ cp_key }}</b> —
+        💡 <b>Indication {{ cp_key }}</b> —
         {% if prime_suggestion.montant_brut is not none %}
           suggestion : <b>{{ "%.2f"|format(prime_suggestion.montant_brut) }} €</b> brut
           <span style="color:#888">({{ prime_suggestion.methode }})</span>

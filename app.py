@@ -1640,8 +1640,14 @@ def generer_fiche_depuis_calendrier(dimona_id):
                 periode_debut, periode_fin,
                 salaire_brut, onss_personnel, precompte,
                 salaire_net, total_onss, onss_patronal,
-                cout_employeur, pdf_path, statut_paiement
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'genere')
+                cout_employeur, pdf_path, statut_paiement,
+                bonus_emploi_a, bonus_emploi_b,
+                precompte_avant_reduction, reduction_precompte_bonus,
+                reduction_structurelle, reduction_premier_engagement,
+                frais_nets_montant, jours_prestes, heures_prestees,
+                is_ouvrier, is_etudiant, cp_key, type_contrat
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'genere',
+                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING id
         """, (
             dimona['dossier_id'], dimona['travailleur_id'],
@@ -1651,7 +1657,13 @@ def generer_fiche_depuis_calendrier(dimona_id):
             abs(data['precompte']), data['salaire_net'],
             abs(data['onss_net']) + data['onss_patronal'],
             data['onss_patronal'],
-            data['cout_employeur'], filepath
+            data['cout_employeur'], filepath,
+            data.get('bonus_emploi_a', 0), data.get('bonus_emploi_b', 0),
+            abs(data.get('precompte_brut', 0)), data.get('red_precompte_bonus', 0),
+            data.get('reduction_structurelle', 0), data.get('reduction_premier_engagement', 0),
+            data.get('frais_nets', 0), jours_prestes, heures_prestees,
+            data.get('is_ouvrier'), data.get('is_etudiant'),
+            data.get('cp_key'), data.get('type_contrat')
         ))
         fiche_id = cur.fetchone()['id']
         conn.commit()
