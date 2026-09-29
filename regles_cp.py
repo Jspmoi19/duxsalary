@@ -51,16 +51,35 @@ PREMIER_ENGAGEMENT = {
 
 # Bonus à l'emploi 2026 — réduction ONSS personnelle pour bas/moyens salaires
 BONUS_EMPLOI = {
-    'seuil_bas_mensuel': 1945.38,       # sous ce seuil ETP: bonus maximal (volet A et B)
-    'seuil_haut_mensuel_a': 2792.16,    # volet A: au-delà, bonus = 0
-    'seuil_haut_mensuel_b': 2777.83,    # volet B: seuil DIFFÉRENT — validé fiche Bilal 98'H BARBER
-    'volet_a_max': 229.01,              # tous statuts (ouvrier+employé), formule linéaire entre les 2 seuils
-    'volet_b_max': 69.93,               # OUVRIERS SEULEMENT, seuils propres au volet B
+    # Parametres EN VIGUEUR AU 01/09/2026 (source: ONSS via Partena, infoflash
+    # du 07/07/2026, section "Au 1er septembre 2026" -- verifie le 29/09/2026
+    # via web_fetch direct de la page officielle, ET recoupe au centime contre
+    # une simulation reelle Group S pour Ciwan Ilhan CP336 employe 2257EUR).
+    #
+    # STRUCTURE 2024+ (reforme du 01/04/2024): volet A ET volet B s'appliquent
+    # DESORMAIS aux employes ET aux ouvriers, avec des seuils et montants
+    # DIFFERENTS pour chaque combinaison statut x volet (4 tableaux distincts).
+    # AVANT cette correction, le code supposait a tort que le volet B etait
+    # reserve aux ouvriers -- FAUX depuis le 01/04/2024.
+    #
+    # Ces seuils sont mis a jour PLUSIEURS FOIS PAR AN (janvier, mars, juillet,
+    # septembre releves en 2026) -- a revoir a chaque nouvelle indexation.
+    'volet_a': {
+        'employe': {'seuil_bas': 2937.93, 'montant_max': 127.54,
+                     'seuil_haut': 3403.62, 'pente': 0.2739},
+        'ouvrier': {'seuil_bas': 2937.93, 'montant_max': 137.74,
+                     'seuil_haut': 3403.62, 'pente': 0.2958},
+    },
+    'volet_b': {
+        'employe': {'seuil_bas': 2300.62, 'montant_max': 171.99,
+                     'seuil_haut': 2937.93, 'pente': 0.2699},
+        'ouvrier': {'seuil_bas': 2300.62, 'montant_max': 185.75,
+                     'seuil_haut': 2937.93, 'pente': 0.2915},
+    },
     'applicable_etudiant': False,
-    'reduction_precompte_taux_volet_a': 0.3314,  # 33,14% du volet A (confirme 4 sources independantes)
-    'reduction_precompte_taux_volet_b': 0.5254,  # 52,54% du volet B -- OUVRIERS uniquement, taux DIFFERENT du volet A
-                                                   # (source: monsalaire-net.be, calculateur-de-salaire.be, macalculatriceenligne.com)
-    'reduction_precompte_plafond_imposable': 3500.0,  # au-delà, pas de réduction précompte
+    'reduction_precompte_taux_volet_a': 0.3314,
+    'reduction_precompte_taux_volet_b': 0.5254,
+    'reduction_precompte_plafond_imposable': 3500.0,
 }
 
 # Précompte professionnel — "formule-clé" 2026 (Annexe III AR/CIR92, applicable

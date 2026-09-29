@@ -141,35 +141,44 @@ class ProfilTravailleur:
     def onss_personnel(self, brut_onss: float) -> float:
         return round(brut_onss * self.onss_personnel_taux, 2)
 
-    def bonus_emploi(self, salaire_propre_etp_mensuel: float, ratio_temps_partiel: float = 1.0) -> tuple[float, float]:
-        """Retourne (volet_a, volet_b). Volet B = 0 si non ouvrier.
-        ATTENTION: salaire_propre_etp_mensuel = le salaire BRUT PROPRE du travailleur,
-        ramené à temps plein (salaire_horaire × heures_semaine_reference × 52/12).
-        CE N'EST PAS le minimum sectoriel de la CP — confusion corrigée le 29/09/2026.
-        Formule linéaire dégressive entre seuil_bas et seuil_haut (2026)."""
+    def bonus_emploi(self, salaire_propre_etp_mensuel, ratio_temps_partiel=1.0, onss_du=None):
+        """Bonus a l'emploi -- structure 2024+ (post-reforme 01/04/2024).
+        Volet A (bas salaires) ET volet B (tres bas salaires) s'appliquent
+        DESORMAIS aux employes ET aux ouvriers, chacun avec ses propres
+        seuils/montants (4 tableaux distincts, pas 3 comme avant correction).
+        Verifie au centime contre une simulation Group S reelle le 29/09/2026.
+
+        Ecretement: si volet_a + volet_b depasse l'ONSS personnel du, on
+        ecrete D'ABORD le volet B (jusqu'a 0 si necessaire), PUIS le volet A
+        si ca ne suffit toujours pas -- PAS une reduction proportionnelle des
+        deux (erreur corrigee le 29/09/2026, confirmee par l'exemple Group S).
+        """
         if not self.bonus_emploi_applicable:
             return 0.0, 0.0
-        seuil_bas = BONUS_EMPLOI['seuil_bas_mensuel']
-        seuil_haut_a = BONUS_EMPLOI['seuil_haut_mensuel_a']
-        seuil_haut_b = BONUS_EMPLOI['seuil_haut_mensuel_b']
+        statut_key = 'ouvrier' if self.is_ouvrier else 'employe'
         s = salaire_propre_etp_mensuel
-        if s <= seuil_bas:
-            volet_a = BONUS_EMPLOI['volet_a_max']
-        elif s >= seuil_haut_a:
-            volet_a = 0.0
-        else:
-            volet_a = round(BONUS_EMPLOI['volet_a_max'] * (seuil_haut_a - s) / (seuil_haut_a - seuil_bas), 2)
-        volet_a = round(volet_a * ratio_temps_partiel, 2)
 
-        volet_b = 0.0
-        if self.bonus_emploi_volet_b_applicable:
-            if s <= seuil_bas:
-                volet_b = BONUS_EMPLOI['volet_b_max']
-            elif s >= seuil_haut_b:
-                volet_b = 0.0
+        def montant_volet(params):
+            if s <= params['seuil_bas']:
+                m = params['montant_max']
+            elif s <= params['seuil_haut']:
+                m = params['montant_max'] - (params['pente'] * (s - params['seuil_bas']))
             else:
-                volet_b = round(BONUS_EMPLOI['volet_b_max'] * (seuil_haut_b - s) / (seuil_haut_b - seuil_bas), 2)
-            volet_b = round(volet_b * ratio_temps_partiel, 2)
+                m = 0.0
+            return max(0.0, round(m, 2))
+
+        volet_a = round(montant_volet(BONUS_EMPLOI['volet_a'][statut_key]) * ratio_temps_partiel, 2)
+        volet_b = round(montant_volet(BONUS_EMPLOI['volet_b'][statut_key]) * ratio_temps_partiel, 2)
+
+        if onss_du is not None and (volet_a + volet_b) > onss_du:
+            # Ecretement: volet B en premier, jusqu'a 0, puis volet A si besoin
+            exces = round((volet_a + volet_b) - onss_du, 2)
+            reduction_b = min(volet_b, exces)
+            volet_b = round(volet_b - reduction_b, 2)
+            exces_restant = round(exces - reduction_b, 2)
+            if exces_restant > 0:
+                volet_a = round(max(0.0, volet_a - exces_restant), 2)
+
         return volet_a, volet_b
 
     def reduction_precompte_bonus(self, bonus_a: float, bonus_b: float, brut_imposable: float) -> float:
