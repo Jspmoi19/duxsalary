@@ -21,6 +21,35 @@ sur tous les taux (8%/7.38%/15.38% ouvrier, 92% employe).
 """
 
 
+# Statuts qui N'OUVRENT AUCUN DROIT aux conges payes ni au pecule.
+# Raison: ces travailleurs ne paient qu'une cotisation de solidarite reduite
+# (2.71% etudiant) au lieu des cotisations ordinaires (13.07%) -- or le droit
+# aux vacances annuelles se construit UNIQUEMENT sur les cotisations
+# ordinaires. Verifie le 29/09/2026 sur 6 sources independantes concordantes:
+# Infor Jeunes, Bruxelles-J, Wikifin (autorite publique), studentatwork.be
+# (site officiel ONSS), CSC, Trixxo.
+# ==> Les mois prestes sous contrat STU ne comptent PAS dans
+#     mois_prestes_annee_precedente. L'etudiant garde par contre ses droits
+#     aux jours feries legaux (regle distincte, non geree ici).
+STATUTS_SANS_DROIT_CONGES = ('etudiant',)
+TYPES_CONTRAT_SANS_DROIT_CONGES = ('STU',)
+
+
+def mois_ouvrant_droit(mois_par_type_contrat: dict) -> int:
+    """Calcule le nombre de mois qui ouvrent reellement un droit a conges,
+    en excluant les periodes sous statut etudiant (STU) ou assimile.
+
+    mois_par_type_contrat: dict {type_contrat: nombre_de_mois}
+        ex: {'STU': 2, 'CDI': 3} -> retourne 3 (seuls les mois CDI comptent)
+    """
+    total = 0
+    for type_contrat, nb_mois in mois_par_type_contrat.items():
+        if type_contrat and type_contrat.upper() in TYPES_CONTRAT_SANS_DROIT_CONGES:
+            continue  # STU: aucun droit ouvert
+        total += int(nb_mois or 0)
+    return min(12, total)
+
+
 def jours_conges_acquis(statut: str, jours_semaine_ref: float,
                          mois_prestes_annee_precedente: int,
                          jours_semaine_annee_precedente: float = None) -> float:
@@ -45,6 +74,10 @@ def jours_conges_acquis(statut: str, jours_semaine_ref: float,
     convertit, mais le resultat final en base 5 est directement le nombre
     de jours ouvrables de conge.
     """
+    # Un statut etudiant n'ouvre JAMAIS de droit, meme avec des mois prestes
+    if statut and statut.lower() in STATUTS_SANS_DROIT_CONGES:
+        return 0.0
+
     if mois_prestes_annee_precedente <= 0:
         return 0.0  # AUCUN droit si pas de prestation l'annee precedente
 
@@ -80,6 +113,17 @@ def double_pecule_employe(salaire_mensuel_brut_actuel: float,
         return 0.0
     mois = min(12, mois_prestes_annee_precedente)
     return round(salaire_mensuel_brut_actuel * 0.92 * mois / 12, 2)
+
+
+def verifier_statut_ouvre_droit(type_contrat: str) -> tuple:
+    """Retourne (ouvre_droit: bool, message: str) pour un type de contrat.
+    A utiliser dans l'interface pour avertir l'utilisateur."""
+    if type_contrat and type_contrat.upper() in TYPES_CONTRAT_SANS_DROIT_CONGES:
+        return (False, "Contrat etudiant (STU): cotisation de solidarite "
+                        "uniquement -- n'ouvre AUCUN droit aux conges payes "
+                        "ni au pecule de vacances. Seuls les jours feries "
+                        "legaux restent dus.")
+    return (True, "")
 
 
 def pecule_ouvrier_information(remuneration_brute_annuelle_reference: float) -> dict:

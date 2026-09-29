@@ -34,8 +34,14 @@
       </div>
       {% endif %}
       {% if is_etudiant_contrat %}
-      <div style="padding:8px 12px;background:#fde8e8;border-radius:6px;color:#c0392b">
-        ⚠️ Contrat étudiant — régime de congés distinct, à vérifier au cas par cas
+      <div style="padding:10px 14px;background:#fde8e8;border-radius:6px;color:#c0392b;font-weight:600;width:100%">
+        ⛔ Contrat étudiant (STU) en cours — <b>aucun droit aux congés payés ni au pécule</b>.<br>
+        <span style="font-weight:400;font-size:12px">
+          L'étudiant ne paie qu'une cotisation de solidarité (2,71 %) et non les cotisations
+          ordinaires (13,07 %) : le droit aux vacances ne se construit que sur ces dernières.
+          Seuls les <b>jours fériés légaux</b> restent dus. Les mois prestés sous STU ne
+          doivent PAS être comptés ci-dessous.
+        </span>
       </div>
       {% endif %}
     </div>
@@ -71,7 +77,10 @@
         <div class="form-group">
           <label class="form-label">Mois prestés l'année précédente</label>
           <input type="number" name="mois_prestes_reference" min="0" max="12" value="0" required class="form-control">
-          <small style="font-size:11px;color:#888">0 à 12 — base du calcul</small>
+          <small style="font-size:11px;color:#c0392b;font-weight:600">
+            ⚠️ Ne comptez QUE les mois sous contrat ordinaire (CDI/CDD).<br>
+            Les mois sous contrat étudiant (STU) n'ouvrent AUCUN droit.
+          </small>
         </div>
         <div class="form-group">
           <label class="form-label">Régime (jours/semaine)</label>

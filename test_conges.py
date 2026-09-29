@@ -1,4 +1,6 @@
-from conges_legaux import jours_conges_acquis, double_pecule_employe, pecule_ouvrier_information
+from conges_legaux import (jours_conges_acquis, double_pecule_employe,
+                            pecule_ouvrier_information, mois_ouvrant_droit,
+                            verifier_statut_ouvre_droit)
 
 ECHECS = []
 def check(label, actual, expected, tol=0.05):
@@ -50,6 +52,29 @@ print("=" * 70)
 jours5 = jours_conges_acquis('employe', 5, mois_prestes_annee_precedente=0)
 check("Jours conges Ciwan 2026 (0 mois en 2025)", jours5, 0.0)
 print("  (Ciwan n'aura droit a des conges qu'en 2027, sur base de ses mois 2026)")
+
+print()
+print("=" * 70)
+print("CAS 6 — CIWAN REEL: 2 mois STU (juillet+septembre) + 3 mois CDI (oct-dec)")
+print("Les mois STU n'ouvrent AUCUN droit (cotisation solidarite seulement)")
+print("Verifie sur 6 sources: Infor Jeunes, Bruxelles-J, Wikifin, ONSS, CSC, Trixxo")
+print("=" * 70)
+mois_ciwan = mois_ouvrant_droit({'STU': 2, 'CDI': 3})
+check("Mois ouvrant droit (2 STU + 3 CDI)", mois_ciwan, 3)
+jours6 = jours_conges_acquis('employe', 5, mois_prestes_annee_precedente=mois_ciwan)
+check("Jours conges Ciwan 2027 (3 mois CDI seulement)", jours6, 5.0)
+print(f"  (si on avait compte les 2 mois STU a tort: {jours_conges_acquis('employe',5,5)} jours -- ERREUR evitee)")
+
+ouvre, msg = verifier_statut_ouvre_droit('STU')
+check("STU n'ouvre pas de droit", 0.0 if ouvre else 1.0, 1.0)
+print(f"  Message: {msg[:80]}...")
+
+ouvre2, _ = verifier_statut_ouvre_droit('CDI')
+check("CDI ouvre bien un droit", 1.0 if ouvre2 else 0.0, 1.0)
+
+# Garde-fou: statut etudiant ne donne jamais rien meme avec des mois
+jours7 = jours_conges_acquis('etudiant', 5, mois_prestes_annee_precedente=12)
+check("Statut etudiant avec 12 mois = toujours 0", jours7, 0.0)
 
 print()
 print("=" * 70)

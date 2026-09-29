@@ -2319,3 +2319,106 @@ def traiter_demande(dossier_id, demande_id):
     ctx = get_context_base(); ctx['tenant'] = get_tenant()
     return render_template('portail_demande.html', demande=demande, data=data,
                            dossier=dossier, dossier_actif=dossier, **ctx)
+
+# ── GESTION DES CONGES ────────────────────────────────────────────────
+@app.route('/travailleur/<int:travailleur_id>/conges', methods=['GET', 'POST'])
+@login_required
+def conges_travailleur(travailleur_id):
+    from psycopg2.extras import RealDictCursor
+    from conges_legaux import jours_conges_acquis, double_pecule_employe, pecule_ouvrier_information
+    from datetime import date as _d
+
+    travailleur = get_travailleur(travailleur_id)
+    dossier = get_dossier(travailleur['dossier_id'])
+    ctx = get_context_base(); ctx['tenant'] = get_tenant()
+
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    if request.method == 'POST':
+        annee = int(request.form['annee_vacances'])
+        mois_ref = int(request.form.get('mois_prestes_reference', 0) or 0)
+        jours_sem = float(request.form.get('jours_semaine_reference', 5) or 5)
+        jours_pris = float(request.form.get('jours_pris', 0) or 0)
+        pecule_verse = float(request.form.get('double_pecule_verse', 0) or 0)
+        date_vers = request.form.get('date_versement_pecule') or None
+        notes = request.form.get('notes', '')
+
+        # Determiner le statut pour le calcul
+        cur.execute("""SELECT type_contrat, cp_key FROM contrats
+            WHERE travailleur_id=%s AND statut='actif'
+            ORDER BY date_debut DESC LIMIT 1""", (travailleur_id,))
+        c = cur.fetchone()
+        cp_key = (c['cp_key'] if c else None) or travailleur.get('cp_key') or 'CP 200'
+        try:
+            from regles_cp import get_regles_cp
+            statut = get_regles_cp(cp_key).get('type_travailleur_defaut', 'employe')
+        except Exception:
+            statut = 'employe'
+
+        jours_acquis = jours_conges_acquis(statut, jours_sem, mois_ref)
+
+        cur.execute("""INSERT INTO conges_droits
+            (travailleur_id, annee_vacances, mois_prestes_reference,
+             jours_semaine_reference, jours_acquis, jours_pris,
+             double_pecule_verse, date_versement_pecule, notes, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            ON CONFLICT (travailleur_id, annee_vacances)
+            DO UPDATE SET mois_prestes_reference=EXCLUDED.mois_prestes_reference,
+                jours_semaine_reference=EXCLUDED.jours_semaine_reference,
+                jours_acquis=EXCLUDED.jours_acquis,
+                jours_pris=EXCLUDED.jours_pris,
+                double_pecule_verse=EXCLUDED.double_pecule_verse,
+                date_versement_pecule=EXCLUDED.date_versement_pecule,
+                notes=EXCLUDED.notes, updated_at=NOW()""",
+            (travailleur_id, annee, mois_ref, jours_sem, jours_acquis,
+             jours_pris, pecule_verse, date_vers, notes))
+        conn.commit()
+        cur.close(); conn.close()
+        return redirect(url_for('conges_travailleur', travailleur_id=travailleur_id))
+
+    # GET: charger l'historique
+    cur.execute("""SELECT * FROM conges_droits WHERE travailleur_id=%s
+        ORDER BY annee_vacances DESC""", (travailleur_id,))
+    historique = [dict(r) for r in cur.fetchall()]
+
+    # Contrat actif pour determiner statut + salaire
+    cur.execute("""SELECT type_contrat, cp_key, salaire_horaire, salaire_mensuel,
+        heures_jour, jours_semaine FROM contrats
+        WHERE travailleur_id=%s AND statut='actif'
+        ORDER BY date_debut DESC LIMIT 1""", (travailleur_id,))
+    contrat = cur.fetchone()
+    cur.close(); conn.close()
+
+    cp_key = (contrat['cp_key'] if contrat else None) or travailleur.get('cp_key') or 'CP 200'
+    try:
+        from regles_cp import get_regles_cp
+        regles = get_regles_cp(cp_key)
+        statut = regles.get('type_travailleur_defaut', 'employe')
+    except Exception:
+        statut = 'employe'
+    is_etudiant_contrat = bool(contrat and contrat['type_contrat'] == 'STU')
+
+    # Estimation pecule pour l'annee en cours (informatif)
+    estimation = None
+    annee_courante = _d.today().year
+    ligne_courante = next((h for h in historique if h['annee_vacances'] == annee_courante), None)
+    if ligne_courante and ligne_courante['mois_prestes_reference']:
+        if statut == 'employe' and not is_etudiant_contrat:
+            sal_mensuel = 0.0
+            if contrat:
+                if contrat.get('salaire_mensuel'):
+                    sal_mensuel = float(contrat['salaire_mensuel'])
+                elif contrat.get('salaire_horaire'):
+                    hs = float(contrat.get('heures_jour') or 7.6) * int(contrat.get('jours_semaine') or 5)
+                    sal_mensuel = round(float(contrat['salaire_horaire']) * hs * 52 / 12, 2)
+            estimation = {
+                'type': 'employe',
+                'double_pecule': double_pecule_employe(sal_mensuel, ligne_courante['mois_prestes_reference']),
+                'salaire_base': sal_mensuel,
+            }
+
+    return render_template('conges_travailleur.html',
+        travailleur=travailleur, dossier=dossier, dossier_actif=dossier,
+        historique=historique, statut=statut, cp_key=cp_key,
+        is_etudiant_contrat=is_etudiant_contrat,
+        estimation=estimation, annee_courante=annee_courante, **ctx)
