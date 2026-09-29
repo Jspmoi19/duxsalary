@@ -1,0 +1,216 @@
+# -*- coding: utf-8 -*-
+"""
+regles_cp.py — DuxSalary
+SOURCE UNIQUE DE VÉRITÉ pour les règles légales par CP.
+Toute donnée ici doit avoir une source et une date. Ne jamais coder un taux
+en dur ailleurs dans le moteur — tout passe par ce fichier ou par la table
+BDD baremes_cp pour les montants qui changent (barèmes salariaux).
+
+Dernière vérification: 29/09/2026
+Sources: ONSS instructions DmfA, SPF Emploi (salairesminimums.be),
+         SPF Finances (précompte), recoupé avec aureussocial.be
+"""
+
+# ─────────────────────────────────────────────────────────────────
+# TAUX ONSS DE BASE 2026 (identiques pour tous secteurs marchands)
+# ─────────────────────────────────────────────────────────────────
+ONSS = {
+    'personnel_taux': 0.1307,          # part travailleur, tous statuts ordinaires
+    # Pas de taux patronal global unique: chaque CP a son propre taux facial
+    # (validé contre fiches réelles). Voir 'onss_patronal_taux_base' dans REGLES_CP.
+    'patronal_taux_defaut': 0.2508,    # fallback si une CP ne précise rien (à éviter)
+    'coeff_ouvrier': 1.08,             # base ONSS ouvrier = brut × 1.08 (pécule ONVA)
+    'etudiant_personnel': 0.0271,      # cotisation solidarité étudiant — part travailleur
+    'etudiant_patronal': 0.0542,       # cotisation solidarité étudiant — part patronale
+    'etudiant_fonds_amiante': 0.0001,  # +0,01% fonds amiante, part patronale seulement
+    'quota_etudiant_heures_an': 650,   # quota annuel légal
+}
+
+# Réduction structurelle — montant plafond trimestriel par profil (2026)
+# Formule: réduction dégressive avec le salaire trimestriel, plafonnée à ce montant
+# pour les bas salaires, décroît ensuite. On applique le plafond si S_trim <= seuil bas.
+REDUCTION_STRUCTURELLE = {
+    'plafond_trimestriel_bas_salaire': 521.47,   # € — vérifié sur fiche FDLR Liantis 2025
+    'seuil_salaire_bas_mensuel': 2000.0,          # au-delà, réduction dégressive (approximation actuelle)
+}
+
+# Premier engagement — réduction groupe-cible (loi du 27/06/1969)
+PREMIER_ENGAGEMENT = {
+    '1er_travailleur_plafond_trim': 2000.0,   # depuis le 01/07/2026 (était 3100€ avant)
+    '1er_travailleur_illimite_duree': True,   # pas de limite dans le temps
+    'applicable_etudiant': False,             # CONFIRMÉ: ne s'applique jamais aux STU
+    'applicable_interim': False,
+}
+
+# Bonus à l'emploi 2026 — réduction ONSS personnelle pour bas/moyens salaires
+BONUS_EMPLOI = {
+    'seuil_bas_mensuel': 1945.38,       # sous ce seuil ETP: bonus maximal
+    'seuil_haut_mensuel': 2792.16,      # au-delà: bonus = 0
+    'volet_a_max': 229.01,              # tous statuts (ouvrier+employé), formule linéaire entre les 2 seuils
+    'volet_b_max': 69.93,               # OUVRIERS SEULEMENT, même logique de seuils
+    'applicable_etudiant': False,
+    'reduction_precompte_taux': 0.3314,  # 33,14% du bonus emploi = réduction précompte pro
+    'reduction_precompte_plafond_imposable': 3500.0,  # au-delà, pas de réduction précompte
+}
+
+# Précompte professionnel — quotités exemptées annuelles 2026 (SPF Finances)
+# ATTENTION: à remplacer par la vraie clé de calcul Annexe III dès qu'on l'a
+# récupérée officiellement — ceci reste une approximation par tranches.
+PRECOMPTE = {
+    'quotite_isole': 10160.0,
+    'quotite_couple_sans_revenus_partenaire': 11320.0,
+    'tranches_annuelles': [
+        (10160.0, 14850.0, 0.2675),
+        (14850.0, 24800.0, 0.3765),
+        (24800.0, 40480.0, 0.4360),
+        (40480.0, float('inf'), 0.4930),
+    ],
+    'reduction_enfants_charge': {1: 1850.0, 2: 4760.0, 3: 10660.0, 4: 16000.0, 5: 21000.0},
+    'applicable_etudiant': False,   # précompte toujours 0 pour étudiant STU
+}
+
+# Cotisation spéciale sécurité sociale (CSSS) — barème mensuel 2026
+CSSS = {
+    'tranches': [
+        (0, 1945.38, 0.0),
+        (1945.38, 2190.19, 0.076),   # + montant fixe additionné progressivement
+        (2190.19, 6038.82, 0.011),   # avec base 18.60€ (voir moteur pour formule complète)
+        (6038.82, float('inf'), 0.0),  # forfait 60.94€ max
+    ],
+}
+
+# ─────────────────────────────────────────────────────────────────
+# RÈGLES SPÉCIFIQUES PAR CP — la vraie source de vérité par secteur
+# ─────────────────────────────────────────────────────────────────
+REGLES_CP = {
+
+    'CP 140.03': {
+        'nom': 'Sous-commission paritaire du transport routier et logistique',
+        'type_travailleur_defaut': 'ouvrier',
+        'heures_semaine_defaut': 38,
+        'onss_patronal_taux_base': 0.27,   # validé contre fiche FDLR Liantis 2025 (taux facial CP140.03)
+        'avantage_repas': {
+            'applicable': True,
+            'montant_jour': 1.09,
+            'soumis_onss': True,     # OUI — c'est soumis, contrairement à CP 200/336
+        },
+        'cheques_repas': {
+            'obligatoire': True,
+            'valeur_totale_jour': 8.00,
+            'part_employeur_jour': 6.91,
+            'part_travailleur_jour': 1.09,
+            'depuis': '01/07/2026',
+        },
+        'rgpt': {
+            'applicable': True,
+            'montant_heure': 1.8175,
+            'depuis': '01/01/2026',
+        },
+        'sectoriel_notes': [
+            'Personnel roulant soumis au règlement CE n°561/2006 (temps de conduite/repos)',
+            'Cotisations sectorielles FSE + formation dues via DmfA trimestrielle, '
+            'NON couvertes par la réduction structurelle ni le premier engagement — '
+            'facturées séparément par l\'ONSS après DmfA.',
+        ],
+        'indexation': {'derniere': '01/01/2026 (+2.18%)', 'prochaine_attendue': 'janvier 2027'},
+        'source': 'salairesminimums.be PC 1400300, recoupé Liantis (FDLR 2025) + PayrollTool',
+        'derniere_verification': '28/09/2026',
+    },
+
+    'CP 200': {
+        'nom': 'Commission paritaire auxiliaire pour employés (CPAE)',
+        'type_travailleur_defaut': 'employe',
+        'heures_semaine_defaut': 38,
+        'onss_patronal_taux_base': 0.25,   # validé fiches Liantis employés CP200/336
+        'avantage_repas': {
+            'applicable': False,   # employés: pas d'avantage repas soumis ONSS de ce type
+        },
+        'cheques_repas': {
+            'obligatoire': False,   # PAS OBLIGATOIRE en CP 200 — accord d'entreprise requis
+            'valeur_max_legale_jour': 8.00,
+            'part_employeur_max_jour': 6.91,
+            'part_travailleur_min_jour': 1.09,
+        },
+        'rgpt': {'applicable': False},
+        'prime_fin_annee': {
+            'applicable': True,
+            'montant_brut_annuel': 330.84,
+            'proratise_selon_presence': True,
+        },
+        'fonds_formation': 'CEFORA',
+        'sectoriel_notes': [
+            'Classification par classe de fonction (A à D) — pas d\'ancienneté dans le barème minimum de base.',
+        ],
+        'indexation': {'derniere': '01/01/2026 (+2.21%)', 'prochaine_attendue': 'janvier 2027'},
+        'source': 'salairesminimums.be PC 2000000',
+        'derniere_verification': '29/09/2026',
+    },
+
+    'CP 336': {
+        'nom': 'Commission paritaire des professions libérales',
+        'type_travailleur_defaut': 'employe',
+        'heures_semaine_defaut': 38,
+        'onss_patronal_taux_base': 0.25,   # aligné employés CP200 — à reconfirmer spécifiquement pour 336
+        'avantage_repas': {'applicable': False},
+        'cheques_repas': {
+            'obligatoire': False,   # à vérifier par CCT d'entreprise — pas d'obligation sectorielle générale connue
+            'part_employeur_usuelle_jour': 6.91,
+            'part_travailleur_usuelle_jour': 1.09,
+        },
+        'rgpt': {'applicable': False},
+        'transport': {
+            'train_remboursement_pct': 80,   # 80% du prix carte 2e classe
+            'velo_indemnite_km': 0.32,
+        },
+        'sectoriel_notes': [
+            'Pas de classification de fonctions officielle: un seul minimum sectoriel.',
+            'Statut "professionnel libéral entrée (103%)" = critère de STATUT '
+            '(activité intellectuelle indépendante + déontologie imposée), '
+            'PAS un barème générique — ne l\'appliquer que si le travailleur '
+            'correspond réellement à cette définition légale (ex: expert-comptable '
+            'stagiaire, pas un aide-comptable).',
+            'Salaire plafonné à 3.500€ brut temps plein pour l\'indexation au 01/01/2026 spécifiquement.',
+        ],
+        'indexation': {'derniere': '01/09/2026 (+2%)', 'prochaine_attendue': 'janvier 2027'},
+        'source': 'salairesminimums.be PC 3360000, CGSLB CP336, aureussocial.be',
+        'derniere_verification': '29/09/2026',
+    },
+
+    'CP 121': {
+        'nom': 'Commission paritaire pour le nettoyage',
+        'type_travailleur_defaut': 'ouvrier',
+        'heures_semaine_defaut': 36.5,   # ATTENTION: différent des autres CP (pas 38h)
+        'onss_patronal_taux_base': 0.27,   # ⚠️ NON VALIDÉ — taux ouvrier standard par défaut, à confirmer avant Yassin
+        'avantage_repas': {'applicable': False},   # à confirmer — pas d'avantage repas standard connu
+        'cheques_repas': {
+            'obligatoire': True,
+            'valeur_totale_jour': 3.09,
+            'depuis': '01/01/2026',
+            # part employeur/travailleur non confirmées avec certitude — À VÉRIFIER avant Yassin
+        },
+        'rgpt': {
+            'applicable': True,
+            'montant_heure': 1.63,
+        },
+        'sectoriel_notes': [
+            '⚠️ NON ENCORE VALIDÉ contre une fiche réelle — dossier Yassin est le premier '
+            'cas d\'usage. Vérifier: part CR employeur/travailleur exactes, avantages '
+            'sectoriels spécifiques (prime vêtements, prime saleté), fonds de sécurité '
+            'd\'existence propre au nettoyage.',
+        ],
+        'indexation': {'derniere': '01/07/2026', 'prochaine_attendue': 'à vérifier'},
+        'source': 'salairesminimums.be PC 1210000 — À RECOUPER avant premier client actif',
+        'derniere_verification': '29/09/2026',
+    },
+}
+
+
+def get_regles_cp(cp_key: str) -> dict:
+    """Retourne les règles d'une CP, ou lève une erreur explicite si CP non gérée."""
+    if cp_key not in REGLES_CP:
+        raise ValueError(
+            f"CP '{cp_key}' non définie dans regles_cp.py — "
+            f"aucun calcul de paie ne doit être fait pour une CP non documentée. "
+            f"CP disponibles: {list(REGLES_CP.keys())}"
+        )
+    return REGLES_CP[cp_key]
