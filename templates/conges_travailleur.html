@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Congés — {{ travailleur.prenom }} {{ travailleur.nom }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="/travailleur/{{ travailleur.id }}" class="btn-back">← {{ travailleur.prenom }} {{ travailleur.nom }}</a>
+    <h2>🏖️ Congés légaux & pécule de vacances</h2>
+  </div>
+</div>
+
+<!-- Rappel de la regle -->
+<div class="card" style="margin-bottom:16px;border-left:4px solid #1F4E79">
+  <div class="card-body" style="padding:14px 18px">
+    <div style="font-size:12px;font-weight:700;color:#1F4E79;text-transform:uppercase;margin-bottom:8px">
+      Règle du décalage d'un an
+    </div>
+    <p style="font-size:13px;color:#444;margin:0 0 8px">
+      Les congés de l'année <b>N</b> se calculent sur les mois prestés durant l'année <b>N-1</b>
+      (l'« exercice de vacances »). Un travailleur qui n'a rien presté en N-1
+      n'a <b>aucun droit</b> à congé payé en N.
+    </p>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;margin-top:10px">
+      <div style="padding:8px 12px;background:{% if statut == 'ouvrier' %}#fff3cd{% else %}#e8f0f8{% endif %};border-radius:6px">
+        <b>Statut : {{ statut|upper }}</b> ({{ cp_key }})
+      </div>
+      {% if statut == 'ouvrier' %}
+      <div style="padding:8px 12px;background:#f5f7fa;border-radius:6px">
+        ⚠️ Le pécule est payé par l'<b>ONVA</b>, pas par l'employeur
+      </div>
+      {% else %}
+      <div style="padding:8px 12px;background:#f5f7fa;border-radius:6px">
+        Double pécule = <b>92 %</b> d'un mois brut, payé par l'employeur (mai/juin)
+      </div>
+      {% endif %}
+      {% if is_etudiant_contrat %}
+      <div style="padding:8px 12px;background:#fde8e8;border-radius:6px;color:#c0392b">
+        ⚠️ Contrat étudiant — régime de congés distinct, à vérifier au cas par cas
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Estimation en cours -->
+{% if estimation %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #27ae60">
+  <div class="card-body" style="padding:14px 18px">
+    <div style="font-size:12px;font-weight:700;color:#27ae60;text-transform:uppercase;margin-bottom:6px">
+      Estimation double pécule {{ annee_courante }}
+    </div>
+    <div style="font-size:20px;font-weight:700;color:#1F4E79">{{ "%.2f"|format(estimation.double_pecule) }} €</div>
+    <div style="font-size:11px;color:#888;margin-top:4px">
+      Base : {{ "%.2f"|format(estimation.salaire_base) }} € brut/mois × 92 %, proratisé
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Formulaire -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Encoder / mettre à jour une année</h3></div>
+  <div class="card-body" style="padding:18px">
+    <form method="POST">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px">
+        <div class="form-group">
+          <label class="form-label">Année de vacances</label>
+          <input type="number" name="annee_vacances" value="{{ annee_courante }}" required class="form-control">
+          <small style="font-size:11px;color:#888">L'année où les congés sont PRIS</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mois prestés l'année précédente</label>
+          <input type="number" name="mois_prestes_reference" min="0" max="12" value="0" required class="form-control">
+          <small style="font-size:11px;color:#888">0 à 12 — base du calcul</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Régime (jours/semaine)</label>
+          <input type="number" name="jours_semaine_reference" step="0.5" min="1" max="6" value="5" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Jours déjà pris</label>
+          <input type="number" name="jours_pris" step="0.5" min="0" value="0" class="form-control">
+        </div>
+        {% if statut != 'ouvrier' %}
+        <div class="form-group">
+          <label class="form-label">Double pécule versé (€)</label>
+          <input type="number" name="double_pecule_verse" step="0.01" min="0" value="0" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date versement pécule</label>
+          <input type="date" name="date_versement_pecule" class="form-control">
+        </div>
+        {% endif %}
+      </div>
+      <div class="form-group" style="margin-top:14px">
+        <label class="form-label">Notes</label>
+        <input type="text" name="notes" class="form-control" placeholder="Ex: périodes assimilées, maladie longue durée...">
+      </div>
+      <button type="submit" class="btn btn-primary" style="margin-top:12px">💾 Enregistrer</button>
+    </form>
+  </div>
+</div>
+
+<!-- Historique -->
+{% if historique %}
+<div class="card">
+  <div class="card-header"><h3>Historique des droits</h3></div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Année</th>
+        <th style="text-align:center">Mois prestés N-1</th>
+        <th style="text-align:center">Régime</th>
+        <th style="text-align:right">Jours acquis</th>
+        <th style="text-align:right">Jours pris</th>
+        <th style="text-align:right">Solde</th>
+        {% if statut != 'ouvrier' %}<th style="text-align:right">Pécule versé</th>{% endif %}
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for h in historique %}
+      {% set solde = (h.jours_acquis or 0) - (h.jours_pris or 0) %}
+      <tr>
+        <td style="font-weight:700">{{ h.annee_vacances }}</td>
+        <td style="text-align:center">{{ h.mois_prestes_reference }}</td>
+        <td style="text-align:center">{{ "%.1f"|format(h.jours_semaine_reference) }}j/sem</td>
+        <td style="text-align:right;font-weight:600">{{ "%.1f"|format(h.jours_acquis or 0) }}</td>
+        <td style="text-align:right">{{ "%.1f"|format(h.jours_pris or 0) }}</td>
+        <td style="text-align:right;font-weight:700;color:{% if solde > 0 %}#27ae60{% elif solde < 0 %}#e74c3c{% else %}#888{% endif %}">
+          {{ "%.1f"|format(solde) }}
+        </td>
+        {% if statut != 'ouvrier' %}
+        <td style="text-align:right">
+          {% if h.double_pecule_verse and h.double_pecule_verse > 0 %}
+            {{ "%.2f"|format(h.double_pecule_verse) }} €
+            {% if h.date_versement_pecule %}<br><small style="color:#888">{{ h.date_versement_pecule.strftime('%d/%m/%Y') }}</small>{% endif %}
+          {% else %}<span style="color:#ccc">—</span>{% endif %}
+        </td>
+        {% endif %}
+        <td style="font-size:12px;color:#888">{{ h.notes or '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body" style="padding:24px;text-align:center;color:#888">
+    Aucun droit encodé pour ce travailleur.
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
