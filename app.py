@@ -1670,10 +1670,32 @@ def generer_fiche_depuis_calendrier(dimona_id):
                 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][mois]
     cp_key = contrat['cp_key'] if contrat else 'CP 140.03'
 
+    # Suggestion prime de fin d'annee (decembre uniquement, indicative)
+    prime_suggestion = None
+    if mois == 12:
+        try:
+            from regles_cp import get_regles_cp
+            from prime_fin_annee import calculer_prime_fin_annee
+            regles_prime = get_regles_cp(cp_key).get('prime_fin_annee')
+            if regles_prime and contrat and contrat.get('date_debut'):
+                periode_fin_calc = date(annee, mois, cal.monthrange(annee, mois)[1])
+                anciennete_m = (periode_fin_calc.year - contrat['date_debut'].year) * 12 + \
+                               (periode_fin_calc.month - contrat['date_debut'].month)
+                sal_h = float(contrat.get('salaire_horaire') or 0)
+                heures_sem_c = float(contrat.get('heures_semaine') or 38)
+                sal_mensuel_calc = float(contrat.get('salaire_mensuel') or 0) or \
+                    round(sal_h * heures_sem_c * 52 / 12, 2)
+                prime_suggestion = calculer_prime_fin_annee(
+                    regles_prime, salaire_mensuel_brut=sal_mensuel_calc,
+                    mois_prestes_annee=12, anciennete_mois=anciennete_m)
+        except Exception as ex:
+            app.logger.warning(f"Suggestion prime fin annee: {ex}")
+            prime_suggestion = None
+
     ctx = get_context_base()
     ctx['tenant'] = get_tenant()
     return render_template('generer_fiche_form.html',
-        dimona=dimona, contrat=contrat,
+        dimona=dimona, contrat=contrat, prime_suggestion=prime_suggestion,
         annee=annee, mois=mois, mois_nom=mois_nom,
         cp_key=cp_key,
         vehicule_societe=dimona.get('vehicule_societe', False),

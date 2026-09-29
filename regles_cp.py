@@ -226,8 +226,20 @@ REGLES_CP = {
         'rgpt': {'applicable': False},
         'prime_fin_annee': {
             'applicable': True,
+            'mode': 'mois_salaire',
+            'coefficient': 1.0,
+            'anciennete_minimale_mois': 6,
+            'proratise_selon_mois_prestes': True,
+            'echeance': '31 decembre au plus tard',
+            'source': 'CCT CP 200 / CGSLB / Acerta, verifie 29/09/2026',
+        },
+        'prime_annuelle_sectorielle': {
+            'applicable': True,
+            'mode': 'montant_fixe',
             'montant_brut_annuel': 330.84,
-            'proratise_selon_presence': True,
+            'proratise_selon_mois_prestes': True,
+            'convertible_en_avantage': True,
+            'source': 'CCT CP 200, montant au 01/01/2026',
         },
         'fonds_formation': 'CEFORA',
         'sectoriel_notes': [
@@ -253,6 +265,17 @@ REGLES_CP = {
         'transport': {
             'train_remboursement_pct': 80,   # 80% du prix carte 2e classe
             'velo_indemnite_km': 0.32,
+        },
+        'prime_fin_annee': {
+            'applicable': True,
+            'mode': 'montant_fixe_fourchette',
+            'montant_min': 35.0,
+            'montant_max': 105.0,
+            'periode_reference': '01/10 au 31/12',
+            'echeance': 'janvier (annee suivante)',
+            'source': 'hellosafe.be / CCT CP336 -- fourchette a preciser '
+                       'selon la CCT exacte applicable, montant non unique',
+            'a_verifier': True,
         },
         'sectoriel_notes': [
             'Pas de classification de fonctions officielle: un seul minimum sectoriel.',

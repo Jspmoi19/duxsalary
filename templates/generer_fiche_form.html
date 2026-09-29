@@ -116,15 +116,87 @@
 
 </div>
 
-<div style="text-align:right;margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
-  <div class="form-group" style="margin-bottom:12px">
-    <label style="font-size:13px;font-weight:600">Frais nets (exonérés ONSS et IPP)</label>
-    <div style="display:flex;gap:10px;align-items:center;margin-top:6px">
-      <input type="number" name="frais_nets" step="0.01" min="0" value="0"
-             class="form-control" style="max-width:120px" placeholder="0.00">
-      <span style="font-size:13px;color:var(--text-muted)">€/mois (frais forfaitaires, GSM, bureau...)</span>
+<div class="card" style="margin-top:16px">
+  <div class="card-header"><h3>Montants complémentaires</h3></div>
+  <div class="card-body" style="padding:16px">
+
+    <div class="form-group" style="margin-bottom:16px">
+      <label style="font-size:13px;font-weight:600">Frais nets (exonérés ONSS et IPP)</label>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:6px">
+        <input type="number" name="frais_nets" step="0.01" min="0" value="0"
+               class="form-control" style="max-width:140px" placeholder="0.00">
+        <span style="font-size:13px;color:var(--text-muted)">€/mois (frais forfaitaires, GSM, bureau...)</span>
+      </div>
     </div>
+
+    {% if mois == 12 %}
+    <div style="padding:12px 14px;background:#fff8e1;border-left:4px solid #f39c12;border-radius:6px;margin-bottom:14px">
+      <div style="font-weight:700;color:#b9770e;font-size:13px;margin-bottom:4px">
+        🎁 Décembre — Prime de fin d'année (optionnel)
+      </div>
+      <div style="font-size:12px;color:#555;margin-bottom:10px">
+        Que la CP le prévoie ou non — libre à vous d'accorder une prime.
+        Vérifiez le montant/l'éligibilité si la CCT en prévoit une.
+        Soumise à l'ONSS 13,07 % et au précompte « rémunérations exceptionnelles ».
+      </div>
+      {% if prime_suggestion and prime_suggestion.droit %}
+      <div style="font-size:12px;background:white;border:1px solid #f39c12;border-radius:4px;padding:6px 10px;margin-bottom:8px">
+        💡 <b>Indication CP {{ cp_key }}</b> —
+        {% if prime_suggestion.montant_brut is not none %}
+          suggestion : <b>{{ "%.2f"|format(prime_suggestion.montant_brut) }} €</b> brut
+          <span style="color:#888">({{ prime_suggestion.methode }})</span>
+        {% elif prime_suggestion.montant_min is defined %}
+          fourchette légale : <b>{{ prime_suggestion.montant_min }}€ à {{ prime_suggestion.montant_max }}€</b>
+          <span style="color:#888">— montant exact selon la CCT, à vérifier</span>
+        {% else %}
+          {{ prime_suggestion.raison }}
+        {% endif %}
+      </div>
+      {% elif prime_suggestion and not prime_suggestion.droit %}
+      <div style="font-size:12px;background:#fde8e8;border:1px solid #e74c3c;border-radius:4px;padding:6px 10px;margin-bottom:8px;color:#c0392b">
+        ⚠️ {{ prime_suggestion.raison }}
+      </div>
+      {% endif %}
+      <div style="display:flex;gap:10px;align-items:center">
+        <input type="number" name="prime_fin_annee" step="0.01" min="0" value="0"
+               class="form-control" style="max-width:140px" placeholder="0.00">
+        <span style="font-size:13px;color:var(--text-muted)">€ brut — laisser 0 si non due, c'est vous qui décidez</span>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if mois in [5, 6] %}
+    <div style="padding:12px 14px;background:#e8f5e9;border-left:4px solid #27ae60;border-radius:6px;margin-bottom:14px">
+      <div style="font-weight:700;color:#1e7e34;font-size:13px;margin-bottom:4px">
+        🏖️ {{ 'Mai' if mois == 5 else 'Juin' }} — Double pécule de vacances (employés)
+      </div>
+      <div style="font-size:12px;color:#555;margin-bottom:10px">
+        Employés uniquement (les ouvriers sont payés par l'ONVA).
+        Retenue spéciale de 13,07 % sur 85/92 du montant, puis précompte
+        « allocations exceptionnelles » à saisir séparément.
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div>
+          <label style="font-size:11px;color:#666;display:block">Pécule brut</label>
+          <input type="number" name="double_pecule" step="0.01" min="0" value="0"
+                 class="form-control" style="max-width:140px" placeholder="0.00">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#666;display:block">Précompte vacances</label>
+          <input type="number" name="precompte_pecule" step="0.01" min="0" value="0"
+                 class="form-control" style="max-width:140px" placeholder="0.00">
+        </div>
+        <span style="font-size:12px;color:var(--text-muted);align-self:flex-end">
+          Laisser 0 si non dû
+        </span>
+      </div>
+    </div>
+    {% endif %}
+
   </div>
+</div>
+
+<div style="text-align:right;margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
   <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois }}" class="btn btn-secondary">Annuler</a>
   <button type="submit" class="btn btn-primary">🧾 Générer la fiche de paie</button>
 </div>
