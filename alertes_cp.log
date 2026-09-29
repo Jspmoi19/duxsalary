@@ -20,3 +20,14 @@ CP actives: ['CP 336', 'CP 200', 'CP 140.03']
 
 2 CP avec changements — envoi email...
 Email envoyé — 2 CP modifiées
+[29/09/2026 08:00] Démarrage surveillance CP...
+CP actives: ['CP 336', 'CP 200', 'CP 140.03']
+  CP 336 — SPF Emploi — CP 336: impossible de récupérer
+  ⚠️ CHANGEMENT: CP 336 — Aureus CP 336
+  CP 200 — SPF Emploi — CP 200: impossible de récupérer
+  ⚠️ CHANGEMENT: CP 200 — Aureus CP 200
+  CP 140.03 — SPF Emploi — CP 140.03: impossible de récupérer
+  CP 140.03 — ONSS CP 140.03: pas de changement
+
+2 CP avec changements — envoi email...
+Email envoyé — 2 CP modifiées

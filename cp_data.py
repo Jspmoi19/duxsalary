@@ -11,9 +11,9 @@ CP_DATABASE = {
         },
         'duree_travail': {'heures_semaine': 38, 'heures_jour': 7.6},
         'baremes': {
-            'Minimum sectoriel': {'horaire': 13.205, 'mensuel': 2174.42},
-            'Salaire d\'entrée (103%)': {'horaire': 13.601, 'mensuel': 2239.65},
-            'Étudiant (95%)': {'horaire': 12.545, 'mensuel': 2065.70},
+            'Minimum sectoriel': {'horaire': 13.706, 'mensuel': 2254.30},
+            'Professionnel libéral (103%)': {'horaire': 14.117, 'mensuel': 2321.93},
+            'Étudiant (95%)': {'horaire': 13.021, 'mensuel': 2141.59},
         },
         'avantages': ['Transport ferroviaire : 80% du prix carte 2e classe',
                       'Indemnité vélo : 0,32 €/km'],

@@ -57,10 +57,12 @@ CP_INDEMNITES = {
     'CP 336': {
         'avantage_repas_jour': 0.0,
         'cr_part_coll_jour': 1.09,
-        'cr_part_empl_jour': 5.82,
+        'cr_part_empl_jour': 6.91,
         'onss_patronal': 0.2500,
         'type_travailleur': 'employe',
-        'sal_bareme_mensuel_etp': 2174.42,
+        'sal_bareme_mensuel_etp': 2254.30,    # minimum sectoriel 01/09/2026
+        'sal_bareme_prof_liberal': 2321.93,   # professionnel libéral 103%
+        'sal_bareme_etudiant': 2141.59,       # étudiant 95%
     },
     'CP 121': {
         'avantage_repas_jour': 0.0,
