@@ -14,6 +14,13 @@ Sources: ONSS instructions DmfA, SPF Emploi (salairesminimums.be),
 # ─────────────────────────────────────────────────────────────────
 # TAUX ONSS DE BASE 2026 (identiques pour tous secteurs marchands)
 # ─────────────────────────────────────────────────────────────────
+# Exonération fiscale (précompte) de l'indemnité km domicile-travail en VOITURE
+# — DISTINCTE du plafond ONSS (qui suit le taux officiel au km, pas de plafond
+# annuel en euros). Source: Securex + fin.belgium.be, année de revenus 2026.
+# Au-delà de ce montant annuel, le surplus doit être réintégré dans la base
+# imposable pour le calcul du précompte (mais PAS dans la base ONSS).
+INDEMNITE_KM_VOITURE_EXONERATION_ANNUELLE = 500.0
+
 ONSS = {
     'personnel_taux': 0.1307,          # part travailleur, tous statuts ordinaires
     # Pas de taux patronal global unique: chaque CP a son propre taux facial
