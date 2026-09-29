@@ -151,3 +151,94 @@ def pecule_ouvrier_information(remuneration_brute_annuelle_reference: float) -> 
         'paye_par': 'ONVA ou caisse de vacances sectorielle (PAS l\'employeur)',
         'periode_paiement_usuelle': 'entre le 2 mai et le 30 juin',
     }
+
+
+
+def calculer_mois_depuis_contrats(contrats: list, annee_reference: int) -> dict:
+    """Calcule AUTOMATIQUEMENT les mois ouvrant droit a conges, a partir de
+    la liste des contrats d'un travailleur, pour une annee de reference.
+
+    contrats: liste de dicts avec au minimum 'type_contrat', 'date_debut',
+              'date_fin' (peut etre None = contrat en cours), 'statut'.
+    annee_reference: l'annee N-1 (l'exercice de vacances).
+
+    Regles appliquees:
+    - Seuls les contrats ACTIFS sont comptes (les archives sont des
+      versions remplacees, les compter ferait double emploi).
+    - Les contrats STU sont EXCLUS (cotisation de solidarite -> aucun droit).
+    - Un mois est compte des qu'il y a au moins un jour preste dedans.
+    - Les mois couverts par plusieurs contrats ne sont comptes QU'UNE FOIS.
+    - Les contrats incoherents (date_fin < date_debut) sont ignores et
+      signales, plutot que de produire un calcul silencieusement faux.
+
+    Retourne un dict detaille pour que l'utilisateur voie le raisonnement.
+    """
+    from datetime import date as _dt
+
+    mois_ouvrant = set()       # {(annee, mois)} -- set = pas de doublon
+    mois_exclus_stu = set()
+    contrats_ignores = []
+    detail = []
+
+    for c in contrats:
+        statut_c = (c.get('statut') or '').lower()
+        if statut_c != 'actif':
+            continue  # on ignore les archives (versions remplacees)
+
+        type_c = (c.get('type_contrat') or '').upper()
+        debut = c.get('date_debut')
+        fin = c.get('date_fin')
+
+        if not debut:
+            contrats_ignores.append({'id': c.get('id'), 'raison': 'pas de date de debut'})
+            continue
+
+        # Garde-fou: donnees incoherentes
+        if fin and fin < debut:
+            contrats_ignores.append({
+                'id': c.get('id'),
+                'raison': f'date_fin ({fin}) anterieure a date_debut ({debut})'
+            })
+            continue
+
+        # Borner sur l'annee de reference
+        debut_annee = _dt(annee_reference, 1, 1)
+        fin_annee = _dt(annee_reference, 12, 31)
+        d = max(debut, debut_annee)
+        f = min(fin, fin_annee) if fin else fin_annee
+        if d > f:
+            continue  # contrat hors de l'annee de reference
+
+        # Collecter les mois couverts
+        mois_de_ce_contrat = set()
+        annee_cur, mois_cur = d.year, d.month
+        while (annee_cur, mois_cur) <= (f.year, f.month):
+            mois_de_ce_contrat.add((annee_cur, mois_cur))
+            mois_cur += 1
+            if mois_cur > 12:
+                mois_cur = 1
+                annee_cur += 1
+
+        if type_c in TYPES_CONTRAT_SANS_DROIT_CONGES:
+            mois_exclus_stu |= mois_de_ce_contrat
+            detail.append({'id': c.get('id'), 'type': type_c,
+                            'mois': sorted(mois_de_ce_contrat),
+                            'compte': False, 'raison': 'contrat etudiant'})
+        else:
+            mois_ouvrant |= mois_de_ce_contrat
+            detail.append({'id': c.get('id'), 'type': type_c,
+                            'mois': sorted(mois_de_ce_contrat),
+                            'compte': True, 'raison': ''})
+
+    # Un mois couvert a la fois par un STU et un contrat ordinaire compte
+    # (le contrat ordinaire ouvre le droit pour ce mois-la)
+    mois_exclus_purs = mois_exclus_stu - mois_ouvrant
+
+    return {
+        'mois_ouvrant_droit': min(12, len(mois_ouvrant)),
+        'mois_detail': sorted(mois_ouvrant),
+        'mois_exclus_stu': sorted(mois_exclus_purs),
+        'nb_mois_exclus_stu': len(mois_exclus_purs),
+        'contrats_ignores': contrats_ignores,
+        'detail_par_contrat': detail,
+    }
