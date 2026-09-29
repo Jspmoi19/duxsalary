@@ -2381,6 +2381,15 @@ def conges_travailleur(travailleur_id):
         ORDER BY annee_vacances DESC""", (travailleur_id,))
     historique = [dict(r) for r in cur.fetchall()]
 
+    # CALCUL AUTOMATIQUE des mois ouvrant droit, depuis les contrats reels
+    cur.execute("""SELECT id, type_contrat, statut, date_debut, date_fin
+        FROM contrats WHERE travailleur_id=%s ORDER BY date_debut""", (travailleur_id,))
+    tous_contrats = [dict(r) for r in cur.fetchall()]
+    from conges_legaux import calculer_mois_depuis_contrats
+    calcul_auto = {}
+    for annee_vac in (_d.today().year, _d.today().year + 1):
+        calcul_auto[annee_vac] = calculer_mois_depuis_contrats(tous_contrats, annee_vac - 1)
+
     # Contrat actif pour determiner statut + salaire
     cur.execute("""SELECT type_contrat, cp_key, salaire_horaire, salaire_mensuel,
         heures_jour, jours_semaine FROM contrats
@@ -2420,5 +2429,5 @@ def conges_travailleur(travailleur_id):
     return render_template('conges_travailleur.html',
         travailleur=travailleur, dossier=dossier, dossier_actif=dossier,
         historique=historique, statut=statut, cp_key=cp_key,
-        is_etudiant_contrat=is_etudiant_contrat,
+        is_etudiant_contrat=is_etudiant_contrat, calcul_auto=calcul_auto,
         estimation=estimation, annee_courante=annee_courante, **ctx)
