@@ -276,13 +276,11 @@ def calculer_fiche_paie(
     if profil.bonus_emploi_applicable:
         # Salaire PROPRE du travailleur en ETP (pas le minimum sectoriel — corrigé 29/09/2026)
         sal_propre_etp = salaire_horaire * heures_semaine * 52 / 12
-        bonus_a, bonus_b = profil.bonus_emploi(sal_propre_etp, ratio_tp)
-        # Plafonner au max de l'ONSS dû
-        total_bonus = min(bonus_a + bonus_b, onss_trav_brut)
-        if bonus_a + bonus_b > 0:
-            f = total_bonus / (bonus_a + bonus_b)
-            bonus_a = round(bonus_a * f, 2)
-            bonus_b = round(total_bonus - bonus_a, 2)
+        # Ecretement CORRECT integre dans bonus_emploi(): volet B en premier,
+        # jusqu'a 0, PUIS volet A si toujours insuffisant -- PAS une reduction
+        # proportionnelle des deux (erreur corrigee le 29/09/2026, verifiee
+        # au centime contre une simulation Group S reelle CP336 employe).
+        bonus_a, bonus_b = profil.bonus_emploi(sal_propre_etp, ratio_tp, onss_du=onss_trav_brut)
 
     onss_trav_net = round(max(0, onss_trav_brut - bonus_a - bonus_b), 2)
     brut_imposable = round(brut_onss - onss_trav_net, 2)
