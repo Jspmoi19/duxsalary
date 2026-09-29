@@ -373,7 +373,7 @@ def calculer_fiche_paie(
     coeff_ouvrier = profil.coeff_base_onss_patronal
     base_onss_pat = round(brut_onss * coeff_ouvrier, 2)
     onss_pat_brut = round(base_onss_pat * onss_pat_taux_base, 2)
-    red_struct = 0.0 if is_etudiant else calcul_reduction_structurelle(base_onss_pat, onss_pat_taux_base)
+    red_struct = 0.0 if is_etudiant else profil.reduction_structurelle(onss_pat_brut, base_salariale_mensuelle=base_onss_pat)
 
     # Premier engagement
     red_pe = 0.0
