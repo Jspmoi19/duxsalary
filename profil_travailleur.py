@@ -94,6 +94,19 @@ class ProfilTravailleur:
         return round(t['patronal_base'] + t['moderation_salariale'] + t['vacances_trimestrielle'], 6)
 
     @property
+    def onss_patronal_reductible_taux(self) -> float:
+        """Part patronale sur laquelle les reductions PEUVENT s'appliquer:
+        cotisation de base + moderation. Instructions ONSS 2026/3: la
+        cotisation vacances ouvriers (code 253) n'entre PAS dans le plafond."""
+        t = self.onss_officiel
+        return round(t['patronal_base'] + t['moderation_salariale'], 6)
+
+    @property
+    def onss_vacances_trimestrielle_taux(self) -> float:
+        """Cotisation trimestrielle vacances ouvriers (code 253): due en entier."""
+        return self.onss_officiel['vacances_trimestrielle']
+
+    @property
     def vacances_annuelles_taux(self) -> float:
         """Cotisation ANNUELLE vacances ouvriers (10.27% en 2026), facturee
         par avis de debit l'annee suivante -- a provisionner dans le cout."""
@@ -296,6 +309,64 @@ class ProfilTravailleur:
         else:
             pg = self._r2(G * mu * self._beta(mu, False) / 3)
         return round(min(pg, max(0.0, onss_patronal_apres_struct)), 2)
+
+    def precompte_detail(self, brut_imposable_mensuel, etat_civil='celibataire', nb_enfants=0,
+                         partenaire_revenus_pro='non', reference_date=None):
+        """Etapes du calcul du precompte (formule-cle SPF), pour affichage.
+        Doit toujours donner le meme resultat que precompte_brut (teste)."""
+        if not self.precompte_applicable:
+            return {'applicable': False, 'precompte_mensuel': 0.0, 'etapes': []}
+        P = get_precompte_params(reference_date or self.reference_date or _date.today())
+        annuel = brut_imposable_mensuel * 12
+        frais = min(annuel * P['frais_forfaitaires_taux'], P['frais_forfaitaires_plafond_annuel'])
+        net = max(0.0, annuel - frais)
+        def tranches(base):
+            impot = 0.0
+            for bas, haut, taux, fixe in P['tranches_annuelles']:
+                if base <= bas: break
+                h = min(base, haut) if haut != float('inf') else base
+                impot = fixe + (h - bas) * taux
+            return impot
+        couple = etat_civil in ('marie', 'cohabitation_legale') and partenaire_revenus_pro == 'non'
+        etapes = [("Revenu imposable annuel", round(annuel, 2)),
+                  ("Frais professionnels forfaitaires (30%, plafond)", -round(frais, 2)),
+                  ("Revenu net imposable annuel", round(net, 2))]
+        if couple:
+            pc = round(min(net * P['quotient_conjugal_taux'], P['quotient_conjugal_plafond_annuel']), 2)
+            i1, i2 = round(tranches(net - pc), 2), round(tranches(pc), 2)
+            etapes += [("Quotient conjugal attribue au conjoint", pc),
+                       ("Impot sur la part du travailleur", i1), ("Impot sur la part du conjoint", i2),
+                       ("Reduction de base couple", -P['reduction_base_couple_annuelle'])]
+            impot = max(0.0, i1 + i2 - P['reduction_base_couple_annuelle'])
+        else:
+            ib = round(tranches(net), 2)
+            etapes += [("Impot selon les tranches", ib), ("Reduction de base isole", -P['reduction_base_isole_annuelle'])]
+            impot = max(0.0, ib - P['reduction_base_isole_annuelle'])
+        red_enf = P['reduction_enfants_charge'].get(min(nb_enfants, 8), 0.0)
+        if nb_enfants > 8:
+            red_enf += (nb_enfants - 8) * P['reduction_enfant_supplementaire_au_dela_8']
+        if red_enf:
+            etapes.append((f"Reduction enfants a charge ({nb_enfants})", -red_enf))
+        annuel_final = max(0.0, impot - red_enf)
+        etapes.append(("Impot annuel", round(annuel_final, 2)))
+        return {'applicable': True, 'annee_fiscale': P['annee'], 'source': P['source'],
+                'etapes': etapes, 'precompte_mensuel': round(annuel_final / 12, 2)}
+
+    def precompte_exceptionnel(self, montant_imposable, remuneration_annuelle_normale,
+                               nature='autres', reference_date=None):
+        """Precompte sur allocation exceptionnelle (prime, 13e mois, double pecule).
+        nature: 'double_pecule' ou 'autres'. Taux lu sur la remuneration annuelle
+        brute NORMALE, applique en une fois (bareme en escalier, pas progressif).
+        Retourne (precompte, taux)."""
+        if not self.precompte_applicable or montant_imposable <= 0:
+            return 0.0, 0.0
+        P = get_precompte_params(reference_date or self.reference_date or _date.today())
+        r = max(0.0, remuneration_annuelle_normale or 0.0)
+        for bas, haut, t_dp, t_autres in P['allocations_exceptionnelles']:
+            if bas <= r < haut or haut == float('inf'):
+                taux = t_dp if nature == 'double_pecule' else t_autres
+                return self._r2(montant_imposable * taux), taux
+        return 0.0, 0.0
 
     def precompte_brut(self, brut_imposable_mensuel: float, etat_civil: str = 'celibataire',
                         nb_enfants: int = 0, partenaire_revenus_pro: str = 'non',

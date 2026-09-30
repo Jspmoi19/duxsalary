@@ -239,7 +239,10 @@ REGLES_CP = {
             'montant_brut_annuel': 330.84,
             'proratise_selon_mois_prestes': True,
             'convertible_en_avantage': True,
-            'source': 'CCT CP 200, montant au 01/01/2026',
+            'mois_paiement': 6,   # payee en JUIN (pas en decembre)
+            'periode_reference': 'du 1er juin N-1 au 31 mai N',
+            'proratise_selon_regime': True,
+            'source': 'CCT CP 200, montant au 01/01/2026; CGSLB, CSC-CNE, SETCa (paiement en juin)',
         },
         'fonds_formation': 'CEFORA',
         'sectoriel_notes': [
@@ -305,7 +308,7 @@ REGLES_CP = {
         },
         'rgpt': {
             'applicable': True,
-            'montant_heure': 1.63,
+            'montant_jour': 1.63,   # PAR JOUR (ACCG, primes CP 121 au 01/07/2026) - corrige le 30/09/2026
         },
         'sectoriel_notes': [
             '⚠️ NON ENCORE VALIDÉ contre une fiche réelle — dossier Yassin est le premier '

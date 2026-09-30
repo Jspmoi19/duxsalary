@@ -181,6 +181,180 @@ def categorie_existe(categorie, reference_date=None):
     data = _charger(dispo[-1])
     return any(r.get('EmployerClass') == categorie for r in data['cotisations'])
 
+
+# ─────────────────────────────────────────────────────────────────
+# COTISATIONS PATRONALES COMPLEMENTAIRES (non couvertes par les reductions)
+# ─────────────────────────────────────────────────────────────────
+# Regles officielles (Instructions administratives ONSS 2026/3 + legende de
+# la feuille "comb" du fichier des taux):
+#   810 FFE speciale   : due par TOUS les employeurs, pour tout travailleur
+#                        soumis au chomage (donc pas les etudiants) - p.343
+#   809 FFE de base    : employeur commercial (code FFE "C")
+#   811 FFE de base    : employeur non commercial (code FFE "B")
+#                        codes FFE N / O: pas de FFE de base - p.342
+#   855 cotisation 1,60% : employeurs de code d'importance 3 a 9
+#   Fonds sectoriels (codes 820-839) : dus si la combinaison categorie/code
+#                        travailleur porte le renvoi (1) = "due, sauf apprentis
+#                        de plus de 18 ans" -- ex. 831 Fonds social CP 200 (cat. 010)
+# La reduction structurelle et le premier engagement NE s'appliquent PAS a ces
+# cotisations (Instructions p.376: pas sur le FFE ni sur la moderation du 1,60%).
+_LIBELLES = None
+
+def libelle_code(code):
+    global _LIBELLES
+    if _LIBELLES is None:
+        p = os.path.join(DOSSIER, 'libelles_codes.json')
+        _LIBELLES = json.load(open(p)) if os.path.exists(p) else {'cotisations': {}, 'reductions': {}}
+    return _LIBELLES['cotisations'].get(str(code), f"Cotisation code {code}")
+
+
+def cotisations_complementaires(statut, reference_date, categorie=CATEGORIE_DEFAUT,
+                                 code_ffe=None, code_importance=None):
+    """Liste des cotisations patronales complementaires dues pour ce statut.
+    Chaque element: code, type, libelle, taux (fraction, moderation incluse),
+    reductible (toujours False), source, a_verifier.
+    code_ffe / code_importance: donnees du dossier (Repertoire des employeurs).
+    S'ils ne sont pas renseignes, seules les cotisations certaines sont
+    appliquees et un avertissement est renvoye."""
+    avert = []
+    if statut == 'etudiant':
+        return [], avert   # etudiant: cotisation de solidarite uniquement
+    voulu = trimestre_de(reference_date)
+    dispo = [c for c in _disponibles() if c <= voulu]
+    if not dispo:
+        return [], [f"Aucun fichier de taux pour {voulu}."]
+    data = _charger(dispo[-1])
+    code_trav = CODE_TRAVAILLEUR[statut]
+
+    def taux(code, type_cot='0'):
+        for r in data['cotisations']:
+            if r.get('EmployerClass') == categorie and r.get('ContributionWorkerCode') == code \
+               and r.get('ContributionType') == type_cot:
+                return float(r.get('TotalRate') or 0) / 100
+        return None
+
+    comb = {r.get('ContributionWorkerCode'): r.get('OwednessCode')
+            for r in data['combinaisons']
+            if r.get('EmployerClass') == categorie and r.get('WorkerCode') == code_trav}
+    res = []
+
+    def ajouter(code, type_cot, source, a_verifier=False):
+        t = taux(code, type_cot)
+        if t is None:
+            avert.append(f"Code {code} type {type_cot} absent du fichier {dispo[-1]} (categorie {categorie}).")
+            return
+        res.append({'code': code, 'type': type_cot, 'libelle': libelle_code(code),
+                    'taux': t, 'reductible': False, 'source': source, 'a_verifier': a_verifier})
+
+    # 810 FFE speciale -- tous les employeurs
+    if code_ffe != 'O' and '810' in comb:
+        ajouter('810', '0', "Instructions ONSS 2026/3 p.343: due par tous les employeurs")
+
+    # 809 / 811 FFE de base selon le code FFE du dossier
+    imp = int(code_importance) if str(code_importance or '').isdigit() else None
+    if code_ffe == 'C':
+        if imp is not None and imp > 3:
+            ajouter('809', '5', "Instructions ONSS p.342: commercial, code d'importance > 3", a_verifier=True)
+        else:
+            ajouter('809', '0', "Instructions ONSS p.342: employeur commercial (FFE C), code d'importance <= 3")
+    elif code_ffe == 'B':
+        ajouter('811', '0', "Instructions ONSS p.342: employeur non commercial (FFE B)")
+    elif code_ffe in (None, ''):
+        avert.append("Code FFE non renseigne dans le dossier: FFE de base (809/811) non calcule.")
+
+    # 855 cotisation 1,60% -- codes d'importance 3 a 9
+    if imp is not None and 3 <= imp <= 9 and '855' in comb:
+        ajouter('855', '0', "Fichier des taux: employeurs de code d'importance 3 a 9")
+    elif imp is None:
+        avert.append("Code d'importance non renseigne: cotisation 1,60% (employeurs >= 10 travailleurs) non verifiee.")
+
+    # Fonds sectoriels propres a la categorie (renvoi (1) = du)
+    for code, owed in sorted(comb.items()):
+        if code and '820' <= code <= '839' and owed == '1':
+            ajouter(code, '0', f"Fichier des taux: due pour la categorie {categorie} (renvoi 1)")
+    return res, avert
+
+
+# ─────────────────────────────────────────────────────────────────
+# LISTES POUR LES MENUS DEROULANTS DU DOSSIER
+# ─────────────────────────────────────────────────────────────────
+# Code d'importance -- source: BCSS Datawarehouse, variable "Code d'importance"
+# (ONSS). Codes 5 a 8: grille habituelle, non reprise explicitement dans la source.
+CODES_IMPORTANCE = [
+    ('0', 'Indéfini'),
+    ('1', 'Moins de 5 travailleurs'),
+    ('2', '5 à 9 travailleurs'),
+    ('3', '10 à 19 travailleurs'),
+    ('4', '20 à 49 travailleurs'),
+    ('5', '50 à 99 travailleurs'),
+    ('6', '100 à 199 travailleurs'),
+    ('7', '200 à 499 travailleurs'),
+    ('8', '500 à 999 travailleurs'),
+    ('9', 'Plus de 1.000 travailleurs'),
+]
+# Code FFE -- Instructions administratives ONSS 2026/3 p.342-343
+CODES_FFE = [
+    ('C', 'C — Commercial / industriel : redevable du FFE de base (809)'),
+    ('B', 'B — Non commercial (ASBL, professions libérales…) : FFE de base (811)'),
+    ('N', 'N — Exclu du FFE de base (catégorie pourtant redevable)'),
+    ('O', 'O — Catégorie exclue du FFE de base'),
+]
+_CACHE_CATEGORIES = {}
+# Noms courts des fonds sectoriels, d'apres les libelles officiels (feuille comb)
+NOMS_FONDS = {
+    '820': "FSE ouvriers (108 %)", '825': "Pension sectorielle ouvriers",
+    '826': "FSE ouvriers (forfait)", '827': "Pension sectorielle ouvriers (forfait)",
+    '830': "FSE employés", '831': "Fonds social CP 200", '832': "Fonds social CP 201",
+    '833': "Fonds social socio-culturel (CP 329.02)", '835': "Pension sectorielle employés",
+    '836': "FSE employés (forfait)", '837': "Pension sectorielle employés (forfait)",
+}
+
+def liste_categories(reference_date=None):
+    """Toutes les categories employeur du fichier de taux, avec une description
+    GENEREE a partir des donnees officielles: fonds sectoriels propres
+    (codes 820-839 dus) et taux de base particuliers. Le fichier ONSS ne
+    fournit pas de libelle de categorie (annexe 27 non disponible)."""
+    import re
+    ref = reference_date or date.today()
+    dispo = [c for c in _disponibles() if c <= trimestre_de(ref)] or _disponibles()
+    if not dispo:
+        return []
+    cle = dispo[-1]
+    if cle in _CACHE_CATEGORIES:
+        return _CACHE_CATEGORIES[cle]
+    data = _charger(cle)
+    bases, fonds = {}, {}
+    taux_idx = {}
+    for r in data['cotisations']:
+        cat, code = r.get('EmployerClass'), r.get('ContributionWorkerCode')
+        if code in ('015', '495'):
+            bases.setdefault(cat, set()).add((r.get('EmployerRate'), r.get('SalaryModerationRate')))
+        if code and r.get('ContributionType') == '0':
+            taux_idx[(cat, code)] = r.get('TotalRate')
+    for r in data['combinaisons']:
+        code = r.get('ContributionWorkerCode') or ''
+        if '820' <= code <= '839' and r.get('OwednessCode') == '1' and r.get('WorkerCode') in ('015', '495'):
+            fonds.setdefault(r.get('EmployerClass'), set()).add(code)
+    res = []
+    for cat in sorted(set(bases) | set(fonds) | {r.get('EmployerClass') for r in data['cotisations']}):
+        morceaux = []
+        for code in sorted(fonds.get(cat, [])):
+            nom = NOMS_FONDS.get(code, f"Cotisation {code}")
+            t = taux_idx.get((cat, code))
+            morceaux.append(f"{nom} {t} %" if t else nom)
+        b = bases.get(cat, set())
+        if b and b != {('19.88', '5.12')}:
+            e, m = sorted(b)[0]
+            morceaux.insert(0, f"taux de base {e} % + {m} %")
+        if cat == '000':
+            desc = 'Secteur privé général' + (' — ' + ', '.join(morceaux) if morceaux else '')
+        else:
+            desc = ', '.join(morceaux) if morceaux else 'Taux de base général, sans fonds sectoriel propre'
+        res.append({'code': cat, 'description': desc})
+    _CACHE_CATEGORIES[cle] = res
+    return res
+
+
 if __name__ == '__main__':
     if len(sys.argv) == 3 and sys.argv[1] == 'importer':
         cle, rapport = importer(sys.argv[2])

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Calcul de paie — {{ dimona.prenom }} {{ dimona.nom }} — {{ mois_nom }} {{ annee }}{% endblock %}
+{% block content %}
+<style>
+  .calc-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+  .calc-card{background:#fff;border:1px solid #e3e8ef;border-radius:8px;padding:14px;text-align:center}
+  .calc-card .lbl{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.3px}
+  .calc-card .val{font-size:21px;font-weight:700;margin-top:4px}
+  .calc-table{width:100%;border-collapse:collapse;font-size:13px}
+  .calc-table th{background:#f5f7fa;text-align:left;padding:7px 10px;font-size:11px;color:#666;text-transform:uppercase;border-bottom:1px solid #e3e8ef}
+  .calc-table td{padding:7px 10px;border-bottom:1px solid #f0f2f5;vertical-align:top}
+  .calc-table td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .calc-table tr.info td{color:#888;font-style:italic}
+  .calc-table tr.total td{font-weight:700;background:#fafbfc}
+  .calc-src{font-size:11px;color:#999}
+  .neg{color:#c0392b}
+</style>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois }}" class="btn-back">← Calendrier</a>
+    <h2>🧮 Calcul de paie — {{ dimona.prenom }} {{ dimona.nom }}</h2>
+    <p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">
+      {{ mois_nom }} {{ annee }} · {{ data.cp_key }} · {{ data.type_contrat }}
+      · Rien n'est enregistré tant que vous n'avez pas cliqué sur « Générer la fiche PDF ».
+    </p>
+  </div>
+</div>
+
+{% if data.alertes_calcul %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #f39c12">
+  <div class="card-body" style="padding:12px 16px">
+    {% for a in data.alertes_calcul %}
+    <div style="font-size:13px;color:#8a5a00;padding:2px 0">⚠️ {{ a }}</div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="calc-cards">
+  <div class="calc-card"><div class="lbl">Brut ONSS</div><div class="val" style="color:#1F4E79">{{ "%.2f"|format(data.brut_onss) }} €</div></div>
+  <div class="calc-card"><div class="lbl">Net à payer</div><div class="val" style="color:#27ae60">{{ "%.2f"|format(data.salaire_net) }} €</div></div>
+  <div class="calc-card"><div class="lbl">ONSS patronal net</div><div class="val" style="color:#e67e22">{{ "%.2f"|format(data.onss_patronal) }} €</div></div>
+  <div class="calc-card"><div class="lbl">Coût employeur</div><div class="val" style="color:#c0392b">{{ "%.2f"|format(data.cout_employeur) }} €</div></div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Paramètres utilisés</h3></div>
+  <div class="card-body" style="padding:12px 16px;font-size:13px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px 18px">
+    <div>Taux ONSS : <b>{{ data.onss_trimestre_utilise }}</b>{% if data.onss_parametres_reportes %} <span style="color:#e67e22">(reporté)</span>{% endif %}</div>
+    <div>Fichier ONSS du : <b>{{ data.onss_date_fichier or '—' }}</b></div>
+    <div>Catégorie employeur : <b>{{ data.onss_categorie_employeur }}</b></div>
+    <div>Taux patronal appliqué : <b>{{ "%.2f"|format(data.onss_taux_patronal_applique * 100) }} %</b></div>
+    <div>Statut : <b>{{ 'Étudiant' if data.is_etudiant else ('Ouvrier' if data.is_ouvrier else 'Employé') }}</b></div>
+    <div>Salaire de base : <b>{{ data.libelle_salaire_base }}</b></div>
+  </div>
+</div>
+
+{% for bloc in data.detail_calcul %}
+{% if bloc.lignes %}
+<div class="card" style="margin-bottom:14px">
+  <div class="card-header"><h3>{{ bloc.titre }}</h3></div>
+  <table class="calc-table">
+    <thead><tr><th>Élément</th><th style="text-align:right">Base</th><th style="text-align:right">Taux</th><th style="text-align:right">Montant</th><th>Source / détail</th></tr></thead>
+    <tbody>
+    {% for l in bloc.lignes %}
+      <tr class="{{ 'info' if l.info else '' }} {{ 'total' if l.total else '' }}">
+        <td>{{ l.libelle }}</td>
+        <td class="num">{% if l.base is not none and l.base is number %}{{ "%.2f"|format(l.base) }}{% endif %}</td>
+        <td class="num">{% if l.taux %}{{ "%.2f"|format(l.taux * 100) }} %{% endif %}</td>
+        <td class="num {{ 'neg' if l.montant is not none and l.montant < 0 else '' }}">{% if l.montant is not none %}{{ "%.2f"|format(l.montant) }} €{% endif %}</td>
+        <td class="calc-src">{{ l.source or '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endfor %}
+
+<form method="POST" action="/dimona/{{ dimona.id }}/generer-paie?annee={{ annee }}&mois={{ mois }}">
+  {% for k, v in champs %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin:18px 0 30px">
+    <button type="button" onclick="history.back()" class="btn btn-secondary">✏️ Modifier les paramètres</button>
+    <button type="submit" name="action" value="generer" class="btn btn-primary">🧾 Générer la fiche PDF</button>
+  </div>
+</form>
+{% endblock %}

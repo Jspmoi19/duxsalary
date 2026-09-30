@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Suivi des chèques — {{ dossier.nom }}{% endblock %}
+{% block content %}
+<style>
+  .ch-table{width:100%;border-collapse:collapse;font-size:13px}
+  .ch-table th{background:#f5f7fa;text-align:left;padding:7px 10px;font-size:11px;color:#666;text-transform:uppercase;border-bottom:1px solid #e3e8ef}
+  .ch-table td{padding:7px 10px;border-bottom:1px solid #f0f2f5;vertical-align:top}
+  .ch-table td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+  .b-oblig{background:#fde8e8;color:#c0392b}.b-ok{background:#e8f5e9;color:#1e7e34}.b-info{background:#eef2f7;color:#555}
+  .regle{padding:10px 14px;background:#f8fafc;border-radius:8px;margin-bottom:10px;font-size:13px}
+  .src{font-size:11px;color:#999}
+</style>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
+    <h2>🎟️ Suivi des chèques</h2>
+    <p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">Chèques-repas et écochèques : obligations sectorielles, configuration du dossier et quantités à commander.</p>
+  </div>
+</div>
+
+{% if obligatoire_non_active %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #c0392b;background:#fff5f5">
+  <div class="card-body" style="padding:12px 16px;font-size:13px;color:#a93226">
+    ⛔ <b>Obligation sectorielle non respectée</b> : au moins un travailleur a droit à des chèques-repas obligatoires ce mois-ci,
+    mais les chèques-repas ne sont pas activés pour ce dossier. Activez-les ci-dessous.
+  </div>
+</div>
+{% endif %}
+
+<!-- Regles applicables -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Règles applicables ({{ mois_nom }} {{ annee }})</h3></div>
+  <div class="card-body" style="padding:14px 16px">
+    {% for cp, r in regles.items() %}
+    <div class="regle">
+      <div style="font-weight:700;color:#1F4E79;margin-bottom:6px">{{ cp }}</div>
+      {% if not r.connue %}
+        <div>⚠️ CP non encore documentée dans le suivi des chèques : vérifier la CCT sectorielle.</div>
+      {% else %}
+        <div><b>Chèques-repas :</b>
+          {% if r.repas %}
+            <span class="badge b-oblig">obligatoires</span>
+            {{ "%.2f"|format(r.repas.valeur_introduction) }} € ({{ "%.2f"|format(r.repas.part_patronale_introduction) }} employeur + {{ "%.2f"|format(r.repas.part_travailleur) }} travailleur)
+            {% if r.repas.anciennete_min_mois %}· à partir de {{ r.repas.anciennete_min_mois }} mois d'ancienneté{% endif %}
+            · {{ r.repas.statuts|join(', ') }}
+            · si déjà octroyés avant le {{ r.repas.existant_avant.strftime('%d/%m/%Y') }} : +{{ "%.2f"|format(r.repas.augmentation_si_existant) }} € employeur
+            {% if r.repas.calcul %}<br>Nombre : {{ r.repas.calcul }}{% endif %}
+            {% if r.repas.alternative %}<br>{{ r.repas.alternative }}{% endif %}
+            <div class="src">Source : {{ r.repas.source }}{% if r.repas.au %} · valable jusqu'au {{ r.repas.au.strftime('%d/%m/%Y') }}{% endif %}</div>
+          {% else %}<span class="badge b-info">aucune obligation sectorielle</span> (octroi volontaire possible){% endif %}
+        </div>
+        <div style="margin-top:6px"><b>Écochèques :</b>
+          {% if r.eco %}
+            <span class="badge b-oblig">obligatoires</span>
+            {% if r.eco.montants_par_regime %}
+              {% for seuil, m in r.eco.montants_par_regime %}{{ m|int }} €{% if seuil %} (≥ {{ (seuil*100)|int }} %){% else %} (moins){% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
+              — payés en {{ ['','janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][r.eco.mois_paiement] }}, période {{ r.eco.periode_reference }}
+            {% else %}
+              {{ r.eco.montant_temps_plein|int }} € temps plein en {{ ['','janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][r.eco.mois_paiement] }} · personnel {{ r.eco.personnel|join(' / ') }} · {{ r.eco.condition }}
+            {% endif %}
+            {% if r.eco.convertible %}<br>{{ r.eco.convertible }}{% endif %}
+            <div class="src">Source : {{ r.eco.source }}</div>
+          {% else %}<span class="badge b-info">aucune obligation sectorielle</span>{% endif %}
+        </div>
+        {% for x in r.autres %}<div style="margin-top:6px;font-size:12px;color:#555">• {{ x }}</div>{% endfor %}
+      {% endif %}
+    </div>
+    {% endfor %}
+    <div class="src">Cadre légal 2026 : chèque-repas max {{ "%.2f"|format(cadre.repas_valeur_max) }} € (part patronale max {{ "%.2f"|format(cadre.repas_part_patronale_max) }} €, part travailleur min {{ "%.2f"|format(cadre.repas_part_travailleur_min) }} €) · écochèques max {{ cadre.eco_max_annuel|int }} €/an, valeur faciale max {{ cadre.eco_valeur_faciale_max|int }} €.</div>
+  </div>
+</div>
+
+<form method="POST">
+<!-- Configuration du dossier -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Configuration du dossier</h3></div>
+  <div class="card-body" style="padding:14px 16px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end">
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="repas_actif" {% if config.actif %}checked{% endif %}> <b>Chèques-repas activés</b></label>
+      <div><label class="form-label">Valeur faciale (€)</label>
+        <input class="form-control" name="repas_valeur" value="{{ config.valeur if config.valeur is not none else (suggestion.valeur_introduction if suggestion else '') }}"></div>
+      <div><label class="form-label">Part patronale (€)</label>
+        <input class="form-control" name="repas_part_patronale" value="{{ config.part_patronale if config.part_patronale is not none else (suggestion.part_patronale_introduction if suggestion else '') }}"></div>
+      <div><label class="form-label">Part travailleur (€)</label>
+        <input class="form-control" name="repas_part_travailleur" value="{{ config.part_travailleur if config.part_travailleur is not none else (suggestion.part_travailleur if suggestion else '1.09') }}"></div>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px">
+      <input type="checkbox" name="repas_octroi_avant_2025" {% if config.octroi_avant_2025 %}checked{% endif %}>
+      L'employeur octroyait déjà des chèques-repas avant l'accord sectoriel (règle « augmentation » au lieu de « introduction »)
+    </label>
+    {% if suggestion and config.valeur is none %}<div class="src" style="margin-top:4px">Valeurs pré-remplies avec la règle sectorielle d'introduction.</div>{% endif %}
+    <hr style="border:none;border-top:1px solid #eef1f5;margin:14px 0">
+    <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px">
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="eco_actif" {% if config.eco_actif %}checked{% endif %}> <b>Écochèques activés</b></label>
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="eco_convertis" {% if config.eco_convertis %}checked{% endif %}> Convertis en avantage équivalent (accord conclu)</label>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-top:12px">
+      <div><label class="form-label">Émetteur</label><input class="form-control" name="emetteur" value="{{ config.emetteur }}" placeholder="Monizze, Pluxee, Edenred…"></div>
+      <div><label class="form-label">Notes</label><input class="form-control" name="notes" value="{{ config.notes }}"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Cheques-repas du mois -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+    <h3>Chèques-repas à commander — {{ mois_nom }} {{ annee }}</h3>
+    <div style="display:flex;gap:6px">
+      <a class="btn btn-secondary btn-sm" href="?annee={{ annee if mois > 1 else annee - 1 }}&mois={{ mois - 1 if mois > 1 else 12 }}">◀</a>
+      <a class="btn btn-secondary btn-sm" href="?annee={{ annee if mois < 12 else annee + 1 }}&mois={{ mois + 1 if mois < 12 else 1 }}">▶</a>
+    </div>
+  </div>
+  <table class="ch-table">
+    <thead><tr><th>Travailleur</th><th>Statut / CP</th><th style="text-align:right">Prestations</th><th>Règle</th>
+      <th style="text-align:right">Nombre</th><th style="text-align:right">Valeur</th><th style="text-align:right">Employeur</th><th style="text-align:right">Travailleur</th></tr></thead>
+    <tbody>
+    {% for l in lignes %}
+      <tr>
+        <td><b>{{ l.travailleur.prenom }} {{ l.travailleur.nom }}</b><div class="src">ancienneté depuis {{ l.date_anciennete.strftime('%d/%m/%Y') }}</div></td>
+        <td>{{ l.statut }}<div class="src">{{ l.cp_key }}</div></td>
+        <td class="num">{{ l.jours }} j<div class="src">{{ "%.1f"|format(l.heures) }} h</div></td>
+        <td style="font-size:12px">
+          {% if l.repas.obligatoire %}<span class="badge b-oblig">obligatoire</span>{% elif not l.repas.eligible %}<span class="badge b-info">pas encore dû</span>{% elif config.actif %}<span class="badge b-ok">volontaire</span>{% endif %}
+          <div>{{ l.repas.motif }}</div>
+          {% for a in l.repas.alertes or [] %}<div style="color:#c0392b">⚠️ {{ a }}</div>{% endfor %}
+        </td>
+        <td class="num"><b>{{ l.repas.nombre }}</b></td>
+        <td class="num">{{ "%.2f"|format(l.repas.total_valeur or 0) }} €</td>
+        <td class="num">{{ "%.2f"|format(l.repas.total_patronal or 0) }} €</td>
+        <td class="num">{{ "%.2f"|format(l.repas.total_travailleur or 0) }} €</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" style="text-align:center;color:#888;padding:18px">Aucun travailleur avec un contrat actif.</td></tr>
+    {% endfor %}
+    </tbody>
+    {% if lignes %}
+    <tfoot><tr style="font-weight:700;background:#fafbfc">
+      <td colspan="4">Total à commander</td><td class="num">{{ tot.nombre }}</td><td class="num">{{ "%.2f"|format(tot.valeur) }} €</td>
+      <td class="num">{{ "%.2f"|format(tot.patronal) }} €</td><td class="num">{{ "%.2f"|format(tot.travailleur) }} €</td></tr></tfoot>
+    {% endif %}
+  </table>
+  <div class="src" style="padding:8px 14px">La part travailleur est retenue automatiquement sur la fiche de paie du mois. Les prestations proviennent du calendrier de chaque travailleur.</div>
+</div>
+
+<!-- Ecocheques -->
+{% set avec_eco = lignes|selectattr('eco')|list %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Écochèques — prochaine échéance</h3></div>
+  {% if avec_eco %}
+  <table class="ch-table">
+    <thead><tr><th>Travailleur</th><th>Période de référence</th><th style="text-align:right">Régime</th><th style="text-align:right">Mois</th>
+      <th>Type de personnel</th><th style="text-align:right">Montant prévu</th><th>Détail</th></tr></thead>
+    <tbody>
+    {% for l in avec_eco %}
+      <tr>
+        <td><b>{{ l.travailleur.prenom }} {{ l.travailleur.nom }}</b><div class="src">{{ l.cp_key }}</div></td>
+        <td>{{ l.eco.periode }}<div class="src">paiement {{ ['','janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][l.eco.mois_paiement or 0] }} {{ l.eco.annee_paiement }}</div></td>
+        <td class="num">{{ (l.eco.fraction_regime * 100)|int }} %</td>
+        <td class="num">{{ l.eco.mois_couverts }}/12</td>
+        <td>
+          {% if l.eco.regle and l.eco.regle.personnel is defined %}
+          <select name="categorie_personnel_{{ l.travailleur.id }}" class="form-control" style="max-width:170px">
+            <option value="">— À préciser —</option>
+            {% for v, lib in [('roulant','Roulant'),('non_roulant','Non roulant'),('garage','Garage')] %}
+            <option value="{{ v }}" {% if l.travailleur.categorie_personnel == v %}selected{% endif %}>{{ lib }}</option>
+            {% endfor %}
+          </select>
+          {% else %}<span class="src">—</span>{% endif %}
+        </td>
+        <td class="num"><b>{{ "%.2f"|format(l.eco.montant) }} €</b>{% if l.eco.nombre_cheques_10 %}<div class="src">{{ l.eco.nombre_cheques_10 }} × 10 €{% if l.eco.reste %} + {{ "%.2f"|format(l.eco.reste) }} €{% endif %}</div>{% endif %}</td>
+        <td style="font-size:12px">{{ l.eco.motif }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="src" style="padding:8px 14px">Prévision : les contrats en cours sont supposés se poursuivre jusqu'à la fin de la période. Prorata approché par mois ; la règle officielle compte les jours prestés et assimilés.
+    {% if config.eco_convertis %}<br><b>Écochèques convertis en avantage équivalent pour ce dossier : rien à commander.</b>{% endif %}</div>
+  {% else %}
+  <div class="card-body" style="padding:14px 16px;font-size:13px;color:#888">Aucune obligation d'écochèques pour les travailleurs de ce dossier.</div>
+  {% endif %}
+</div>
+
+<div style="display:flex;justify-content:flex-end;margin:0 0 30px">
+  <button type="submit" class="btn btn-primary">💾 Enregistrer la configuration</button>
+</div>
+</form>
+{% endblock %}

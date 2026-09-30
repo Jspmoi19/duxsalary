@@ -71,7 +71,7 @@ CP_INDEMNITES = {
         'avantage_repas_jour': 0.0,
         'cr_part_coll_jour': 1.09,
         'cr_part_empl_jour': 5.82,
-        'rgpt_heure': 1.63,
+        'rgpt_jour': 1.63,   # PAR JOUR (ACCG, primes CP 121 au 01/07/2026) - corrige le 30/09/2026
         'onss_patronal': 0.2700,
         'type_travailleur': 'ouvrier',
         'sal_bareme_mensuel_etp': 2696.49,  # indexé 01/07/2026
@@ -195,7 +195,10 @@ def calculer_fiche_paie(
     etat_civil='celibataire', nb_enfants=0,
     partenaire_revenus_pro='non', partenaire_pensions='non',
     salaire_mensuel_fixe=0.0,
-    categorie_employeur='000',
+    categorie_employeur='000', code_ffe=None, code_importance=None,
+    cheques_repas_calc=None,
+    prime_exceptionnelle=0.0, libelle_prime="Prime de fin d'année",
+    double_pecule=0.0, precompte_pecule_manuel=None,
     heures_semaine=38.0, heures_jour=7.6, jours_semaine=5,
     type_contrat='CDD', is_etudiant=False, premier_engagement=False,
     jours_prestes=0, heures_prestees=0.0,
@@ -317,7 +320,12 @@ def calculer_fiche_paie(
     # RGPT
     montant_rgpt = 0.0
     rgpt_h = cp.get('rgpt_heure', 0.0)
-    if rgpt_h > 0 and rgpt_actif and heures_prestees > 0:
+    rgpt_j = cp.get('rgpt_jour', 0.0)
+    if rgpt_j > 0 and rgpt_actif and jours_prestes > 0:
+        montant_rgpt = round(rgpt_j * jours_prestes, 2)
+        lignes_indemn.append({'libelle': f'Indemnité RGPT ({jours_prestes} j)',
+            'detail': f'{rgpt_j:.4f} €/jour', 'jours': jours_prestes, 'montant': montant_rgpt})
+    elif rgpt_h > 0 and rgpt_actif and heures_prestees > 0:
         montant_rgpt = round(rgpt_h * heures_prestees, 2)
         lignes_indemn.append({'libelle': f'Indemnité RGPT ({heures_prestees:.0f}h)',
             'detail': f'{rgpt_h:.4f} €/h', 'jours': 0, 'montant': montant_rgpt})
@@ -357,7 +365,18 @@ def calculer_fiche_paie(
     cr_coll = cp.get('cr_part_coll_jour', 0.0)
     cr_empl_j = cp.get('cr_part_empl_jour', 0.0)
     cr_empl_total = 0.0
-    if cheques_repas and cr_coll > 0 and jours_prestes > 0:
+    if cheques_repas_calc is not None:
+        # Nombre et montants calcules par le SUIVI DES CHEQUES du dossier
+        # (regles sectorielles: jours prestes, ou heures/7,4 en CP 121)
+        nb_cr = int(cheques_repas_calc.get('nombre') or 0)
+        if nb_cr > 0:
+            pt_cr = float(cheques_repas_calc.get('part_travailleur') or 0)
+            montant_cr_ded = -round(nb_cr * pt_cr, 2)
+            cr_empl_total = round(nb_cr * float(cheques_repas_calc.get('part_patronale') or 0), 2)
+            lignes_indemn.append({'libelle': f'Chèques-repas part travailleur ({nb_cr} x {pt_cr:.2f} €)',
+                'detail': f"{nb_cr} chèques de {float(cheques_repas_calc.get('valeur') or 0):.2f} € — suivi des chèques",
+                'jours': 0, 'montant': montant_cr_ded})
+    elif cheques_repas and cr_coll > 0 and jours_prestes > 0:
         montant_cr_ded = -round(cr_coll * jours_prestes, 2)
         cr_empl_total = round(cr_empl_j * jours_prestes, 2)
         lignes_indemn.append({'libelle': f'Chèques-repas part coll. (-{cr_coll:.2f} €/j)',
@@ -376,39 +395,163 @@ def calculer_fiche_paie(
         lignes_indemn.append({'libelle': 'Cotisation spéciale SS', 'montant': -css})
 
     # ── NET ───────────────────────────────────────────────────────────
-    total_indemn = montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + montant_cr_ded + montant_frais_nets - css
+    # ── ALLOCATIONS EXCEPTIONNELLES (prime, 13e mois, double pecule) ──────
+    # Hors bonus emploi et hors precompte mensuel: precompte special sur
+    # "allocations exceptionnelles" (bareme en escalier, parametres_dates 2026).
+    # Remuneration annuelle brute NORMALE = salaire mensuel x 12 (allocation exclue).
+    lignes_exc = []
+    net_exceptionnel = 0.0
+    remu_annuelle_normale = round((salaire_mensuel_fixe or brut_onss) * 12, 2)
+    prime_onss = prime_imposable = prime_precompte = 0.0
+    if prime_exceptionnelle and prime_exceptionnelle > 0 and not is_etudiant:
+        prime_onss = _r2_prime = round(prime_exceptionnelle * onss_pers_taux, 2)
+        prime_imposable = round(prime_exceptionnelle - prime_onss, 2)
+        prime_precompte, taux_pp_prime = profil.precompte_exceptionnel(
+            prime_imposable, remu_annuelle_normale, 'autres', reference_date=ref_date_fiscale)
+        net_prime = round(prime_imposable - prime_precompte, 2)
+        net_exceptionnel += net_prime
+        lignes_exc += [
+            {'libelle': f'{libelle_prime} (brut)', 'detail': 'Allocation exceptionnelle', 'jours': 0, 'montant': round(prime_exceptionnelle, 2)},
+            {'libelle': f'ONSS sur {libelle_prime.lower()}', 'detail': f'{onss_pers_taux*100:.2f} %', 'jours': 0, 'montant': -prime_onss},
+            {'libelle': f'Précompte sur {libelle_prime.lower()}', 'detail': f'{taux_pp_prime*100:.2f} % (barème allocations exceptionnelles)', 'jours': 0, 'montant': -prime_precompte},
+        ]
+    pecule_retenue = pecule_imposable = pecule_precompte = 0.0
+    if double_pecule and double_pecule > 0 and not is_etudiant:
+        # Retenue speciale 13,07% sur 85/92 du double pecule (Instructions ONSS, Securex)
+        pecule_base_soumise = round(double_pecule * 85 / 92, 2)
+        pecule_retenue = round(pecule_base_soumise * 0.1307, 2)
+        pecule_imposable = round(double_pecule - pecule_retenue, 2)
+        if precompte_pecule_manuel is not None and precompte_pecule_manuel > 0:
+            pecule_precompte, taux_pp_pec = round(precompte_pecule_manuel, 2), None
+        else:
+            pecule_precompte, taux_pp_pec = profil.precompte_exceptionnel(
+                pecule_imposable, remu_annuelle_normale, 'double_pecule', reference_date=ref_date_fiscale)
+        net_pecule = round(pecule_imposable - pecule_precompte, 2)
+        net_exceptionnel += net_pecule
+        lignes_exc += [
+            {'libelle': 'Double pécule de vacances (brut)', 'detail': 'Allocation exceptionnelle', 'jours': 0, 'montant': round(double_pecule, 2)},
+            {'libelle': 'Retenue double pécule', 'detail': f'13,07 % sur 85/92 ({pecule_base_soumise:.2f})', 'jours': 0, 'montant': -pecule_retenue},
+            {'libelle': 'Précompte double pécule', 'detail': ('saisi manuellement' if taux_pp_pec is None
+                        else f'{taux_pp_pec*100:.2f} % (barème allocations exceptionnelles)'), 'jours': 0, 'montant': -pecule_precompte},
+        ]
+    lignes_indemn.extend(lignes_exc)
+    net_exceptionnel = round(net_exceptionnel, 2)
+
+    total_indemn = montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + montant_cr_ded + montant_frais_nets - css + net_exceptionnel
     salaire_net = round(brut_imposable - precompte + total_indemn, 2)
 
     # ── CHARGES PATRONALES ────────────────────────────────────────────
     # Coefficient 108% pour ouvriers (pécule vacances ONVA — source ONSS officiel)
     coeff_ouvrier = profil.coeff_base_onss_patronal
     base_onss_pat = round(brut_onss * coeff_ouvrier, 2)
-    onss_pat_brut = round(base_onss_pat * onss_pat_taux_base, 2)
     ref_date_struct = periode_fin if periode_fin else date.today()
+    _r2 = profil._r2   # arrondi officiel ONSS (0,005 vers le haut)
+    # 1) Part REDUCTIBLE: cotisation de base + moderation (seule base des reductions)
+    onss_pat_reductible = _r2(base_onss_pat * profil.onss_patronal_reductible_taux)
+    # 2) Cotisation vacances ouvriers (code 253): hors plafond des reductions
+    onss_vacances_253 = _r2(base_onss_pat * profil.onss_vacances_trimestrielle_taux)
+    # 3) Cotisations complementaires (FFE, 1,60%, fonds sectoriels): non reductibles
+    from onss_taux import cotisations_complementaires
+    cotis_compl, avertissements_onss = cotisations_complementaires(
+        profil.statut, ref_date_struct, categorie=categorie_employeur or '000',
+        code_ffe=code_ffe, code_importance=code_importance)
+    for cc in cotis_compl:
+        cc['base'] = base_onss_pat
+        cc['montant'] = _r2(base_onss_pat * cc['taux'])
+    total_compl = round(sum(cc['montant'] for cc in cotis_compl), 2)
+    onss_pat_brut = round(onss_pat_reductible + onss_vacances_253 + total_compl, 2)
+
     # Jours / heures payes du mois (codes prestation ONSS 1, 3, 4, 5...):
     # prestations + jours feries payes + conges payes par l'employeur
     jours_payes_onss = (jours_prestes or 0) + (jours_feries_payes or 0) + (jours_conge or 0)
     heures_payees_onss = float(heures_prestees or 0) + float(heures_feries or 0) + \
                          float(jours_conge or 0) * float(heures_jour or 0)
     red_struct = 0.0 if is_etudiant else profil.reduction_structurelle(
-        onss_pat_brut, reference_date=ref_date_struct, remuneration_mois=brut_onss,
+        onss_pat_reductible, reference_date=ref_date_struct, remuneration_mois=brut_onss,
         jours_payes=jours_payes_onss, heures_payees=heures_payees_onss)
 
-    # Premier engagement
+    # Premier engagement (plafonne a la part reductible restante)
     red_pe = 0.0
     if premier_engagement and not is_etudiant:
-        reste_apres_struct = round(max(0, onss_pat_brut - red_struct), 2)
+        reste_apres_struct = round(max(0, onss_pat_reductible - red_struct), 2)
         red_pe = profil.reduction_premier_engagement(
             reste_apres_struct, ratio_tp, reference_date=ref_date_struct,
             jours_payes=jours_payes_onss, heures_payees=heures_payees_onss)
 
-    onss_pat_net = round(max(0, onss_pat_brut - red_struct - red_pe), 2)
+    onss_pat_net = round(max(0, onss_pat_reductible - red_struct - red_pe)
+                         + onss_vacances_253 + total_compl, 2)
     # Cotisation ANNUELLE vacances ouvriers (10.27% des remunerations a 108%),
     # facturee par l'ONSS l'annee suivante -- provisionnee ici pour un cout reel
     provision_vacances_annuelles = round(brut_onss * profil.coeff_base_onss_patronal
                                          * profil.vacances_annuelles_taux, 2)
+    # Cotisations patronales sur la prime (le double pecule employe n'en supporte pas).
+    # Prudence: aucune reduction n'est imputee sur la prime (calcul conservateur).
+    onss_pat_prime = 0.0
+    if prime_exceptionnelle and prime_exceptionnelle > 0 and not is_etudiant:
+        onss_pat_prime = _r2(prime_exceptionnelle * profil.coeff_base_onss_patronal *
+                             (profil.onss_patronal_taux_base + sum(cc['taux'] for cc in cotis_compl)))
+    onss_pat_net = round(onss_pat_net + onss_pat_prime, 2)
     cout_empl = round(brut_onss + onss_pat_net + montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + cr_empl_total
-                      + provision_vacances_annuelles, 2)
+                      + provision_vacances_annuelles + (prime_exceptionnelle or 0) + (double_pecule or 0), 2)
+
+    # ── DETAIL COMPLET DU CALCUL (page "Calculer la paie") ─────────────
+    onss_info = profil.onss_officiel
+    pp_detail = profil.precompte_detail(brut_imposable_precompte, etat_civil, nb_enfants,
+                                        partenaire_revenus_pro, reference_date=ref_date_fiscale)
+    def L(libelle, montant, base=None, taux=None, source=None, info=False, total=False):
+        return {'libelle': libelle, 'montant': round(montant, 2) if montant is not None else None,
+                'base': base, 'taux': taux, 'source': source, 'info': info, 'total': total}
+    detail_calcul = [
+        {'titre': 'Rémunération brute', 'lignes':
+            [L(l['libelle'], l['montant'], base=l.get('base'), source=f"{l.get('jours',0)} j / {l.get('heures',0)} h")
+             for l in lignes_salaire] +
+            [L('Brut soumis à l\'ONSS', brut_onss, total=True)]},
+        {'titre': 'ONSS travailleur', 'lignes': [
+            L('Cotisation personnelle', -onss_trav_brut, base=brut_onss, taux=onss_pers_taux,
+              source=f"TechLib ONSS {onss_info['trimestre_utilise']}, code {onss_info['code_travailleur']}"),
+            L('Bonus à l\'emploi volet A', bonus_a, source='Tables datées bonus emploi (parametres_dates)'),
+            L('Bonus à l\'emploi volet B', bonus_b, source='Écrêtement : volet B en premier'),
+            L('ONSS travailleur net', -onss_trav_net, total=True)]},
+        {'titre': 'Précompte professionnel', 'lignes':
+            [L(lib, mt, info=True) for lib, mt in pp_detail['etapes']] + [
+            L('Base imposable mensuelle', brut_imposable_precompte,
+              source=('dont surplus km imposable ' + str(montant_km_imposable_precompte)) if montant_km_imposable_precompte else None),
+            L('Précompte avant réduction', -precompte_brut,
+              source=f"Formule-clé SPF {pp_detail.get('annee_fiscale', '')}" if pp_detail['applicable'] else 'Non applicable'),
+            L('Réduction liée au bonus à l\'emploi', red_precompte_bonus, source='33,14 % volet A / 52,54 % volet B'),
+            L('Précompte retenu', -precompte, total=True),
+            L('Cotisation spéciale sécurité sociale', -css)]},
+        {'titre': 'Indemnités et retenues nettes', 'lignes':
+            [L(l['libelle'], l['montant'], source=l.get('detail')) for l in lignes_indemn]},
+        {'titre': 'Allocations exceptionnelles', 'lignes':
+            ([L('Rémunération annuelle brute normale (base du taux)', remu_annuelle_normale, info=True)] if lignes_exc else []) +
+            [L(l['libelle'], l['montant'], source=l['detail']) for l in lignes_exc] +
+            ([L('Net des allocations exceptionnelles', net_exceptionnel, total=True)] if lignes_exc else [])},
+        {'titre': 'Net à payer', 'lignes': [L('Salaire net', salaire_net, total=True)]},
+        {'titre': 'Cotisations patronales', 'lignes': [
+            L('Base patronale' + (' (108 %)' if coeff_ouvrier != 1.0 else ''), base_onss_pat, info=True),
+            L('Cotisation de solidarité étudiant' if is_etudiant else 'Cotisation de base + modération (réductible)',
+              onss_pat_reductible, base=base_onss_pat,
+              taux=profil.onss_patronal_reductible_taux,
+              source=f"TechLib {onss_info['trimestre_utilise']}, catégorie {onss_info['categorie']}")] +
+            ([L('Vacances annuelles ouvriers (code 253, non réductible)', onss_vacances_253, base=base_onss_pat,
+                taux=profil.onss_vacances_trimestrielle_taux, source='Instructions ONSS 2026/3')] if onss_vacances_253 else []) +
+            [L(f"{cc['code']} – {cc['libelle'][:80]}", cc['montant'], base=cc['base'], taux=cc['taux'],
+               source=cc['source'] + (' — à vérifier' if cc['a_verifier'] else '')) for cc in cotis_compl] +
+            ([L('Réduction structurelle', -red_struct, source='Ps = R × µ × ß (Instructions ONSS 2026/3 p.382)')] if red_struct else []) +
+            ([L('Réduction premier engagement', -red_pe, source='Pg = G × µ × ß, G = forfait daté')] if red_pe else []) +
+            [L('ONSS patronal net', onss_pat_net, total=True)]},
+        {'titre': 'Coût employeur', 'lignes': [
+            L('Provision vacances annuelles ouvriers (10,27 %, facturée l\'année suivante)',
+              provision_vacances_annuelles, info=True) if provision_vacances_annuelles else None,
+            L('Coût employeur total', cout_empl, total=True)]},
+    ]
+    for bloc_d in detail_calcul:
+        bloc_d['lignes'] = [x for x in bloc_d['lignes'] if x]
+    alertes_calcul = list(avertissements_onss)
+    if onss_info['parametres_reportes']:
+        alertes_calcul.insert(0, f"Taux ONSS du {onss_info['trimestre_demande']} pas encore publiés : "
+                                 f"calcul avec le {onss_info['trimestre_utilise']} (à régulariser via la DmfA).")
 
     # Ancienneté
     ref_date = periode_fin if periode_fin else date.today()
@@ -429,6 +572,14 @@ def calculer_fiche_paie(
         'type_contrat': type_contrat, 'is_etudiant': is_etudiant, 'is_ouvrier': is_ouvrier,
         'libelle_salaire_base': profil.libelle_salaire_base,
         'onss_trimestre_utilise': onss_info['trimestre_utilise'],
+        'detail_calcul': detail_calcul,
+        'alertes_calcul': alertes_calcul,
+        'onss_patronal_reductible': onss_pat_reductible,
+        'onss_vacances_trimestrielle': onss_vacances_253,
+        'cotisations_complementaires': cotis_compl,
+        'prime_exceptionnelle': prime_exceptionnelle or 0.0, 'prime_onss': prime_onss, 'prime_precompte': prime_precompte,
+        'double_pecule': double_pecule or 0.0, 'pecule_retenue': pecule_retenue, 'pecule_precompte': pecule_precompte,
+        'onss_patronal_prime': onss_pat_prime, 'net_exceptionnel': net_exceptionnel,
         'onss_categorie_employeur': onss_info['categorie'],
         'onss_parametres_reportes': onss_info['parametres_reportes'],
         'onss_date_fichier': onss_info['date_creation_onss'],

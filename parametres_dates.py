@@ -162,6 +162,25 @@ PRECOMPTE_VERSIONS = [
         # Exoneration fiscale de l'indemnite km voiture domicile-travail
         # (annee de revenus 2026) -- au-dela, le surplus est imposable
         'exoneration_km_voiture_annuelle': 500.0,
+        # Allocations exceptionnelles (prime de fin d'annee, 13e mois, bonus,
+        # double pecule): taux UNIQUE lu sur la remuneration annuelle brute
+        # NORMALE (allocation exclue), applique en une fois a l'allocation.
+        # (bas, haut, taux double pecule, taux autres allocations)
+        # Source: bareme 2026 publie par calculateur-de-salaire.be (29/09/2026),
+        # dont les autres parametres concordent au centime avec le simulateur SPF.
+        'allocations_exceptionnelles': [
+            (0.00, 10675.00, 0.0000, 0.0000),
+            (10675.00, 13660.00, 0.1917, 0.2322),
+            (13660.00, 17375.00, 0.2120, 0.2523),
+            (17375.00, 20840.00, 0.2625, 0.3028),
+            (20840.00, 23580.00, 0.3130, 0.3533),
+            (23580.00, 26340.00, 0.3433, 0.3836),
+            (26340.00, 31830.00, 0.3634, 0.4038),
+            (31830.00, 34640.00, 0.3937, 0.4341),
+            (34640.00, 45860.00, 0.4239, 0.4644),
+            (45860.00, 59900.00, 0.4744, 0.5148),
+            (59900.00, float('inf'), 0.5350, 0.5350),
+        ],
     },
 ]
 

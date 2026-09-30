@@ -151,24 +151,33 @@ def dossier_dashboard(dossier_id):
 @app.route('/dossier/<int:dossier_id>/modifier', methods=['GET', 'POST'])
 @login_required
 def modifier_dossier(dossier_id):
+    from onss_taux import categorie_existe, liste_categories, CODES_IMPORTANCE, CODES_FFE
     dossier = get_dossier(dossier_id)
     ctx = get_context_base()
     ctx['tenant'] = get_tenant()
+    listes = dict(categories_onss=liste_categories(), codes_importance=CODES_IMPORTANCE, codes_ffe=CODES_FFE)
     if request.method == 'POST':
-        # Categorie employeur ONSS: validee AVANT tout enregistrement
-        from onss_taux import categorie_existe
-        cat = (request.form.get('categorie_employeur') or '000').strip()
-        if not (cat.isdigit() and len(cat) <= 3) or not categorie_existe(cat.zfill(3)):
+        # Donnees ONSS de l'employeur: validees AVANT tout enregistrement
+        cat = (request.form.get('categorie_employeur') or '000').strip().zfill(3)
+        imp = (request.form.get('code_importance') or '').strip()
+        ffe = (request.form.get('code_ffe') or '').strip().upper()
+        erreur = None
+        if not categorie_existe(cat):
+            erreur = f"Catégorie « {cat} » introuvable dans le fichier de taux ONSS."
+        elif imp and imp not in dict(CODES_IMPORTANCE):
+            erreur = f"Code d'importance « {imp} » invalide (0 à 9)."
+        elif ffe and ffe not in dict(CODES_FFE):
+            erreur = f"Code FFE « {ffe} » invalide (C, B, N ou O)."
+        if erreur:
             return render_template('modifier_dossier.html', dossier=dossier, dossier_actif=dossier,
-                erreur_categorie=f"Catégorie « {cat} » introuvable dans le fichier de taux ONSS. "
-                                 f"Vérifiez le code dans le Répertoire des employeurs (consultation sécurisée).",
-                **ctx)
+                                   erreur_onss=erreur, **listes, **ctx)
         update_dossier(dossier_id, request.form)
         conn_c = get_conn(); cur_c = conn_c.cursor()
-        cur_c.execute("UPDATE dossiers SET categorie_employeur=%s WHERE id=%s", (cat.zfill(3), dossier_id))
+        cur_c.execute("UPDATE dossiers SET categorie_employeur=%s, code_importance=%s, code_ffe=%s WHERE id=%s",
+                      (cat, imp or None, ffe or None, dossier_id))
         conn_c.commit(); cur_c.close(); conn_c.close()
         return redirect(url_for('dossier_dashboard', dossier_id=dossier_id))
-    return render_template('modifier_dossier.html', dossier=dossier, dossier_actif=dossier, **ctx)
+    return render_template('modifier_dossier.html', dossier=dossier, dossier_actif=dossier, **listes, **ctx)
 
 @app.route('/dossier/<int:dossier_id>/archiver', methods=['POST'])
 @login_required
@@ -1509,7 +1518,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
                dos.nom as dossier_nom, dos.adresse as dossier_adresse,
                dos.bce, dos.rsz, dos.id as dossier_id,
                dos.premier_engagement, dos.premier_engagement_depuis,
-               dos.categorie_employeur,
+               dos.categorie_employeur, dos.code_importance, dos.code_ffe,
                t.etat_civil, t.partenaire_revenus_pro, t.partenaire_pensions,
                t.nb_enfants_sans_handicap, t.nb_enfants_avec_handicap, t.nb_personnes_charge_66
         FROM dimona d
@@ -1604,7 +1613,37 @@ def generer_fiche_depuis_calendrier(dimona_id):
         periode_debut = date(annee, mois, 1)
         periode_fin = date(annee, mois, cal.monthrange(annee, mois)[1])
 
+        # Cheques-repas: nombre et montants issus du SUIVI DES CHEQUES du dossier
+        # (applique si le dossier les a actives ou si la CP les rend obligatoires)
+        cr_calc = None
+        try:
+            cfg_cr = _config_cheques(cur, dimona['dossier_id'])
+            cur.execute("SELECT * FROM travailleurs WHERE id=%s", (dimona['travailleur_id'],))
+            calc_cr = _calcul_cheques_travailleur(cur, dict(cur.fetchone()), annee, mois, cfg_cr)
+            if calc_cr and (cfg_cr['actif'] or calc_cr['repas']['obligatoire']) and calc_cr['repas']['nombre']:
+                cr_calc = calc_cr['repas']
+        except Exception as ex_cr:
+            app.logger.warning(f"Suivi cheques non applique: {ex_cr}")
+            conn.rollback()
+
+        # Allocations exceptionnelles saisies (decembre: prime de fin d'annee;
+        # juin CP 200: prime annuelle; mai/juin: double pecule employe)
+        def _montant(nom):
+            try:
+                return float((form.get(nom) or '0').replace(',', '.') or 0)
+            except ValueError:
+                return 0.0
+        prime_fa, prime_an = _montant('prime_fin_annee'), _montant('prime_annuelle')
+        libelles_prime = []
+        if prime_fa: libelles_prime.append("Prime de fin d'année")
+        if prime_an: libelles_prime.append('Prime annuelle sectorielle')
+
         data = calculer_fiche_paie(
+            cheques_repas_calc=cr_calc,
+            prime_exceptionnelle=prime_fa + prime_an,
+            libelle_prime=' + '.join(libelles_prime) or "Prime de fin d'année",
+            double_pecule=_montant('double_pecule'),
+            precompte_pecule_manuel=_montant('precompte_pecule') or None,
             prenom=dimona['prenom'], nom=dimona['nom'],
             niss=dimona['niss'] or '—', adresse=dimona['adresse'] or '—',
             iban=dimona['iban'] or '—',
@@ -1631,6 +1670,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
             jours_conge=jours_conge, jours_maladie=jours_maladie, jours_chomage=jours_chomage,
             premier_engagement=premier_engagement,
             categorie_employeur=dimona.get('categorie_employeur') or '000',
+            code_ffe=dimona.get('code_ffe'), code_importance=dimona.get('code_importance'),
             frais_nets=float(form.get('frais_nets', 0) or 0),
             km_domicile=km_domicile, moyen_transport=moyen_transport,
             vehicule_societe=vehicule_societe,
@@ -1639,6 +1679,20 @@ def generer_fiche_depuis_calendrier(dimona_id):
             periode_debut=periode_debut, periode_fin=periode_fin,
         )
 
+        # ── ETAPE 1 : "Calculer la paie" -> page de detail, RIEN n'est ecrit ──
+        # Le PDF et l'enregistrement en base ne se font qu'apres validation
+        # explicite sur la page de detail (action=generer).
+        if form.get('action') != 'generer':
+            cur.close(); conn.close()
+            ctx = get_context_base(); ctx['tenant'] = get_tenant()
+            mois_nom_calc = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet',
+                             'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][mois]
+            champs = [(k, v) for k, v in form.items(multi=True) if k != 'action']
+            return render_template('calcul_paie_detail.html', data=data, dimona=dimona, contrat=contrat,
+                                   annee=annee, mois=mois, mois_nom=mois_nom_calc, champs=champs,
+                                   dossier_actif=get_dossier(dimona['dossier_id']), **ctx)
+
+        # ── ETAPE 2 : "Generer la fiche" (valide sur la page de detail) ──
         # Générer le PDF
         mois_nom = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
                     'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][mois]
@@ -1658,17 +1712,20 @@ def generer_fiche_depuis_calendrier(dimona_id):
                 precompte_avant_reduction, reduction_precompte_bonus,
                 reduction_structurelle, reduction_premier_engagement,
                 frais_nets_montant, jours_prestes, heures_prestees,
-                is_ouvrier, is_etudiant, cp_key, type_contrat
+                is_ouvrier, is_etudiant, cp_key, type_contrat,
+                prime_brut, pecule_brut, onss_exceptionnel, precompte_exceptionnel
             ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'genere',
-                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING id
         """, (
             dimona['dossier_id'], dimona['travailleur_id'],
             contrat['id'] if contrat else None,
             periode_debut, periode_fin,
-            data['brut_onss'], abs(data['onss_net']),
-            abs(data['precompte']), data['salaire_net'],
-            abs(data['onss_net']) + data['onss_patronal'],
+            data['brut_onss'] + data.get('prime_exceptionnelle', 0),
+            abs(data['onss_net']) + data.get('prime_onss', 0) + data.get('pecule_retenue', 0),
+            abs(data['precompte']) + data.get('prime_precompte', 0) + data.get('pecule_precompte', 0),
+            data['salaire_net'],
+            abs(data['onss_net']) + data.get('prime_onss', 0) + data.get('pecule_retenue', 0) + data['onss_patronal'],
             data['onss_patronal'],
             data['cout_employeur'], filepath,
             data.get('bonus_emploi_a', 0), data.get('bonus_emploi_b', 0),
@@ -1676,7 +1733,10 @@ def generer_fiche_depuis_calendrier(dimona_id):
             data.get('reduction_structurelle', 0), data.get('reduction_premier_engagement', 0),
             data.get('frais_nets', 0), jours_prestes, heures_prestees,
             data.get('is_ouvrier'), data.get('is_etudiant'),
-            data.get('cp_key'), data.get('type_contrat')
+            data.get('cp_key'), data.get('type_contrat'),
+            data.get('prime_exceptionnelle', 0), data.get('double_pecule', 0),
+            round(data.get('prime_onss', 0) + data.get('pecule_retenue', 0), 2),
+            round(data.get('prime_precompte', 0) + data.get('pecule_precompte', 0), 2)
         ))
         fiche_id = cur.fetchone()['id']
         conn.commit()
@@ -1717,10 +1777,47 @@ def generer_fiche_depuis_calendrier(dimona_id):
             app.logger.warning(f"Suggestion prime fin annee: {ex}")
             prime_suggestion = None
 
+    # Juin: prime annuelle sectorielle (CP 200: 330,84 EUR, periode juin N-1 -> mai N)
+    # et indication du double pecule (mai/juin, employes) -- indicatives uniquement
+    prime_annuelle_suggestion = pecule_suggestion = None
+    try:
+        from regles_cp import get_regles_cp
+        regle_pa = get_regles_cp(cp_key).get('prime_annuelle_sectorielle') if contrat else None
+        if mois == 6 and regle_pa and regle_pa.get('applicable'):
+            p_deb, p_fin = date(annee - 1, 6, 1), date(annee, 5, 31)
+            d0 = max(contrat['date_debut'], p_deb) if contrat.get('date_debut') else p_deb
+            d1 = min(contrat['date_fin'] or p_fin, p_fin)
+            nb_mois = max(0, min(12, (d1.year - d0.year) * 12 + d1.month - d0.month + 1)) if d1 >= d0 else 0
+            hs = float(contrat.get('heures_semaine') or 38) or 38.0
+            regime = min(1.0, float(contrat.get('heures_jour') or 7.6) * int(contrat.get('jours_semaine') or 5) / hs)
+            montant = round(regle_pa['montant_brut_annuel'] * nb_mois / 12 * regime, 2)
+            prime_annuelle_suggestion = {
+                'montant': montant,
+                'methode': f"{regle_pa['montant_brut_annuel']:.2f} € x {nb_mois}/12 mois x régime {regime:.0%}",
+                'regle': f"Payée en juin, période de référence {p_deb:%m/%Y} – {p_fin:%m/%Y}, au prorata des prestations et du régime."}
+        if mois in (5, 6) and contrat and contrat.get('type_contrat') != 'STU':
+            from conges_legaux import calculer_mois_depuis_contrats
+            from pecule_vacances import calculer_double_pecule_employe
+            statut_c = get_regles_cp(cp_key).get('type_travailleur_defaut', 'employe')
+            if statut_c == 'employe':
+                cur2 = get_conn().cursor(cursor_factory=RealDictCursor)
+                cur2.execute("SELECT id, type_contrat, statut, date_debut, date_fin FROM contrats WHERE travailleur_id=%s",
+                             (dimona['travailleur_id'],))
+                m_ref = calculer_mois_depuis_contrats([dict(x) for x in cur2.fetchall()], annee - 1)['mois_ouvrant_droit']
+                cur2.connection.close()
+                hs = float(contrat.get('heures_semaine') or 38) or 38.0
+                sal = float(contrat.get('salaire_mensuel') or 0) or round(float(contrat.get('salaire_horaire') or 0) * hs * 52 / 12, 2)
+                dp = calculer_double_pecule_employe(sal, m_ref)
+                if dp.get('droit'):
+                    pecule_suggestion = {'montant': dp['pecule_base'], 'methode': dp['methode'] + f" ({m_ref} mois ouvrant droit en {annee-1})"}
+    except Exception as ex_s:
+        app.logger.warning(f"Suggestions juin: {ex_s}")
+
     ctx = get_context_base()
     ctx['tenant'] = get_tenant()
     return render_template('generer_fiche_form.html',
         dimona=dimona, contrat=contrat, prime_suggestion=prime_suggestion,
+        prime_annuelle_suggestion=prime_annuelle_suggestion, pecule_suggestion=pecule_suggestion,
         annee=annee, mois=mois, mois_nom=mois_nom,
         cp_key=cp_key,
         vehicule_societe=dimona.get('vehicule_societe', False),
@@ -2586,3 +2683,128 @@ def compte_individuel(travailleur_id):
     return render_template('compte_individuel.html',
         travailleur=travailleur, dossier=dossier, dossier_actif=dossier,
         fiches=fiches, totaux=totaux, annee=annee, annees_dispo=annees_dispo, **ctx)
+
+
+# ── SUIVI DES CHEQUES (cheques-repas + ecocheques) ────────────────────
+def _config_cheques(cur, dossier_id):
+    cur.execute("SELECT * FROM cheques_config WHERE dossier_id=%s", (dossier_id,))
+    r = cur.fetchone()
+    r = dict(r) if r else {}
+    return {'actif': bool(r.get('repas_actif')), 'valeur': r.get('repas_valeur'),
+            'part_patronale': r.get('repas_part_patronale'), 'part_travailleur': r.get('repas_part_travailleur'),
+            'octroi_avant_2025': bool(r.get('repas_octroi_avant_2025')),
+            'eco_actif': bool(r.get('eco_actif')), 'eco_convertis': bool(r.get('eco_convertis')),
+            'emetteur': r.get('emetteur') or '', 'notes': r.get('notes') or ''}
+
+
+def _calcul_cheques_travailleur(cur, t, annee, mois, config):
+    """Cheques-repas du mois + ecocheques previsionnels pour un travailleur."""
+    import calendar
+    from cheques_regles import cheques_repas_du_mois, ecocheques_annuels, regles_pour
+    from regles_cp import get_regles_cp
+    debut_m = date(annee, mois, 1)
+    fin_m = date(annee, mois, calendar.monthrange(annee, mois)[1])
+    cur.execute("SELECT * FROM contrats WHERE travailleur_id=%s AND statut='actif' ORDER BY date_debut", (t['id'],))
+    contrats = [dict(x) for x in cur.fetchall()]
+    couvrant = [c for c in contrats if c['date_debut'] and c['date_debut'] <= fin_m
+                and (c['date_fin'] is None or c['date_fin'] >= debut_m)]
+    contrat = couvrant[-1] if couvrant else (contrats[-1] if contrats else None)
+    if not contrat:
+        return None
+    cp_key = contrat.get('cp_key') or t.get('cp_key') or ''
+    if contrat.get('type_contrat') == 'STU':
+        statut = 'etudiant'
+    else:
+        try:
+            statut = get_regles_cp(cp_key).get('type_travailleur_defaut', 'employe')
+        except Exception:
+            statut = 'employe'
+    cur.execute("""SELECT code_journee, heures FROM prestations WHERE travailleur_id=%s
+                   AND date_prestation BETWEEN %s AND %s""", (t['id'], debut_m, fin_m))
+    prest = cur.fetchall()
+    jours = sum(1 for p in prest if p['code_journee'] in ('P', 'S', 'HS', 'PP'))
+    heures = float(sum(p['heures'] or 0 for p in prest if p['code_journee'] in ('P', 'S', 'HS', 'PP')))
+    date_anc = min(c['date_debut'] for c in contrats if c['date_debut'])
+    repas = cheques_repas_du_mois(cp_key, statut, annee, mois, jours, heures, date_anc, config)
+
+    # Ecocheques: prochaine echeance et prorata sur la periode de reference
+    eco = None
+    regle_eco = regles_pour(cp_key, date(annee, 6, 30))['eco']
+    if regle_eco:
+        mp = regle_eco['mois_paiement']
+        n = annee if mois <= mp else annee + 1
+        if mp == 6:   # CP 200: juin N-1 -> mai N
+            p_deb, p_fin = date(n - 1, 6, 1), date(n, 5, 31)
+        else:         # paiement annuel: annee civile N
+            p_deb, p_fin = date(n, 1, 1), date(n, 12, 31)
+        mois_couverts = set()
+        for c in contrats:
+            if c.get('type_contrat') == 'STU' or not c['date_debut']:
+                continue
+            d0, d1 = max(c['date_debut'], p_deb), min(c['date_fin'] or p_fin, p_fin)
+            y, m = d0.year, d0.month
+            while (y, m) <= (d1.year, d1.month):
+                mois_couverts.add((y, m)); m += 1
+                if m > 12: m, y = 1, y + 1
+        hs = float(contrat.get('heures_semaine') or 38) or 38.0
+        fraction = min(1.0, float(contrat.get('heures_jour') or 7.6) * int(contrat.get('jours_semaine') or 5) / hs)
+        eco = ecocheques_annuels(cp_key, statut, n, fraction, len(mois_couverts),
+                                 t.get('categorie_personnel'))
+        eco.update(annee_paiement=n, periode=f"{p_deb:%m/%Y} – {p_fin:%m/%Y}", fraction_regime=round(fraction, 2),
+                   mois_couverts=len(mois_couverts))
+    return {'travailleur': t, 'contrat': contrat, 'cp_key': cp_key, 'statut': statut,
+            'jours': jours, 'heures': heures, 'date_anciennete': date_anc, 'repas': repas, 'eco': eco}
+
+
+@app.route('/dossier/<int:dossier_id>/cheques', methods=['GET', 'POST'])
+@login_required
+def suivi_cheques(dossier_id):
+    from psycopg2.extras import RealDictCursor
+    from cheques_regles import regles_pour, CADRE_LEGAL
+    dossier = get_dossier(dossier_id)
+    ctx = get_context_base(); ctx['tenant'] = get_tenant()
+    annee = request.args.get('annee', date.today().year, type=int)
+    mois = request.args.get('mois', date.today().month, type=int)
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    if request.method == 'POST':
+        f = request.form
+        def num(k):
+            try: return float((f.get(k) or '').replace(',', '.')) if f.get(k) else None
+            except ValueError: return None
+        cur.execute("""INSERT INTO cheques_config (dossier_id, repas_actif, repas_valeur, repas_part_patronale,
+                repas_part_travailleur, repas_octroi_avant_2025, eco_actif, eco_convertis, emetteur, notes, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            ON CONFLICT (dossier_id) DO UPDATE SET repas_actif=EXCLUDED.repas_actif, repas_valeur=EXCLUDED.repas_valeur,
+                repas_part_patronale=EXCLUDED.repas_part_patronale, repas_part_travailleur=EXCLUDED.repas_part_travailleur,
+                repas_octroi_avant_2025=EXCLUDED.repas_octroi_avant_2025, eco_actif=EXCLUDED.eco_actif,
+                eco_convertis=EXCLUDED.eco_convertis, emetteur=EXCLUDED.emetteur, notes=EXCLUDED.notes, updated_at=NOW()""",
+            (dossier_id, f.get('repas_actif') == 'on', num('repas_valeur'), num('repas_part_patronale'),
+             num('repas_part_travailleur'), f.get('repas_octroi_avant_2025') == 'on', f.get('eco_actif') == 'on',
+             f.get('eco_convertis') == 'on', f.get('emetteur', '')[:100], f.get('notes', '')))
+        for k, v in f.items():
+            if k.startswith('categorie_personnel_') and k[20:].isdigit():
+                cur.execute("UPDATE travailleurs SET categorie_personnel=%s WHERE id=%s AND dossier_id=%s",
+                            (v or None, int(k[20:]), dossier_id))
+        conn.commit(); cur.close(); conn.close()
+        return redirect(url_for('suivi_cheques', dossier_id=dossier_id, annee=annee, mois=mois))
+
+    config = _config_cheques(cur, dossier_id)
+    cur.execute("SELECT * FROM travailleurs WHERE dossier_id=%s AND COALESCE(actif, TRUE) ORDER BY nom", (dossier_id,))
+    lignes = [x for x in (_calcul_cheques_travailleur(cur, dict(t), annee, mois, config) for t in cur.fetchall()) if x]
+    cur.close(); conn.close()
+
+    cps = sorted({l['cp_key'] for l in lignes if l['cp_key']} | ({dossier.get('cp_principale')} - {None, ''}))
+    regles = {cp: regles_pour(cp, date(annee, mois, 28)) for cp in cps}
+    obligatoire_non_active = any(l['repas']['obligatoire'] for l in lignes) and not config['actif']
+    tot = {'nombre': sum(l['repas']['nombre'] for l in lignes),
+           'valeur': round(sum(l['repas'].get('total_valeur', 0) for l in lignes), 2),
+           'patronal': round(sum(l['repas'].get('total_patronal', 0) for l in lignes), 2),
+           'travailleur': round(sum(l['repas'].get('total_travailleur', 0) for l in lignes), 2)}
+    suggestion = next((r['repas'] for r in regles.values() if r['repas']), None)
+    mois_noms = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août',
+                 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+    return render_template('cheques_dossier.html', dossier=dossier, dossier_actif=dossier, config=config,
+                           lignes=lignes, regles=regles, tot=tot, annee=annee, mois=mois, mois_nom=mois_noms[mois],
+                           obligatoire_non_active=obligatoire_non_active, suggestion=suggestion,
+                           cadre=CADRE_LEGAL, **ctx)

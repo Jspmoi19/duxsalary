@@ -89,18 +89,47 @@
           </div>
           </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Catégorie employeur ONSS</label>
-            <input type="text" name="categorie_employeur" maxlength="3" class="form-control"
-                   style="max-width:120px{% if erreur_categorie %};border-color:#e74c3c{% endif %}"
-                   value="{{ request.form.get('categorie_employeur') if erreur_categorie else (dossier.categorie_employeur or '000') }}">
-            <small style="font-size:11px;color:#888">
-              Code à 3 chiffres attribué par l'ONSS — Répertoire des employeurs (consultation sécurisée).
-              Détermine les taux ONSS et les Fonds de sécurité d'existence. 000 = secteur privé général.
-            </small>
-            {% if erreur_categorie %}
-            <div style="font-size:12px;color:#c0392b;margin-top:4px">⚠️ {{ erreur_categorie }}</div>
+          <div class="form-group" style="grid-column:1 / -1;padding:12px 14px;background:#f5f7fa;border-radius:8px">
+            <div style="font-size:12px;font-weight:700;color:#1F4E79;text-transform:uppercase;margin-bottom:8px">
+              Données ONSS de l'employeur — Répertoire des employeurs (consultation sécurisée)
+            </div>
+            {% if erreur_onss %}
+            <div style="font-size:12px;color:#c0392b;margin-bottom:8px">⚠️ {{ erreur_onss }}</div>
             {% endif %}
+            <div style="display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:12px">
+              <div>
+                <label class="form-label">Catégorie employeur</label>
+                <select name="categorie_employeur" class="form-control">
+                  {% set cat_actuelle = (request.form.get('categorie_employeur') if erreur_onss else dossier.categorie_employeur) or '000' %}
+                  {% for c in categories_onss %}
+                  <option value="{{ c.code }}" {% if c.code == cat_actuelle %}selected{% endif %}>{{ c.code }} — {{ c.description }}</option>
+                  {% endfor %}
+                </select>
+                <small style="font-size:11px;color:#888">Détermine les taux de base et les fonds sectoriels. Description générée depuis le fichier des taux ONSS.</small>
+              </div>
+              <div>
+                <label class="form-label">Code d'importance</label>
+                <select name="code_importance" class="form-control">
+                  {% set imp_actuel = (request.form.get('code_importance') if erreur_onss else dossier.code_importance) or '' %}
+                  <option value="" {% if not imp_actuel %}selected{% endif %}>— Non renseigné —</option>
+                  {% for code, lib in codes_importance %}
+                  <option value="{{ code }}" {% if code == imp_actuel %}selected{% endif %}>{{ code }} — {{ lib }}</option>
+                  {% endfor %}
+                </select>
+                <small style="font-size:11px;color:#888">« Belangrijkheidscode ». Cotisation 1,60 % à partir du code 3.</small>
+              </div>
+              <div>
+                <label class="form-label">Code FFE</label>
+                <select name="code_ffe" class="form-control">
+                  {% set ffe_actuel = (request.form.get('code_ffe') if erreur_onss else dossier.code_ffe) or '' %}
+                  <option value="" {% if not ffe_actuel %}selected{% endif %}>— Non renseigné —</option>
+                  {% for code, lib in codes_ffe %}
+                  <option value="{{ code }}" {% if code == ffe_actuel %}selected{% endif %}>{{ lib }}</option>
+                  {% endfor %}
+                </select>
+                <small style="font-size:11px;color:#888">« FSO-code ». Fonds de fermeture d'entreprises.</small>
+              </div>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Premier engagement ONSS</label>
