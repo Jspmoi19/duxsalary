@@ -195,7 +195,6 @@ def calculer_fiche_paie(
     etat_civil='celibataire', nb_enfants=0,
     partenaire_revenus_pro='non', partenaire_pensions='non',
     salaire_mensuel_fixe=0.0,
-    categorie_employeur='000',
     heures_semaine=38.0, heures_jour=7.6, jours_semaine=5,
     type_contrat='CDD', is_etudiant=False, premier_engagement=False,
     jours_prestes=0, heures_prestees=0.0,
@@ -218,8 +217,7 @@ def calculer_fiche_paie(
     statut_profil = 'etudiant' if is_etudiant else ('ouvrier' if is_ouvrier else 'employe')
     profil = construire_profil(cp_key, statut_profil, type_contrat=type_contrat,
                                 heures_semaine=heures_semaine, jours_semaine=jours_semaine,
-                                reference_date=periode_fin if periode_fin else date.today(),
-                                categorie_employeur=categorie_employeur or '000')
+                                reference_date=periode_fin if periode_fin else date.today())
     onss_info = profil.onss_officiel   # trimestre utilise + report eventuel
 
     onss_pers_taux = profil.onss_personnel_taux
@@ -420,7 +418,6 @@ def calculer_fiche_paie(
         'type_contrat': type_contrat, 'is_etudiant': is_etudiant, 'is_ouvrier': is_ouvrier,
         'libelle_salaire_base': profil.libelle_salaire_base,
         'onss_trimestre_utilise': onss_info['trimestre_utilise'],
-        'onss_categorie_employeur': onss_info['categorie'],
         'onss_parametres_reportes': onss_info['parametres_reportes'],
         'onss_date_fichier': onss_info['date_creation_onss'],
         'onss_taux_patronal_applique': profil.onss_patronal_taux_base,
