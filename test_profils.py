@@ -50,10 +50,13 @@ onss_pat_brut = p.onss_patronal_brut(brut_onss)
 # + 5.57% vacances annuelles (code 253) = 30.57%, sur 108% du brut.
 # 778.87 x 1.08 = 841.18 -> x 30.57% = 257.15
 check("ONSS patronal brut ouvrier (30.57% officiel x 108%)", onss_pat_brut, 257.15, tol=0.05)
-red_struct = p.reduction_structurelle(onss_pat_brut)
-check("Réduction structurelle", red_struct, min(521.47, onss_pat_brut))
+# Formules officielles (Instructions ONSS 2026/3): Ps = R x mu x beta_s sur
+# S = W(100%) x 13 x U / H ; Pg = G x mu x beta_g, G = 2000EUR depuis 01/07/2026
+red_struct = p.reduction_structurelle(onss_pat_brut, remuneration_mois=778.87, heures_payees=51.0)
+check("Reduction structurelle (temps partiel, proportionnee)", red_struct, 113.42)
 reste = round(onss_pat_brut - red_struct, 2)
-red_pe = p.reduction_premier_engagement(reste)
+red_pe = p.reduction_premier_engagement(reste, heures_payees=51.0)
+check("Premier engagement (couvre le reste)", red_pe, 143.73)
 onss_pat_net = round(max(0, onss_pat_brut - red_struct - red_pe), 2)
 check("ONSS patronal NET (avec 1er engagement)", onss_pat_net, 0.0)
 
@@ -138,9 +141,12 @@ print("=" * 70)
 p7 = construire_profil('CP 336', 'employe', type_contrat='CDI')
 # Ciwan: base=2257, onss_pat_brut theorique 25% = 564.25
 onss_pat_brut_ciwan = round(2257.00 * 0.25, 2)
-red_ciwan = p7.reduction_structurelle(onss_pat_brut_ciwan, base_salariale_mensuelle=2257.00, reference_date=date(2026, 9, 29))
-check("Reduction structurelle degressive Ciwan (2257EUR)", red_ciwan, 387.70, tol=0.05)
-print(f"  (Group S annonce 398.98EUR -- ecart connu de {round(398.98-red_ciwan,2)}EUR, non resolu)")
+red_ciwan = p7.reduction_structurelle(onss_pat_brut_ciwan, remuneration_mois=2257.00,
+                                     jours_payes=22, reference_date=date(2026, 10, 31))
+check("Reduction structurelle Ciwan (Group S: 398.98) -- ECART 11EUR RESOLU", red_ciwan, 398.98)
+pe_ciwan = p7.reduction_premier_engagement(round(onss_pat_brut_ciwan - red_ciwan, 2),
+                                            jours_payes=22, reference_date=date(2026, 10, 31))
+check("Premier engagement Ciwan (Group S: 165.27)", pe_ciwan, 165.27)
 
 # Bilal reste au plafond max car tres bas salaire (verifie que la formule
 # degressive donne bien un montant tres eleve pour un tout petit salaire)

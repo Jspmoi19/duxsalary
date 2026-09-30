@@ -16,7 +16,7 @@ Utilisation:
 
 from dataclasses import dataclass, field
 from regles_cp import get_regles_cp, ONSS, REDUCTION_STRUCTURELLE, PREMIER_ENGAGEMENT, BONUS_EMPLOI, PRECOMPTE, CSSS
-from parametres_dates import get_bonus_emploi_params, get_reduction_structurelle_params, get_precompte_params
+from parametres_dates import get_bonus_emploi_params, get_reduction_structurelle_params, get_precompte_params, get_premier_engagement_params
 from datetime import date as _date
 from onss_taux import get_taux_onss
 
@@ -213,30 +213,89 @@ class ProfilTravailleur:
         red_b = bonus_b * P['reduction_precompte_taux_volet_b']
         return round(red_a + red_b, 2)
 
-    def reduction_structurelle(self, onss_patronal_brut, base_salariale_mensuelle=None, reference_date=None):
-        """Reduction structurelle DEGRESSIVE, parametres VERSIONNES PAR DATE
-        (voir parametres_dates.py). Sans base_salariale_mensuelle, retombe
-        sur l'ancien montant fixe (deprecated, imprecis)."""
+    # ── Reductions ONSS patronales: formules OFFICIELLES (Instructions ONSS
+    #    2026/3, p.375-383 et 404-405), verifiees le 30/09/2026 ──────────────
+
+    @staticmethod
+    def _r2(x):
+        """Arrondi officiel ONSS a l'eurocent: 0,005 arrondi vers le haut."""
+        from decimal import Decimal, ROUND_HALF_UP
+        return float(Decimal(str(x)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+
+    def _prestation(self, jours_payes=None, heures_payees=None):
+        """Retourne (facteur_S, mu) pour la periode de la fiche.
+        - declaration en jours (employe a salaire fixe): S = W x (13 x D / J),
+          mu = J / (13 x D)
+        - declaration en heures (ouvrier, temps partiel): S = W x (13 x U / H),
+          mu = H / (13 x U), U = heures hebdomadaires du travailleur de reference
+        Adaptation MENSUELLE (la regle ONSS est trimestrielle): J/H du mois,
+        mu rapporte a un tiers de trimestre. Verifie contre Group S."""
+        if self.salaire_est_mensuel_fixe and jours_payes:
+            D = self.jours_semaine or 5
+            facteur = self._r2(13 * D / jours_payes)
+            mu = self._r2(jours_payes / (13 * D / 3))
+        elif heures_payees:
+            U = self.heures_semaine or 38.0
+            facteur = self._r2(13 * U / heures_payees)
+            mu = self._r2(heures_payees / (13 * U / 3))
+        else:
+            return None, None
+        return facteur, mu
+
+    @staticmethod
+    def _beta(mu, structurelle=True):
+        """Facteur de multiplication (jamais arrondi). Instructions p.377."""
+        base, pente = (1.18, 0.28) if structurelle else (1.0, 1.0)
+        if mu < 0.55:
+            return base
+        if mu < 0.80:
+            return base + (mu - 0.55) * pente
+        return 1 / mu   # prestations >= 80%: reduction complete
+
+    def reduction_structurelle(self, onss_patronal_brut, base_salariale_mensuelle=None,
+                                reference_date=None, remuneration_mois=None,
+                                jours_payes=None, heures_payees=None):
+        """Reduction structurelle mensuelle: Ps = R x mu x beta_s, R calcule
+        sur le salaire de reference S (W a 100%, ramene temps plein).
+        Plafonnee aux cotisations patronales sur lesquelles elle s'applique.
+        Sans remuneration_mois + jours/heures: ancien calcul (deprecated)."""
         if not self.reduction_structurelle_applicable:
             return 0.0
-        if base_salariale_mensuelle is None:
-            return round(min(onss_patronal_brut,
-                REDUCTION_STRUCTURELLE['ancien_montant_fixe_deprecated']), 2)
+        ref = reference_date or self.reference_date or _date.today()
+        facteur, mu = (self._prestation(jours_payes, heures_payees)
+                       if remuneration_mois is not None else (None, None))
+        if facteur is None:
+            if base_salariale_mensuelle is None:
+                return round(min(onss_patronal_brut,
+                    REDUCTION_STRUCTURELLE['ancien_montant_fixe_deprecated']), 2)
+            p = get_reduction_structurelle_params(ref)
+            s_trim = base_salariale_mensuelle * 3
+            r = max(0.0, p['coeff_bas'] * (p['seuil_bas'] - s_trim)) + \
+                max(0.0, p['coeff_tres_bas'] * (p['seuil_tres_bas'] - s_trim))
+            return round(min(onss_patronal_brut, r / 3), 2)
 
-        ref = reference_date or _date.today()
         p = get_reduction_structurelle_params(ref)
-        s_trim = base_salariale_mensuelle * 3
-        terme_bas = max(0.0, p['coeff_bas'] * (p['seuil_bas'] - s_trim))
-        terme_tres_bas = max(0.0, p['coeff_tres_bas'] * (p['seuil_tres_bas'] - s_trim))
-        r_mensuel = round((terme_bas + terme_tres_bas) / 3, 2)
-        return round(min(onss_patronal_brut, r_mensuel), 2)
+        S = self._r2(remuneration_mois * facteur)
+        R = max(0.0, self._r2(p['coeff_bas'] * (p['seuil_bas'] - S))) + \
+            max(0.0, self._r2(p['coeff_tres_bas'] * (p['seuil_tres_bas'] - S)))
+        ps_mensuel = self._r2(R * mu * self._beta(mu, True) / 3)
+        return round(min(onss_patronal_brut, ps_mensuel), 2)
 
-    def reduction_premier_engagement(self, onss_patronal_apres_struct: float, ratio_temps_partiel: float = 1.0) -> float:
+    def reduction_premier_engagement(self, onss_patronal_apres_struct, ratio_temps_partiel=1.0,
+                                      reference_date=None, jours_payes=None, heures_payees=None):
+        """Premier engagement (1er travailleur): Pg = G x mu x beta_g par
+        trimestre, G = 2.000EUR depuis le 01/07/2026 (3.100EUR avant).
+        Jamais pour un etudiant. Sans jours/heures: ancien calcul (deprecated)."""
         if not self.premier_engagement_applicable:
             return 0.0
-        plafond_mensuel = round(PREMIER_ENGAGEMENT['1er_travailleur_plafond_trim'] / 3, 2)
-        plafond = round(plafond_mensuel * ratio_temps_partiel, 2)
-        return round(min(plafond, max(0.0, onss_patronal_apres_struct)), 2)
+        ref = reference_date or self.reference_date or _date.today()
+        G = get_premier_engagement_params(ref)['forfait_1er_trimestriel']
+        _, mu = self._prestation(jours_payes, heures_payees)
+        if mu is None:
+            pg = self._r2(G / 3 * ratio_temps_partiel)
+        else:
+            pg = self._r2(G * mu * self._beta(mu, False) / 3)
+        return round(min(pg, max(0.0, onss_patronal_apres_struct)), 2)
 
     def precompte_brut(self, brut_imposable_mensuel: float, etat_civil: str = 'celibataire',
                         nb_enfants: int = 0, partenaire_revenus_pro: str = 'non',

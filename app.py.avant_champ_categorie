@@ -155,18 +155,7 @@ def modifier_dossier(dossier_id):
     ctx = get_context_base()
     ctx['tenant'] = get_tenant()
     if request.method == 'POST':
-        # Categorie employeur ONSS: validee AVANT tout enregistrement
-        from onss_taux import categorie_existe
-        cat = (request.form.get('categorie_employeur') or '000').strip()
-        if not (cat.isdigit() and len(cat) <= 3) or not categorie_existe(cat.zfill(3)):
-            return render_template('modifier_dossier.html', dossier=dossier, dossier_actif=dossier,
-                erreur_categorie=f"Catégorie « {cat} » introuvable dans le fichier de taux ONSS. "
-                                 f"Vérifiez le code dans le Répertoire des employeurs (consultation sécurisée).",
-                **ctx)
         update_dossier(dossier_id, request.form)
-        conn_c = get_conn(); cur_c = conn_c.cursor()
-        cur_c.execute("UPDATE dossiers SET categorie_employeur=%s WHERE id=%s", (cat.zfill(3), dossier_id))
-        conn_c.commit(); cur_c.close(); conn_c.close()
         return redirect(url_for('dossier_dashboard', dossier_id=dossier_id))
     return render_template('modifier_dossier.html', dossier=dossier, dossier_actif=dossier, **ctx)
 

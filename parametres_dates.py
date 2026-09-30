@@ -91,7 +91,9 @@ REDUCTION_STRUCTURELLE_VERSIONS = [
         # Source: Instructions administratives ONSS 2026/2 (intermediaires),
         # date de bascule exacte non confirmee a 100% -- a revalider.
         'date_debut': date(2026, 7, 1),
-        'source': 'Instructions ONSS 2026/2 (intermediaires) -- date de bascule estimee, non confirmee',
+        'source': ("Instructions administratives ONSS 2026/3 (PDF du 27/08/2026, p.383): "
+                   "'A partir du 3eme trimestre 2026' -- CONFIRME, et verifie au centime "
+                   "contre Group S (Ciwan, 2257EUR, 22 jours -> 398.98EUR)."),
         'seuil_bas': 11687.74, 'coeff_bas': 0.14,
         'seuil_tres_bas': 9738.14, 'coeff_tres_bas': 0.16,
     },
@@ -181,3 +183,22 @@ def get_precompte_params(reference_date):
         f"SPF Finances {annee} et ajouter la version dans parametres_dates.py "
         f"avant de generer une fiche pour cette annee."
     )
+
+
+# ─────────────────────────────────────────────────────────────────
+# PREMIER ENGAGEMENT — forfait trimestriel 1er travailleur (temps plein)
+# ─────────────────────────────────────────────────────────────────
+# Source: Instructions administratives ONSS 2026/3, p.404-405:
+# G21 = 2.000EUR a partir du 01/07/2026 (G20 = 3.100EUR avant), illimite
+# dans le temps. Montant pour des prestations a TEMPS PLEIN: proportionne
+# par la fraction de prestation mu et le facteur beta_g (Pg = G x mu x beta_g).
+PREMIER_ENGAGEMENT_VERSIONS = [
+    {'date_debut': date(2016, 1, 1), 'forfait_1er_trimestriel': 3100.0,
+     'source': 'Instructions ONSS (G20), avant le 01/07/2026'},
+    {'date_debut': date(2026, 7, 1), 'forfait_1er_trimestriel': 2000.0,
+     'source': 'Instructions administratives ONSS 2026/3, p.405 (G21)'},
+]
+
+
+def get_premier_engagement_params(reference_date):
+    return _get_version(PREMIER_ENGAGEMENT_VERSIONS, reference_date)
