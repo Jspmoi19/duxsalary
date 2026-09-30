@@ -2465,3 +2465,111 @@ def conges_travailleur(travailleur_id):
         historique=historique, statut=statut, cp_key=cp_key,
         is_etudiant_contrat=is_etudiant_contrat, calcul_auto=calcul_auto,
         estimation=estimation, annee_courante=annee_courante, **ctx)
+
+# ── RESUME DE CHARGE SALARIALE ──────────────────────────────────────────
+@app.route('/dossier/<int:dossier_id>/resume-charge')
+@login_required
+def resume_charge(dossier_id):
+    from psycopg2.extras import RealDictCursor
+    dossier = get_dossier(dossier_id)
+    ctx = get_context_base(); ctx['tenant'] = get_tenant()
+
+    date_debut = request.args.get('date_debut') or f"{date.today().year}-01-01"
+    date_fin = request.args.get('date_fin') or date.today().isoformat()
+
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    # Detail par travailleur
+    cur.execute("""
+        SELECT t.id as travailleur_id, t.prenom, t.nom,
+               COUNT(f.id) as nb_fiches,
+               COALESCE(SUM(f.salaire_brut), 0) as total_brut,
+               COALESCE(SUM(f.onss_personnel), 0) as total_onss_pers,
+               COALESCE(SUM(f.onss_patronal), 0) as total_onss_pat,
+               COALESCE(SUM(f.precompte), 0) as total_precompte,
+               COALESCE(SUM(f.salaire_net), 0) as total_net,
+               COALESCE(SUM(f.cout_employeur), 0) as total_cout_employeur,
+               COALESCE(SUM(f.bonus_emploi_a + f.bonus_emploi_b), 0) as total_bonus_emploi,
+               COALESCE(SUM(f.reduction_structurelle), 0) as total_red_structurelle,
+               COALESCE(SUM(f.reduction_premier_engagement), 0) as total_red_1er_eng,
+               COALESCE(SUM(f.frais_nets_montant), 0) as total_frais_nets
+        FROM travailleurs t
+        LEFT JOIN fiches_paie f ON f.travailleur_id = t.id
+            AND f.periode_debut >= %s AND f.periode_fin <= %s
+        WHERE t.dossier_id = %s
+        GROUP BY t.id, t.prenom, t.nom
+        ORDER BY t.nom
+    """, (date_debut, date_fin, dossier_id))
+    par_travailleur = [dict(r) for r in cur.fetchall()]
+
+    # Totaux generaux
+    cur.execute("""
+        SELECT
+            COUNT(f.id) as nb_fiches_total,
+            COUNT(DISTINCT f.travailleur_id) as nb_travailleurs,
+            COALESCE(SUM(f.salaire_brut), 0) as total_brut,
+            COALESCE(SUM(f.onss_personnel), 0) as total_onss_pers,
+            COALESCE(SUM(f.onss_patronal), 0) as total_onss_pat,
+            COALESCE(SUM(f.precompte), 0) as total_precompte,
+            COALESCE(SUM(f.salaire_net), 0) as total_net,
+            COALESCE(SUM(f.cout_employeur), 0) as total_cout_employeur,
+            COALESCE(SUM(f.bonus_emploi_a + f.bonus_emploi_b), 0) as total_bonus_emploi
+        FROM fiches_paie f
+        JOIN travailleurs t ON t.id = f.travailleur_id
+        WHERE t.dossier_id = %s
+            AND f.periode_debut >= %s AND f.periode_fin <= %s
+    """, (dossier_id, date_debut, date_fin))
+    totaux = dict(cur.fetchone())
+
+    cur.close(); conn.close()
+
+    return render_template('resume_charge.html',
+        dossier=dossier, dossier_actif=dossier,
+        par_travailleur=par_travailleur, totaux=totaux,
+        date_debut=date_debut, date_fin=date_fin, **ctx)
+
+
+# ── COMPTE INDIVIDUEL ───────────────────────────────────────────────────
+@app.route('/travailleur/<int:travailleur_id>/compte-individuel')
+@login_required
+def compte_individuel(travailleur_id):
+    from psycopg2.extras import RealDictCursor
+    travailleur = get_travailleur(travailleur_id)
+    dossier = get_dossier(travailleur['dossier_id'])
+    ctx = get_context_base(); ctx['tenant'] = get_tenant()
+
+    annee = request.args.get('annee', date.today().year, type=int)
+
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("""
+        SELECT f.*, c.type_contrat as contrat_type, c.cp_key as contrat_cp
+        FROM fiches_paie f
+        LEFT JOIN contrats c ON c.id = f.contrat_id
+        WHERE f.travailleur_id = %s
+            AND EXTRACT(YEAR FROM f.periode_debut) = %s
+        ORDER BY f.periode_debut
+    """, (travailleur_id, annee))
+    fiches = [dict(r) for r in cur.fetchall()]
+
+    # Totaux annuels
+    totaux = {
+        'brut': sum(float(f['salaire_brut'] or 0) for f in fiches),
+        'onss_pers': sum(float(f['onss_personnel'] or 0) for f in fiches),
+        'onss_pat': sum(float(f['onss_patronal'] or 0) for f in fiches),
+        'precompte': sum(float(f['precompte'] or 0) for f in fiches),
+        'net': sum(float(f['salaire_net'] or 0) for f in fiches),
+        'bonus_emploi': sum(float((f['bonus_emploi_a'] or 0) + (f['bonus_emploi_b'] or 0)) for f in fiches),
+        'frais_nets': sum(float(f['frais_nets_montant'] or 0) for f in fiches),
+        'jours_prestes': sum(int(f['jours_prestes'] or 0) for f in fiches),
+    }
+
+    # Annees disponibles
+    cur.execute("""SELECT DISTINCT EXTRACT(YEAR FROM periode_debut)::int as annee
+        FROM fiches_paie WHERE travailleur_id=%s ORDER BY annee DESC""", (travailleur_id,))
+    annees_dispo = [r['annee'] for r in cur.fetchall()]
+
+    cur.close(); conn.close()
+
+    return render_template('compte_individuel.html',
+        travailleur=travailleur, dossier=dossier, dossier_actif=dossier,
+        fiches=fiches, totaux=totaux, annee=annee, annees_dispo=annees_dispo, **ctx)

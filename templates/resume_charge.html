@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Résumé de charge — {{ dossier.nom }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
+    <h2>💰 Résumé de charge salariale</h2>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <div class="card-body" style="padding:16px">
+    <form method="GET" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Du</label>
+        <input type="date" name="date_debut" value="{{ date_debut }}" class="form-control">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Au</label>
+        <input type="date" name="date_fin" value="{{ date_fin }}" class="form-control">
+      </div>
+      <button type="submit" class="btn btn-primary">🔍 Actualiser</button>
+    </form>
+  </div>
+</div>
+
+<!-- Totaux generaux -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px">
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888;text-transform:uppercase">Travailleurs</div>
+    <div style="font-size:22px;font-weight:700;color:#1F4E79">{{ totaux.nb_travailleurs }}</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888;text-transform:uppercase">Fiches générées</div>
+    <div style="font-size:22px;font-weight:700;color:#1F4E79">{{ totaux.nb_fiches_total }}</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888;text-transform:uppercase">Brut total</div>
+    <div style="font-size:20px;font-weight:700;color:#1F4E79">{{ "%.2f"|format(totaux.total_brut) }} €</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888;text-transform:uppercase">Net total versé</div>
+    <div style="font-size:20px;font-weight:700;color:#27ae60">{{ "%.2f"|format(totaux.total_net) }} €</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888;text-transform:uppercase">ONSS patronal total</div>
+    <div style="font-size:20px;font-weight:700;color:#e67e22">{{ "%.2f"|format(totaux.total_onss_pat) }} €</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888;text-transform:uppercase">Coût employeur total</div>
+    <div style="font-size:20px;font-weight:700;color:#c0392b">{{ "%.2f"|format(totaux.total_cout_employeur) }} €</div>
+  </div>
+</div>
+
+<!-- Detail par travailleur -->
+<div class="card">
+  <div class="card-header"><h3>Détail par travailleur</h3></div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Travailleur</th>
+        <th style="text-align:center">Fiches</th>
+        <th style="text-align:right">Brut</th>
+        <th style="text-align:right">ONSS pers.</th>
+        <th style="text-align:right">Précompte</th>
+        <th style="text-align:right">Bonus emploi</th>
+        <th style="text-align:right">Net versé</th>
+        <th style="text-align:right">ONSS pat.</th>
+        <th style="text-align:right">Coût employeur</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for t in par_travailleur %}
+      <tr>
+        <td style="font-weight:600">
+          <a href="/travailleur/{{ t.travailleur_id }}/compte-individuel">{{ t.prenom }} {{ t.nom }}</a>
+        </td>
+        <td style="text-align:center">{{ t.nb_fiches }}</td>
+        <td style="text-align:right">{{ "%.2f"|format(t.total_brut) }} €</td>
+        <td style="text-align:right">{{ "%.2f"|format(t.total_onss_pers) }} €</td>
+        <td style="text-align:right">{{ "%.2f"|format(t.total_precompte) }} €</td>
+        <td style="text-align:right;color:#27ae60">{{ "%.2f"|format(t.total_bonus_emploi) }} €</td>
+        <td style="text-align:right;font-weight:700">{{ "%.2f"|format(t.total_net) }} €</td>
+        <td style="text-align:right">{{ "%.2f"|format(t.total_onss_pat) }} €</td>
+        <td style="text-align:right;font-weight:700">{{ "%.2f"|format(t.total_cout_employeur) }} €</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p style="font-size:11px;color:#888;margin-top:12px">
+  ⚠️ Ce résumé ne couvre que les fiches générées via DuxSalary avec les colonnes
+  enrichies (à partir du 29/09/2026). Les fiches antérieures peuvent apparaître
+  avec des montants partiels ou nuls sur certaines colonnes de détail.
+</p>
+{% endblock %}

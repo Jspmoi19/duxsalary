@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Compte individuel — {{ travailleur.prenom }} {{ travailleur.nom }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="/travailleur/{{ travailleur.id }}" class="btn-back">← {{ travailleur.prenom }} {{ travailleur.nom }}</a>
+    <h2>📘 Compte individuel — {{ annee }}</h2>
+  </div>
+  <div>
+    {% for a in annees_dispo %}
+      <a href="?annee={{ a }}" class="btn {% if a == annee %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">{{ a }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px">
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888">Brut annuel</div>
+    <div style="font-size:19px;font-weight:700;color:#1F4E79">{{ "%.2f"|format(totaux.brut) }} €</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888">ONSS personnel</div>
+    <div style="font-size:19px;font-weight:700">{{ "%.2f"|format(totaux.onss_pers) }} €</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888">Précompte</div>
+    <div style="font-size:19px;font-weight:700">{{ "%.2f"|format(totaux.precompte) }} €</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888">Bonus emploi</div>
+    <div style="font-size:19px;font-weight:700;color:#27ae60">{{ "%.2f"|format(totaux.bonus_emploi) }} €</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888">Net annuel</div>
+    <div style="font-size:19px;font-weight:700;color:#27ae60">{{ "%.2f"|format(totaux.net) }} €</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center">
+    <div style="font-size:11px;color:#888">Jours prestés</div>
+    <div style="font-size:19px;font-weight:700">{{ totaux.jours_prestes }}</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3>Détail mensuel</h3></div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Période</th>
+        <th style="text-align:center">Jours</th>
+        <th style="text-align:right">Brut</th>
+        <th style="text-align:right">ONSS pers.</th>
+        <th style="text-align:right">Bonus emploi</th>
+        <th style="text-align:right">Précompte</th>
+        <th style="text-align:right">Net</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for f in fiches %}
+      <tr>
+        <td style="font-weight:600">{{ f.periode_debut.strftime('%m/%Y') }}</td>
+        <td style="text-align:center">{{ f.jours_prestes or '—' }}</td>
+        <td style="text-align:right">{{ "%.2f"|format(f.salaire_brut or 0) }} €</td>
+        <td style="text-align:right">{{ "%.2f"|format(f.onss_personnel or 0) }} €</td>
+        <td style="text-align:right;color:#27ae60">{{ "%.2f"|format((f.bonus_emploi_a or 0) + (f.bonus_emploi_b or 0)) }} €</td>
+        <td style="text-align:right">{{ "%.2f"|format(f.precompte or 0) }} €</td>
+        <td style="text-align:right;font-weight:700">{{ "%.2f"|format(f.salaire_net or 0) }} €</td>
+        <td>{% if f.pdf_path %}<a href="/download/{{ f.pdf_path|basename }}" class="btn btn-secondary btn-xs">⬇ PDF</a>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" style="text-align:center;color:#888;padding:20px">Aucune fiche pour {{ annee }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

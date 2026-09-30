@@ -120,3 +120,64 @@ def get_bonus_emploi_params(reference_date):
 
 def get_reduction_structurelle_params(reference_date):
     return _get_version(REDUCTION_STRUCTURELLE_VERSIONS, reference_date)
+
+
+# ─────────────────────────────────────────────────────────────────
+# PRECOMPTE PROFESSIONNEL — versionne par ANNEE FISCALE
+# ─────────────────────────────────────────────────────────────────
+# Le SPF Finances publie en decembre la "formule-cle" de l'annee suivante
+# (avec un simulateur Excel officiel). Chaque annee = une entree ici.
+# Les annees precedentes ne sont JAMAIS modifiees ni supprimees: une fiche
+# de 2026 regeneree en 2027 doit toujours utiliser les parametres 2026.
+#
+# Pour ajouter 2027: copier le bloc 2026, changer 'annee', 'source' et les
+# valeurs extraites du simulateur SPF 2027, puis relancer test_profils.py.
+PRECOMPTE_VERSIONS = [
+    {
+        'annee': 2026,
+        'source': ("Simulateur Excel verrouille SPF Finances 2026 "
+                   "(SimulateurPrP2026verrouilleFR.xlsx), formules extraites "
+                   "et executees le 29/09/2026 -- verifie au centime."),
+        'frais_forfaitaires_taux': 0.30,
+        'frais_forfaitaires_plafond_annuel': 6070.0,
+        'tranches_annuelles': [
+            # (bas, haut, taux, montant_fixe_cumule_avant_la_tranche)
+            (0.0, 16710.0, 0.2675, 0.0),
+            (16710.0, 29500.0, 0.4280, 4469.93),
+            (29500.0, 51050.0, 0.4815, 9944.05),
+            (51050.0, float('inf'), 0.5350, 20320.38),
+        ],
+        'reduction_base_isole_annuelle': 2987.98,
+        'quotient_conjugal_taux': 0.30,
+        'quotient_conjugal_plafond_annuel': 13790.0,
+        'reduction_base_couple_annuelle': 5975.96,
+        'reduction_enfants_charge': {1: 624.0, 2: 1656.0, 3: 4404.0, 4: 7620.0,
+                                     5: 11100.0, 6: 14592.0, 7: 18120.0, 8: 21996.0},
+        'reduction_enfant_supplementaire_au_dela_8': 3864.0,
+        # Reduction du precompte liee au bonus a l'emploi (mecanisme fiscal)
+        'reduction_precompte_taux_volet_a': 0.3314,
+        'reduction_precompte_taux_volet_b': 0.5254,
+        # Exoneration fiscale de l'indemnite km voiture domicile-travail
+        # (annee de revenus 2026) -- au-dela, le surplus est imposable
+        'exoneration_km_voiture_annuelle': 500.0,
+    },
+]
+
+
+def get_precompte_params(reference_date):
+    """Retourne les parametres du precompte pour l'ANNEE de reference_date.
+    Correspondance STRICTE sur l'annee: pas de repli sur l'annee precedente.
+    Si le bareme de l'annee n'est pas charge, leve une erreur explicite --
+    mieux vaut bloquer une fiche que la calculer avec le bareme d'une autre
+    annee sans que personne ne s'en rende compte."""
+    annee = reference_date.year
+    for v in PRECOMPTE_VERSIONS:
+        if v['annee'] == annee:
+            return v
+    disponibles = sorted(v['annee'] for v in PRECOMPTE_VERSIONS)
+    raise ValueError(
+        f"Bareme du precompte professionnel {annee} non charge dans DuxSalary "
+        f"(annees disponibles: {disponibles}). Recuperer le simulateur officiel "
+        f"SPF Finances {annee} et ajouter la version dans parametres_dates.py "
+        f"avant de generer une fiche pour cette annee."
+    )

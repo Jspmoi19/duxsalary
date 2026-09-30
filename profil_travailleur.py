@@ -16,7 +16,7 @@ Utilisation:
 
 from dataclasses import dataclass, field
 from regles_cp import get_regles_cp, ONSS, REDUCTION_STRUCTURELLE, PREMIER_ENGAGEMENT, BONUS_EMPLOI, PRECOMPTE, CSSS
-from parametres_dates import get_bonus_emploi_params, get_reduction_structurelle_params
+from parametres_dates import get_bonus_emploi_params, get_reduction_structurelle_params, get_precompte_params
 from datetime import date as _date
 
 STATUTS_VALIDES = ('ouvrier', 'etudiant', 'employe')
@@ -178,7 +178,8 @@ class ProfilTravailleur:
 
         return volet_a, volet_b
 
-    def reduction_precompte_bonus(self, bonus_a: float, bonus_b: float, brut_imposable: float) -> float:
+    def reduction_precompte_bonus(self, bonus_a: float, bonus_b: float, brut_imposable: float,
+                                   reference_date=None) -> float:
         """Reduction precompte sur bonus emploi -- DEUX taux distincts:
         33.14% sur le volet A, 52.54% sur le volet B (ouvriers uniquement,
         jamais nul pour un employe). Confirme par 4 sources independantes
@@ -188,8 +189,9 @@ class ProfilTravailleur:
             return 0.0
         if brut_imposable > BONUS_EMPLOI['reduction_precompte_plafond_imposable']:
             return 0.0
-        red_a = bonus_a * BONUS_EMPLOI['reduction_precompte_taux_volet_a']
-        red_b = bonus_b * BONUS_EMPLOI['reduction_precompte_taux_volet_b']
+        P = get_precompte_params(reference_date or _date.today())
+        red_a = bonus_a * P['reduction_precompte_taux_volet_a']
+        red_b = bonus_b * P['reduction_precompte_taux_volet_b']
         return round(red_a + red_b, 2)
 
     def reduction_structurelle(self, onss_patronal_brut, base_salariale_mensuelle=None, reference_date=None):
@@ -218,7 +220,8 @@ class ProfilTravailleur:
         return round(min(plafond, max(0.0, onss_patronal_apres_struct)), 2)
 
     def precompte_brut(self, brut_imposable_mensuel: float, etat_civil: str = 'celibataire',
-                        nb_enfants: int = 0, partenaire_revenus_pro: str = 'non') -> float:
+                        nb_enfants: int = 0, partenaire_revenus_pro: str = 'non',
+                        reference_date=None) -> float:
         """Precompte professionnel -- formule-cle officielle (Annexe III, depuis 2023).
         Formule verifiee le 29/09/2026 via execution reelle du simulateur Excel
         verrouille du SPF Finances (pas une reconstitution manuelle).
@@ -232,14 +235,18 @@ class ProfilTravailleur:
         if not self.precompte_applicable:
             return 0.0
 
+        # Parametres de l'ANNEE FISCALE de la periode (versionnes, voir
+        # parametres_dates.PRECOMPTE_VERSIONS) -- erreur explicite si absents
+        P = get_precompte_params(reference_date or _date.today())
+
         annuel_imposable = brut_imposable_mensuel * 12
-        frais = min(annuel_imposable * PRECOMPTE['frais_forfaitaires_taux'],
-                    PRECOMPTE['frais_forfaitaires_plafond_annuel'])
+        frais = min(annuel_imposable * P['frais_forfaitaires_taux'],
+                    P['frais_forfaitaires_plafond_annuel'])
         revenu_net_imposable = max(0.0, annuel_imposable - frais)
 
         def impot_tranches(base):
             impot = 0.0
-            for bas, haut, taux, fixe_cumule in PRECOMPTE['tranches_annuelles']:
+            for bas, haut, taux, fixe_cumule in P['tranches_annuelles']:
                 if base <= bas:
                     break
                 tranche_haut = min(base, haut) if haut != float('inf') else base
@@ -250,18 +257,18 @@ class ProfilTravailleur:
         conjoint_sans_revenus = (etat_civil in etats_couple and partenaire_revenus_pro == 'non')
 
         if conjoint_sans_revenus:
-            part_conjoint = round(min(revenu_net_imposable * PRECOMPTE['quotient_conjugal_taux'],
-                                       PRECOMPTE['quotient_conjugal_plafond_annuel']), 2)
+            part_conjoint = round(min(revenu_net_imposable * P['quotient_conjugal_taux'],
+                                       P['quotient_conjugal_plafond_annuel']), 2)
             part_travailleur = revenu_net_imposable - part_conjoint
             impot_total = round(impot_tranches(part_travailleur), 2) + round(impot_tranches(part_conjoint), 2)
-            impot = max(0.0, impot_total - PRECOMPTE['reduction_base_couple_annuelle'])
+            impot = max(0.0, impot_total - P['reduction_base_couple_annuelle'])
         else:
             impot_brut = round(impot_tranches(revenu_net_imposable), 2)
-            impot = max(0.0, impot_brut - PRECOMPTE['reduction_base_isole_annuelle'])
+            impot = max(0.0, impot_brut - P['reduction_base_isole_annuelle'])
 
-        red_enfants = PRECOMPTE['reduction_enfants_charge'].get(min(nb_enfants, 8), 0.0)
+        red_enfants = P['reduction_enfants_charge'].get(min(nb_enfants, 8), 0.0)
         if nb_enfants > 8:
-            red_enfants += (nb_enfants - 8) * PRECOMPTE['reduction_enfant_supplementaire_au_dela_8']
+            red_enfants += (nb_enfants - 8) * P['reduction_enfant_supplementaire_au_dela_8']
 
         impot_final_annuel = max(0.0, impot - red_enfants)
         return round(impot_final_annuel / 12, 2)

@@ -146,6 +146,28 @@ print(f"  (info) Bilal (base 841.18EUR): reduction degressive = {red_bilal}EUR (
 
 print()
 print("=" * 70)
+print("TEST 8 — Precompte versionne par ANNEE fiscale")
+print("=" * 70)
+p8 = construire_profil('CP 200', 'employe', type_contrat='CDI')
+pp8 = p8.precompte_brut(3042.55, reference_date=date(2026, 10, 31))
+check("Precompte 2026 avec date explicite (isole, 3500 brut)", pp8, 617.41)
+pp8b = p8.precompte_brut(2500.0, etat_civil='marie', partenaire_revenus_pro='non',
+                          reference_date=date(2026, 3, 31))
+check("Quotient conjugal 2026 avec date explicite", pp8b, 35.99)
+red8 = p8.reduction_precompte_bonus(50.0, 20.0, 2500.0, reference_date=date(2026, 6, 30))
+check("Reduction precompte bonus 2026 (taux A/B dates)", red8, round(50*0.3314 + 20*0.5254, 2))
+try:
+    p8.precompte_brut(3042.55, reference_date=date(2027, 1, 31))
+    bloque = 0.0
+except ValueError as e:
+    bloque = 1.0
+    print(f"  Message: {str(e)[:95]}...")
+check("Janvier 2027 sans bareme 2027 = BLOQUE (pas de repli sur 2026)", bloque, 1.0)
+etu = construire_profil('CP 140.03', 'etudiant')
+check("Etudiant 2027: precompte 0 sans exiger de bareme", etu.precompte_brut(1400.0, reference_date=date(2027,1,31)), 0.0)
+
+print()
+print("=" * 70)
 if ECHECS:
     print(f"❌ {len(ECHECS)} TEST(S) ÉCHOUÉ(S): {ECHECS}")
     print("NE PAS DÉPLOYER tant que ces tests ne passent pas.")
