@@ -385,22 +385,13 @@ def calculer_fiche_paie(
     base_onss_pat = round(brut_onss * coeff_ouvrier, 2)
     onss_pat_brut = round(base_onss_pat * onss_pat_taux_base, 2)
     ref_date_struct = periode_fin if periode_fin else date.today()
-    # Jours / heures payes du mois (codes prestation ONSS 1, 3, 4, 5...):
-    # prestations + jours feries payes + conges payes par l'employeur
-    jours_payes_onss = (jours_prestes or 0) + (jours_feries_payes or 0) + (jours_conge or 0)
-    heures_payees_onss = float(heures_prestees or 0) + float(heures_feries or 0) + \
-                         float(jours_conge or 0) * float(heures_jour or 0)
-    red_struct = 0.0 if is_etudiant else profil.reduction_structurelle(
-        onss_pat_brut, reference_date=ref_date_struct, remuneration_mois=brut_onss,
-        jours_payes=jours_payes_onss, heures_payees=heures_payees_onss)
+    red_struct = 0.0 if is_etudiant else profil.reduction_structurelle(onss_pat_brut, base_salariale_mensuelle=base_onss_pat, reference_date=ref_date_struct)
 
     # Premier engagement
     red_pe = 0.0
     if premier_engagement and not is_etudiant:
         reste_apres_struct = round(max(0, onss_pat_brut - red_struct), 2)
-        red_pe = profil.reduction_premier_engagement(
-            reste_apres_struct, ratio_tp, reference_date=ref_date_struct,
-            jours_payes=jours_payes_onss, heures_payees=heures_payees_onss)
+        red_pe = round(min(round(2000/3, 2) * ratio_tp, reste_apres_struct), 2)
 
     onss_pat_net = round(max(0, onss_pat_brut - red_struct - red_pe), 2)
     # Cotisation ANNUELLE vacances ouvriers (10.27% des remunerations a 108%),
