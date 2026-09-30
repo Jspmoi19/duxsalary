@@ -16,7 +16,7 @@ Utilisation:
 
 from dataclasses import dataclass, field
 from regles_cp import get_regles_cp, ONSS, REDUCTION_STRUCTURELLE, PREMIER_ENGAGEMENT, BONUS_EMPLOI, PRECOMPTE, CSSS
-from parametres_dates import get_bonus_emploi_params, get_reduction_structurelle_params, get_precompte_params, get_premier_engagement_params
+from parametres_dates import get_bonus_emploi_params, get_reduction_structurelle_params, get_precompte_params, get_premier_engagement_params, get_css_params
 from datetime import date as _date
 from onss_taux import get_taux_onss
 
@@ -310,8 +310,29 @@ class ProfilTravailleur:
             pg = self._r2(G * mu * self._beta(mu, False) / 3)
         return round(min(pg, max(0.0, onss_patronal_apres_struct)), 2)
 
+    @staticmethod
+    def _reductions_autres_charges(P, couple_un_revenu, charges):
+        """Annexes 4 (isole / conjoint avec revenus) et 5 (conjoint sans revenus)
+        de la formule-cle. Retourne [(libelle, montant annuel)]."""
+        ch = charges or {}
+        R = P['reductions_autres_charges']
+        res = []
+        if ch.get('parent_isole') and not couple_un_revenu and ch.get('etat_civil_isole', True):
+            res.append(("Réduction parent isolé avec enfant à charge", R['parent_isole']))
+        if ch.get('handicape'):
+            res.append(("Réduction travailleur handicapé", R['handicape']))
+        if ch.get('conjoint_handicape') and couple_un_revenu:
+            res.append(("Réduction conjoint handicapé", R['conjoint_handicape']))
+        n_dep = int(ch.get('nb_personnes_charge_dependance') or 0)
+        if n_dep:
+            res.append((f"Personnes à charge 65+ dépendantes ({n_dep})", n_dep * R['personne_charge_dependance']))
+        n_aut = int(ch.get('nb_autres_personnes_charge') or 0)
+        if n_aut:
+            res.append((f"Autres personnes à charge ({n_aut})", n_aut * R['autre_personne_charge']))
+        return res
+
     def precompte_detail(self, brut_imposable_mensuel, etat_civil='celibataire', nb_enfants=0,
-                         partenaire_revenus_pro='non', reference_date=None):
+                         partenaire_revenus_pro='non', reference_date=None, charges=None):
         """Etapes du calcul du precompte (formule-cle SPF), pour affichage.
         Doit toujours donner le meme resultat que precompte_brut (teste)."""
         if not self.precompte_applicable:
@@ -347,7 +368,10 @@ class ProfilTravailleur:
             red_enf += (nb_enfants - 8) * P['reduction_enfant_supplementaire_au_dela_8']
         if red_enf:
             etapes.append((f"Réduction enfants à charge ({nb_enfants})", -red_enf))
-        annuel_final = max(0.0, impot - red_enf)
+        autres = self._reductions_autres_charges(P, couple, dict(charges or {}, etat_civil_isole=etat_civil not in ('marie', 'cohabitation_legale')))
+        for lib, mt in autres:
+            etapes.append((lib, -mt))
+        annuel_final = max(0.0, impot - red_enf - sum(mt for _, mt in autres))
         etapes.append(("Impôt annuel", round(annuel_final, 2)))
         return {'applicable': True, 'annee_fiscale': P['annee'], 'source': P['source'],
                 'etapes': etapes, 'precompte_mensuel': round(annuel_final / 12, 2)}
@@ -370,7 +394,7 @@ class ProfilTravailleur:
 
     def precompte_brut(self, brut_imposable_mensuel: float, etat_civil: str = 'celibataire',
                         nb_enfants: int = 0, partenaire_revenus_pro: str = 'non',
-                        reference_date=None) -> float:
+                        reference_date=None, charges=None) -> float:
         """Precompte professionnel -- formule-cle officielle (Annexe III, depuis 2023).
         Formule verifiee le 29/09/2026 via execution reelle du simulateur Excel
         verrouille du SPF Finances (pas une reconstitution manuelle).
@@ -419,8 +443,46 @@ class ProfilTravailleur:
         if nb_enfants > 8:
             red_enfants += (nb_enfants - 8) * P['reduction_enfant_supplementaire_au_dela_8']
 
-        impot_final_annuel = max(0.0, impot - red_enfants)
+        autres = self._reductions_autres_charges(P, conjoint_sans_revenus,
+                    dict(charges or {}, etat_civil_isole=etat_civil not in etats_couple))
+        impot_final_annuel = max(0.0, impot - red_enfants - sum(mt for _, mt in autres))
         return round(impot_final_annuel / 12, 2)
+
+    def css_mensuelle(self, remuneration_brute_mensuelle, etat_civil='celibataire',
+                      partenaire_revenus_pro='non', reference_date=None):
+        """Cotisation speciale de securite sociale, retenue MENSUELLE selon le
+        bareme officiel (Instructions ONSS 2026/3 p.336-337). Base: remuneration
+        brute declaree (108% ouvriers). Tranche selon la remuneration trimestrielle
+        (= mensuelle x 3, methode des 2 premiers mois du trimestre)."""
+        if not self.css_applicable:
+            return 0.0
+        C = get_css_params(reference_date or self.reference_date or _date.today())
+        m = max(0.0, remuneration_brute_mensuelle or 0.0)
+        q = m * 3
+        couple = etat_civil in ('marie', 'cohabitation_legale')
+        if not couple:
+            for q_min, q_max, fixe, taux, seuil in C['individuelle']:
+                if q_min <= q <= q_max or (q_max == float('inf') and q > q_min):
+                    return self._r2(fixe / 3 + taux * max(0.0, m - seuil))
+            return 0.0
+        if partenaire_revenus_pro == 'oui':
+            fq_min, fq_max, forfait = C['couple_deux_revenus']['forfait']
+            t1 = C['couple_deux_revenus']['tranche_1']
+            t2 = C['couple_deux_revenus']['tranche_2']
+            if fq_min <= q < fq_max:
+                return self._r2(forfait / 3)
+            if t1[0] <= q <= t1[1]:
+                return self._r2(max(t1[2] * (m - t1[3]), t1[4] / 3))
+            if q > t2[0]:
+                return self._r2(min(t2[1] / 3 + t2[2] * (m - t2[3]), t2[4] / 3))
+            return 0.0
+        t1 = C['couple_un_revenu']['tranche_1']
+        t2 = C['couple_un_revenu']['tranche_2']
+        if t1[0] <= q <= t1[1]:
+            return self._r2(t1[2] * (m - t1[3]))
+        if q > t2[0]:
+            return self._r2(min(t2[1] / 3 + t2[2] * (m - t2[3]), t2[4] / 3))
+        return 0.0
 
     def css(self, brut_imposable_mensuel: float) -> float:
         if not self.css_applicable:

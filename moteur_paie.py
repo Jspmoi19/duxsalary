@@ -199,6 +199,7 @@ def calculer_fiche_paie(
     cheques_repas_calc=None,
     prime_exceptionnelle=0.0, libelle_prime="Prime de fin d'année",
     double_pecule=0.0, precompte_pecule_manuel=None,
+    charges_famille=None,
     heures_semaine=38.0, heures_jour=7.6, jours_semaine=5,
     type_contrat='CDD', is_etudiant=False, premier_engagement=False,
     jours_prestes=0, heures_prestees=0.0,
@@ -306,13 +307,16 @@ def calculer_fiche_paie(
             montant_km_imposable_precompte = round(montant_km_estime - plafond_mensuel_km, 2)
     brut_imposable_precompte = round(brut_imposable + montant_km_imposable_precompte, 2)
     precompte_brut = profil.precompte_brut(brut_imposable_precompte, etat_civil, nb_enfants, partenaire_revenus_pro,
-                                           reference_date=ref_date_fiscale)
+                                           reference_date=ref_date_fiscale, charges=charges_famille)
     # Réduction précompte sur bonus emploi (AR 27/08/1993 art. 38§3quater, taux 33.14% confirmé Liantis)
     red_precompte_bonus = profil.reduction_precompte_bonus(bonus_a, bonus_b, brut_imposable,
                                                             reference_date=ref_date_fiscale)
     red_precompte_bonus = min(red_precompte_bonus, precompte_brut)
     precompte = round(precompte_brut - red_precompte_bonus, 2)
-    css = profil.css(brut_imposable_precompte)
+    # Cotisation speciale SS: bareme officiel ONSS (depuis 01/04/2022), base =
+    # remuneration BRUTE declaree (108% ouvriers, primes incluses, hors double pecule)
+    base_css = round((brut_onss + (prime_exceptionnelle or 0)) * profil.coeff_base_onss_patronal, 2)
+    css = profil.css_mensuelle(base_css, etat_civil, partenaire_revenus_pro, reference_date=ref_date_fiscale)
 
     # ── INDEMNITÉS EXONÉRÉES ──────────────────────────────────────────
     lignes_indemn = []
@@ -505,7 +509,8 @@ def calculer_fiche_paie(
     # ── DETAIL COMPLET DU CALCUL (page "Calculer la paie") ─────────────
     onss_info = profil.onss_officiel
     pp_detail = profil.precompte_detail(brut_imposable_precompte, etat_civil, nb_enfants,
-                                        partenaire_revenus_pro, reference_date=ref_date_fiscale)
+                                        partenaire_revenus_pro, reference_date=ref_date_fiscale,
+                                        charges=charges_famille)
     def L(libelle, montant, base=None, taux=None, source=None, info=False, total=False):
         return {'libelle': libelle, 'montant': (round(montant, 2) + 0.0) if montant is not None else None,
                 'base': base, 'taux': taux, 'source': source, 'info': info, 'total': total}

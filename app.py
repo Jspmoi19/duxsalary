@@ -1520,7 +1520,8 @@ def generer_fiche_depuis_calendrier(dimona_id):
                dos.premier_engagement, dos.premier_engagement_depuis,
                dos.categorie_employeur, dos.code_importance, dos.code_ffe,
                t.etat_civil, t.partenaire_revenus_pro, t.partenaire_pensions,
-               t.nb_enfants_sans_handicap, t.nb_enfants_avec_handicap, t.nb_personnes_charge_66
+               t.nb_enfants_sans_handicap, t.nb_enfants_avec_handicap, t.nb_personnes_charge_66,
+               t.parent_isole, t.handicape, t.conjoint_handicape, t.nb_autres_personnes_charge
         FROM dimona d
         JOIN travailleurs t ON t.id = d.travailleur_id
         JOIN dossiers dos ON dos.id = d.dossier_id
@@ -1657,7 +1658,19 @@ def generer_fiche_depuis_calendrier(dimona_id):
             salaire_horaire=salaire_h,
             salaire_mensuel_fixe=float(contrat.get('salaire_mensuel') or 0) if contrat else 0.0,
             etat_civil=dimona.get('etat_civil', 'celibataire') or 'celibataire',
-            nb_enfants=int(dimona.get('nb_enfants_charge', 0) or 0),
+            # Enfants de la situation familiale (enfant handicape compte pour deux,
+            # annexe 3 formule-cle). Corrige le 30/09/2026: l'ancien champ
+            # nb_enfants_charge etait transmis a la place des nouveaux champs.
+            nb_enfants=(int(dimona.get('nb_enfants_sans_handicap') or 0)
+                        + 2 * int(dimona.get('nb_enfants_avec_handicap') or 0))
+                       or int(dimona.get('nb_enfants_charge', 0) or 0),
+            charges_famille={
+                'parent_isole': bool(dimona.get('parent_isole')),
+                'handicape': bool(dimona.get('handicape')),
+                'conjoint_handicape': bool(dimona.get('conjoint_handicape')),
+                'nb_personnes_charge_dependance': int(dimona.get('nb_personnes_charge_66') or 0),
+                'nb_autres_personnes_charge': int(dimona.get('nb_autres_personnes_charge') or 0),
+            },
             partenaire_revenus_pro=dimona.get('partenaire_revenus_pro', 'non') or 'non',
             partenaire_pensions=dimona.get('partenaire_pensions', 'non') or 'non',
             type_contrat=contrat['type_contrat'] if contrat else 'CDD',

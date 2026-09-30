@@ -162,6 +162,16 @@ PRECOMPTE_VERSIONS = [
         # Exoneration fiscale de l'indemnite km voiture domicile-travail
         # (annee de revenus 2026) -- au-dela, le surplus est imposable
         'exoneration_km_voiture_annuelle': 500.0,
+        # Reductions pour autres charges de famille (annexes 4 et 5 de la
+        # formule-cle, simulateur SPF 2026) -- montants ANNUELS, cumulables.
+        # Enfant handicape a charge: compte pour deux (annexe 3, note 1).
+        'reductions_autres_charges': {
+            'parent_isole': 624.0,                # annexe 4.1 (isole uniquement)
+            'handicape': 624.0,                   # annexe 4.2 / 5.1
+            'conjoint_handicape': 624.0,          # annexe 5.2 (conjoint sans revenus)
+            'personne_charge_dependance': 1992.0, # annexe 4.3 / 5.3, par personne
+            'autre_personne_charge': 624.0,       # annexe 4.4 / 5.4, par personne
+        },
         # Allocations exceptionnelles (prime de fin d'annee, 13e mois, bonus,
         # double pecule): taux UNIQUE lu sur la remuneration annuelle brute
         # NORMALE (allocation exclue), applique en une fois a l'allocation.
@@ -221,3 +231,38 @@ PREMIER_ENGAGEMENT_VERSIONS = [
 
 def get_premier_engagement_params(reference_date):
     return _get_version(PREMIER_ENGAGEMENT_VERSIONS, reference_date)
+
+
+# ─────────────────────────────────────────────────────────────────
+# COTISATION SPECIALE DE SECURITE SOCIALE (CSSS) -- retenue travailleur
+# ─────────────────────────────────────────────────────────────────
+# Source: Instructions administratives ONSS 2026/3, p.336-337 (bareme en
+# vigueur depuis le 01/04/2022). Base = remuneration BRUTE declaree (108% pour
+# les ouvriers), PAS le brut imposable. Tranche determinee par la remuneration
+# TRIMESTRIELLE; montants trimestriels (fixes) et % sur la remuneration mensuelle.
+# Corrige le 30/09/2026: l'ancien code appliquait un bareme obsolete (7,6% /
+# 18,60 EUR) sur le brut imposable, sans distinction de situation familiale.
+CSS_VERSIONS = [
+    {'date_debut': date(2022, 4, 1),
+     'source': 'Instructions administratives ONSS 2026/3 p.336-337',
+     # imposition individuelle: (q_min, q_max, fixe_trimestriel, taux, seuil_mensuel)
+     'individuelle': [
+        (5836.14, 6570.54, 0.00, 0.0422, 1945.38),
+        (6570.54, 11211.00, 30.99, 0.0110, 2190.18),
+        (11211.00, 12300.00, 82.05, 0.0338, 3737.00),
+        (12300.00, 18116.46, 118.83, 0.0110, 4100.00),
+        (18116.46, float('inf'), 182.82, 0.0, 0.0),
+     ],
+     # imposition commune, conjoint SANS revenus professionnels
+     'couple_un_revenu': {'tranche_1': (5836.14, 6570.54, 0.0590, 1945.38),
+                          'tranche_2': (6570.54, 43.32, 0.0110, 2190.18, 182.82)},
+     # imposition commune, conjoint AVEC revenus professionnels
+     'couple_deux_revenus': {'forfait': (3285.29, 5836.14, 15.45),
+                             'tranche_1': (5836.14, 6570.54, 0.0590, 1945.38, 15.45),
+                             'tranche_2': (6570.54, 43.32, 0.0110, 2190.18, 154.92)},
+    },
+]
+
+
+def get_css_params(reference_date):
+    return _get_version(CSS_VERSIONS, reference_date)

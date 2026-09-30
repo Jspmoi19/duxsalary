@@ -33,7 +33,10 @@ r = calculer_fiche_paie('Ciwan','Ilhan','n','a','BE',date(2004,11,17),date(2026,
     frais_nets=200.0, km_domicile=12, taux_km=0.08, rgpt_actif=False, cheques_repas=False,
     categorie_employeur='010', code_ffe='C', code_importance='1',
     periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
-check("Net (inchange)", r['salaire_net'], 2332.89)
+# 30/09/2026: CSS au bareme officiel ONSS (11,07 au lieu de 19,33) -> +8,26 EUR net
+check("Net (CSS officielle 11,07)", r['salaire_net'], 2341.16)
+css_l = next(l['montant'] for l in r['lignes_indemn'] if 'Cotisation spéciale' in l['libelle'])
+check("Cotisation speciale SS (bareme ONSS 2022+, isole)", css_l, -11.07)
 check("Reduction structurelle (Group S 398,98)", r['reduction_structurelle'], 398.98)
 check("Premier engagement (Group S 165,27)", r['reduction_premier_engagement'], 165.27)
 codes = {c['code']: c['montant'] for c in r['cotisations_complementaires']}
@@ -84,7 +87,10 @@ avec = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2020,1,1),'X
 check("Prime: ONSS 13,07%", avec['prime_onss'], round(2257 * 0.1307, 2))
 # remuneration annuelle normale 27.084 EUR -> tranche 26.340-31.830: 40,38% (autres allocations)
 check("Prime: precompte 40,38% sur (2257 - ONSS)", avec['prime_precompte'], round((2257 - round(2257*0.1307, 2)) * 0.4038, 2))
-check("Prime: net ajoute au net du mois", round(avec['salaire_net'] - sans['salaire_net'], 2), avec['net_exceptionnel'])
+# La CSS du mois inclut la prime (remuneration brute du trimestre, primes comprises)
+css_de = lambda d: next((l['montant'] for l in d['lignes_indemn'] if 'Cotisation spéciale' in l['libelle']), 0)
+check("Prime: net du mois = net prime - hausse de la CSS", round(avec['salaire_net'] - sans['salaire_net'], 2),
+      round(avec['net_exceptionnel'] + css_de(avec) - css_de(sans), 2))
 check("Salaire regulier inchange (bonus emploi non touche)", avec['bonus_emploi'], sans['bonus_emploi'])
 
 # Fiche REELLE SD Worx juin 2024 (Leo): pecule 2.462,21 / retenue 297,33 / precompte saisi 786,72
@@ -98,6 +104,18 @@ r2 = calculer_fiche_paie('Leo','P','n','a','BE',date(2002,1,1),date(2024,1,1),'X
     salaire_mensuel_fixe=2700.0, double_pecule=2462.21, periode_debut=date(2026,6,1), periode_fin=date(2026,6,30), **base_kw)
 # 2026: remuneration annuelle 32.400 -> tranche 31.830-34.640: 39,37% (double pecule)
 check("Pecule: precompte automatique bareme 2026 (39,37%)", r2['pecule_precompte'], round((2462.21 - 297.33) * 0.3937, 2))
+
+print(); print("=" * 70); print("SITUATION FAMILIALE -- enfants et charges de famille"); print("=" * 70)
+kw_f = dict(heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, type_contrat='CDI', jours_prestes=22, heures_prestees=167.2,
+            rgpt_actif=False, cheques_repas=False, salaire_mensuel_fixe=3000.0,
+            periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
+base = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2020,1,1),'X','a','b','r','CP 200','E',18.0, **kw_f)
+dep = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2020,1,1),'X','a','b','r','CP 200','E',18.0,
+                          charges_famille={'nb_personnes_charge_dependance': 1}, **kw_f)
+check("Personne 65+ dependante: -166 EUR/mois de precompte (1.992/12)", round(abs(base['precompte']) - abs(dep['precompte']), 2), 166.0)
+e2 = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2020,1,1),'X','a','b','r','CP 200','E',18.0, nb_enfants=2, **kw_f)
+check("2 enfants (dont 1 handicape transmis comme 2 = 3): reduction annexe 3", round(abs(base['precompte']) - abs(
+      calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2020,1,1),'X','a','b','r','CP 200','E',18.0, nb_enfants=3, **kw_f)['precompte']), 2), 367.0)
 
 print(); print("=" * 70); print("RGPT CP 121 -- par JOUR (1,63 EUR)"); print("=" * 70)
 r = calculer_fiche_paie('N','T','n','a','BE',date(1990,1,1),date(2026,3,1),'X','a','b','r','CP 121','Nettoyeuse',17.17,
