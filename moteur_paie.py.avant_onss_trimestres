@@ -216,9 +216,7 @@ def calculer_fiche_paie(
     # ── PROFIL TRAVAILLEUR — source unique pour les décisions ONSS/précompte/bonus ──
     statut_profil = 'etudiant' if is_etudiant else ('ouvrier' if is_ouvrier else 'employe')
     profil = construire_profil(cp_key, statut_profil, type_contrat=type_contrat,
-                                heures_semaine=heures_semaine, jours_semaine=jours_semaine,
-                                reference_date=periode_fin if periode_fin else date.today())
-    onss_info = profil.onss_officiel   # trimestre utilise + report eventuel
+                                heures_semaine=heures_semaine, jours_semaine=jours_semaine)
 
     onss_pers_taux = profil.onss_personnel_taux
     onss_pat_taux_base = profil.onss_patronal_taux_base
@@ -392,12 +390,7 @@ def calculer_fiche_paie(
         red_pe = round(min(round(2000/3, 2) * ratio_tp, reste_apres_struct), 2)
 
     onss_pat_net = round(max(0, onss_pat_brut - red_struct - red_pe), 2)
-    # Cotisation ANNUELLE vacances ouvriers (10.27% des remunerations a 108%),
-    # facturee par l'ONSS l'annee suivante -- provisionnee ici pour un cout reel
-    provision_vacances_annuelles = round(brut_onss * profil.coeff_base_onss_patronal
-                                         * profil.vacances_annuelles_taux, 2)
-    cout_empl = round(brut_onss + onss_pat_net + montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + cr_empl_total
-                      + provision_vacances_annuelles, 2)
+    cout_empl = round(brut_onss + onss_pat_net + montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + cr_empl_total, 2)
 
     # Ancienneté
     ref_date = periode_fin if periode_fin else date.today()
@@ -417,11 +410,6 @@ def calculer_fiche_paie(
         'regime_str': f"{jours_semaine}j/sem · {heures_jour}h/j",
         'type_contrat': type_contrat, 'is_etudiant': is_etudiant, 'is_ouvrier': is_ouvrier,
         'libelle_salaire_base': profil.libelle_salaire_base,
-        'onss_trimestre_utilise': onss_info['trimestre_utilise'],
-        'onss_parametres_reportes': onss_info['parametres_reportes'],
-        'onss_date_fichier': onss_info['date_creation_onss'],
-        'onss_taux_patronal_applique': profil.onss_patronal_taux_base,
-        'provision_vacances_annuelles': provision_vacances_annuelles,
         'salaire_mensuel_fixe': salaire_mensuel_fixe,
         'lignes_salaire': lignes_salaire,
         'brut_onss': brut_onss,

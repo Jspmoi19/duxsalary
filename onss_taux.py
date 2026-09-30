@@ -169,6 +169,18 @@ def get_taux_onss(statut, reference_date, categorie=CATEGORIE_DEFAUT):
     return res
 
 
+def categorie_existe(categorie, reference_date=None):
+    """Verifie qu'une categorie employeur existe dans le fichier de taux du
+    trimestre (ou du dernier disponible). Utilise a l'enregistrement du
+    dossier pour refuser une categorie mal encodee."""
+    ref = reference_date or date.today()
+    voulu = trimestre_de(ref)
+    dispo = [c for c in _disponibles() if c <= voulu] or _disponibles()
+    if not dispo:
+        return False
+    data = _charger(dispo[-1])
+    return any(r.get('EmployerClass') == categorie for r in data['cotisations'])
+
 if __name__ == '__main__':
     if len(sys.argv) == 3 and sys.argv[1] == 'importer':
         cle, rapport = importer(sys.argv[2])

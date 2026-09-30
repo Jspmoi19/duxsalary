@@ -31,6 +31,7 @@ class ProfilTravailleur:
     heures_semaine: float = 38.0
     jours_semaine: int = 5
     reference_date: object = None     # periode de la fiche -> trimestre ONSS
+    categorie_employeur: str = '000'  # categorie ONSS de l'employeur (dossier)
     regles_cp: dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -73,7 +74,8 @@ class ProfilTravailleur:
         """Taux ONSS officiels du trimestre de la fiche (fichiers TechLib),
         avec tracabilite: trimestre utilise, report eventuel si le fichier
         du trimestre n'est pas encore publie."""
-        return get_taux_onss(self.statut, self.reference_date or _date.today())
+        return get_taux_onss(self.statut, self.reference_date or _date.today(),
+                             categorie=self.categorie_employeur or '000')
 
     @property
     def onss_personnel_taux(self) -> float:
@@ -305,7 +307,7 @@ class ProfilTravailleur:
 
 def construire_profil(cp_key: str, statut: str, type_contrat: str = 'CDI',
                        heures_semaine: float = None, jours_semaine: int = 5,
-                       reference_date=None) -> ProfilTravailleur:
+                       reference_date=None, categorie_employeur: str = '000') -> ProfilTravailleur:
     """Point d'entrée unique à appeler depuis app.py / moteur_paie.py.
     C'est CETTE fonction qui doit être appelée dès qu'on connaît le statut
     choisi dans le formulaire — tout le reste en découle."""
@@ -316,4 +318,5 @@ def construire_profil(cp_key: str, statut: str, type_contrat: str = 'CDI',
         heures_semaine=heures_semaine or 38.0,
         jours_semaine=jours_semaine,
         reference_date=reference_date,
+        categorie_employeur=categorie_employeur or '000',
     )
