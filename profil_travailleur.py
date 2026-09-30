@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from regles_cp import get_regles_cp, ONSS, REDUCTION_STRUCTURELLE, PREMIER_ENGAGEMENT, BONUS_EMPLOI, PRECOMPTE, CSSS
 from parametres_dates import get_bonus_emploi_params, get_reduction_structurelle_params, get_precompte_params
 from datetime import date as _date
+from onss_taux import get_taux_onss
 
 STATUTS_VALIDES = ('ouvrier', 'etudiant', 'employe')
 
@@ -29,6 +30,7 @@ class ProfilTravailleur:
     type_contrat: str = 'CDI'        # 'CDI' | 'CDD' | 'STU' | ...
     heures_semaine: float = 38.0
     jours_semaine: int = 5
+    reference_date: object = None     # periode de la fiche -> trimestre ONSS
     regles_cp: dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -67,18 +69,33 @@ class ProfilTravailleur:
         return 1.0
 
     @property
+    def onss_officiel(self) -> dict:
+        """Taux ONSS officiels du trimestre de la fiche (fichiers TechLib),
+        avec tracabilite: trimestre utilise, report eventuel si le fichier
+        du trimestre n'est pas encore publie."""
+        return get_taux_onss(self.statut, self.reference_date or _date.today())
+
+    @property
     def onss_personnel_taux(self) -> float:
-        if self.is_etudiant:
-            return ONSS['etudiant_personnel']
-        return ONSS['personnel_taux']
+        return self.onss_officiel['personnel']
 
     @property
     def onss_patronal_taux_base(self) -> float:
-        """Taux ONSS patronal SANS coefficient — le coefficient 108% est appliqué séparément.
-        Lu depuis regles_cp[cp]['onss_patronal_taux_base'] — chaque CP a son propre taux facial."""
-        if self.is_etudiant:
-            return ONSS['etudiant_patronal'] + ONSS['etudiant_fonds_amiante']
-        return self.regles_cp.get('onss_patronal_taux_base', ONSS['patronal_taux_defaut'])
+        """Taux patronal SANS coefficient 108% (applique separement).
+        = cotisation patronale de base + moderation salariale
+          + pour les ouvriers: cotisation trimestrielle vacances annuelles
+            (code 253, 5.57% au 2026/3 -- partie de la cotisation patronale
+            de base selon les Instructions ONSS 2026/3).
+        Remplace l'ancien taux par CP (27% CP 140.03) qui n'avait pas de
+        source officielle (corrige le 30/09/2026)."""
+        t = self.onss_officiel
+        return round(t['patronal_base'] + t['moderation_salariale'] + t['vacances_trimestrielle'], 6)
+
+    @property
+    def vacances_annuelles_taux(self) -> float:
+        """Cotisation ANNUELLE vacances ouvriers (10.27% en 2026), facturee
+        par avis de debit l'annee suivante -- a provisionner dans le cout."""
+        return self.onss_officiel['vacances_annuelle']
 
     @property
     def reduction_structurelle_applicable(self) -> bool:
@@ -287,7 +304,8 @@ class ProfilTravailleur:
 
 
 def construire_profil(cp_key: str, statut: str, type_contrat: str = 'CDI',
-                       heures_semaine: float = None, jours_semaine: int = 5) -> ProfilTravailleur:
+                       heures_semaine: float = None, jours_semaine: int = 5,
+                       reference_date=None) -> ProfilTravailleur:
     """Point d'entrée unique à appeler depuis app.py / moteur_paie.py.
     C'est CETTE fonction qui doit être appelée dès qu'on connaît le statut
     choisi dans le formulaire — tout le reste en découle."""
@@ -297,4 +315,5 @@ def construire_profil(cp_key: str, statut: str, type_contrat: str = 'CDI',
         type_contrat=type_contrat,
         heures_semaine=heures_semaine or 38.0,
         jours_semaine=jours_semaine,
+        reference_date=reference_date,
     )

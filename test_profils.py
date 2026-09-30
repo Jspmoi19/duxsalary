@@ -22,7 +22,7 @@ def check(label, actual, expected, tol=0.02):
 print("=" * 70)
 print("TEST 1 — Bilal Akattof, 98'H BARBER, CP 140.03, ouvrier CDD, juillet 2026")
 print("=" * 70)
-p = construire_profil('CP 140.03', 'ouvrier', type_contrat='CDD')
+p = construire_profil('CP 140.03', 'ouvrier', type_contrat='CDD', reference_date=date(2026, 7, 31))
 brut_onss = 778.87   # 48h prestées + 3h férié + avantage repas 16j, tel que fiche validée
 onss_pers = p.onss_personnel(brut_onss)
 check("ONSS personnel brut", onss_pers, 101.80)
@@ -45,7 +45,11 @@ check("Bonus emploi volet B (vraie table JUILLET 2026, ecrete)", bonus_b, 47.43,
 check("Total bonus = ONSS du (extinction complete)", round(bonus_a+bonus_b,2), 101.80, tol=0.02)
 
 onss_pat_brut = p.onss_patronal_brut(brut_onss)
-check("ONSS patronal brut (×1.08 coeff)", onss_pat_brut, 227.12, tol=0.5)
+# CORRECTION 30/09/2026: l'ancien 227.12 utilisait 27% (sans source officielle).
+# Taux officiel TechLib 2026/3, code 015 cat. 000: 19.88% + 5.12% moderation
+# + 5.57% vacances annuelles (code 253) = 30.57%, sur 108% du brut.
+# 778.87 x 1.08 = 841.18 -> x 30.57% = 257.15
+check("ONSS patronal brut ouvrier (30.57% officiel x 108%)", onss_pat_brut, 257.15, tol=0.05)
 red_struct = p.reduction_structurelle(onss_pat_brut)
 check("Réduction structurelle", red_struct, min(521.47, onss_pat_brut))
 reste = round(onss_pat_brut - red_struct, 2)
@@ -57,7 +61,7 @@ print()
 print("=" * 70)
 print("TEST 2 — Ryad Draoui, 98'H BARBER, CP 140.03, étudiant, août 2026")
 print("=" * 70)
-p2 = construire_profil('CP 140.03', 'etudiant')
+p2 = construire_profil('CP 140.03', 'etudiant', reference_date=date(2026, 8, 31))
 brut_onss2 = 1439.06
 check("ONSS personnel étudiant (2.71%)", p2.onss_personnel(brut_onss2), 39.00)
 onss_pat_brut2 = p2.onss_patronal_brut(brut_onss2)
@@ -73,7 +77,7 @@ print()
 print("=" * 70)
 print("TEST 3 — Ciwan Ilhan, Eysel Consult, CP 336, employé CDI, octobre 2026")
 print("=" * 70)
-p3 = construire_profil('CP 336', 'employe', type_contrat='CDI')
+p3 = construire_profil('CP 336', 'employe', type_contrat='CDI', reference_date=date(2026, 10, 31))
 check("Salaire mensuel fixe applicable", 1.0 if p3.salaire_est_mensuel_fixe else 0.0, 1.0)
 check("Libellé salaire", 1.0 if p3.libelle_salaire_base == "Salaire mensuel de base" else 0.0, 1.0)
 brut_onss3 = 2191.27
@@ -165,6 +169,24 @@ except ValueError as e:
 check("Janvier 2027 sans bareme 2027 = BLOQUE (pas de repli sur 2026)", bloque, 1.0)
 etu = construire_profil('CP 140.03', 'etudiant')
 check("Etudiant 2027: precompte 0 sans exiger de bareme", etu.precompte_brut(1400.0, reference_date=date(2027,1,31)), 0.0)
+
+print()
+print("=" * 70)
+print("TEST 9 — Taux ONSS officiels versionnes par TRIMESTRE (TechLib)")
+print("=" * 70)
+po = construire_profil('CP 140.03', 'ouvrier', reference_date=date(2026, 7, 31))
+check("Ouvrier Q3: patronal 30.57% (19.88+5.12+5.57)", po.onss_patronal_taux_base, 0.3057, tol=0.00001)
+check("Ouvrier: provision vacances annuelles 10.27%", po.vacances_annuelles_taux, 0.1027, tol=0.00001)
+pe = construire_profil('CP 336', 'employe', reference_date=date(2026, 9, 30))
+check("Employe Q3: patronal 25%", pe.onss_patronal_taux_base, 0.25, tol=0.00001)
+check("Employe: pas de cotisation vacances ONVA", pe.vacances_annuelles_taux, 0.0)
+ps = construire_profil('CP 140.03', 'etudiant', reference_date=date(2026, 8, 31))
+check("Etudiant Q3: 2.71% / 5.43%", ps.onss_personnel_taux + ps.onss_patronal_taux_base, 0.0814, tol=0.00001)
+pr = construire_profil('CP 336', 'employe', reference_date=date(2026, 10, 31))
+check("Octobre sans fichier Q4 -> Q3 utilise ET signale",
+      1.0 if (pr.onss_officiel['trimestre_utilise'] == '2026Q3' and pr.onss_officiel['parametres_reportes']) else 0.0, 1.0)
+pq2 = construire_profil('CP 140.03', 'ouvrier', reference_date=date(2026, 5, 31))
+check("Mai 2026 -> fichier Q2 (pas Q3)", 1.0 if pq2.onss_officiel['trimestre_utilise'] == '2026Q2' else 0.0, 1.0)
 
 print()
 print("=" * 70)
