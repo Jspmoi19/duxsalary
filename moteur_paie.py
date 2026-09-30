@@ -464,6 +464,14 @@ def calculer_fiche_paie(
     # Jours / heures payes du mois (codes prestation ONSS 1, 3, 4, 5...):
     # prestations + jours feries payes + conges payes par l'employeur
     jours_payes_onss = (jours_prestes or 0) + (jours_feries_payes or 0) + (jours_conge or 0)
+    if profil.salaire_est_mensuel_fixe and periode_debut and periode_fin:
+        # Employe au mois: le salaire couvre TOUS les jours ouvrables du mois
+        # (le calendrier peut etre incomplet en cours de mois). Seules les
+        # absences non payees (jours_chomage) sont retirees.
+        from datetime import timedelta as _td
+        jours_ouvr_mois = sum(1 for n in range((periode_fin - periode_debut).days + 1)
+                              if (periode_debut + _td(n)).weekday() < 5)
+        jours_payes_onss = max(0, jours_ouvr_mois - (jours_chomage or 0))
     heures_payees_onss = float(heures_prestees or 0) + float(heures_feries or 0) + \
                          float(jours_conge or 0) * float(heures_jour or 0)
     red_struct = 0.0 if is_etudiant else profil.reduction_structurelle(
@@ -499,7 +507,7 @@ def calculer_fiche_paie(
     pp_detail = profil.precompte_detail(brut_imposable_precompte, etat_civil, nb_enfants,
                                         partenaire_revenus_pro, reference_date=ref_date_fiscale)
     def L(libelle, montant, base=None, taux=None, source=None, info=False, total=False):
-        return {'libelle': libelle, 'montant': round(montant, 2) if montant is not None else None,
+        return {'libelle': libelle, 'montant': (round(montant, 2) + 0.0) if montant is not None else None,
                 'base': base, 'taux': taux, 'source': source, 'info': info, 'total': total}
     detail_calcul = [
         {'titre': 'Rémunération brute', 'lignes':
@@ -519,8 +527,7 @@ def calculer_fiche_paie(
             L('Précompte avant réduction', -precompte_brut,
               source=f"Formule-clé SPF {pp_detail.get('annee_fiscale', '')}" if pp_detail['applicable'] else 'Non applicable'),
             L('Réduction liée au bonus à l\'emploi', red_precompte_bonus, source='33,14 % volet A / 52,54 % volet B'),
-            L('Précompte retenu', -precompte, total=True),
-            L('Cotisation spéciale sécurité sociale', -css)]},
+            L('Précompte retenu', -precompte, total=True)]},
         {'titre': 'Indemnités et retenues nettes', 'lignes':
             [L(l['libelle'], l['montant'], source=l.get('detail')) for l in lignes_indemn]},
         {'titre': 'Allocations exceptionnelles', 'lignes':

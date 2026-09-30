@@ -334,21 +334,21 @@ class ProfilTravailleur:
         if couple:
             pc = round(min(net * P['quotient_conjugal_taux'], P['quotient_conjugal_plafond_annuel']), 2)
             i1, i2 = round(tranches(net - pc), 2), round(tranches(pc), 2)
-            etapes += [("Quotient conjugal attribue au conjoint", pc),
-                       ("Impot sur la part du travailleur", i1), ("Impot sur la part du conjoint", i2),
-                       ("Reduction de base couple", -P['reduction_base_couple_annuelle'])]
+            etapes += [("Quotient conjugal attribué au conjoint", pc),
+                       ("Impôt sur la part du travailleur", i1), ("Impôt sur la part du conjoint", i2),
+                       ("Réduction de base couple", -P['reduction_base_couple_annuelle'])]
             impot = max(0.0, i1 + i2 - P['reduction_base_couple_annuelle'])
         else:
             ib = round(tranches(net), 2)
-            etapes += [("Impot selon les tranches", ib), ("Reduction de base isole", -P['reduction_base_isole_annuelle'])]
+            etapes += [("Impôt selon les tranches", ib), ("Réduction de base isolé", -P['reduction_base_isole_annuelle'])]
             impot = max(0.0, ib - P['reduction_base_isole_annuelle'])
         red_enf = P['reduction_enfants_charge'].get(min(nb_enfants, 8), 0.0)
         if nb_enfants > 8:
             red_enf += (nb_enfants - 8) * P['reduction_enfant_supplementaire_au_dela_8']
         if red_enf:
-            etapes.append((f"Reduction enfants a charge ({nb_enfants})", -red_enf))
+            etapes.append((f"Réduction enfants à charge ({nb_enfants})", -red_enf))
         annuel_final = max(0.0, impot - red_enf)
-        etapes.append(("Impot annuel", round(annuel_final, 2)))
+        etapes.append(("Impôt annuel", round(annuel_final, 2)))
         return {'applicable': True, 'annee_fiscale': P['annee'], 'source': P['source'],
                 'etapes': etapes, 'precompte_mensuel': round(annuel_final / 12, 2)}
 

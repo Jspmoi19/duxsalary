@@ -43,6 +43,15 @@ check("831 Fonds social CP 200 0,23%", codes.get('831', 0), 5.19)
 check("ONSS patronal net", r['onss_patronal'], 15.12)
 check("Alerte T4 non publie presente", 1.0 if any('2026Q4' in a for a in r['alertes_calcul']) else 0.0, 1.0)
 
+print(); print("=" * 70); print("CIWAN -- mois en cours, seulement 15 jours encodes (employe au mois)"); print("=" * 70)
+r15 = calculer_fiche_paie('Ciwan','Ilhan','n','a','BE',date(2004,11,17),date(2026,10,1),'Eysel','a','b','r',
+    'CP 200','Comptable',13.71, heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, type_contrat='CDI',
+    premier_engagement=True, salaire_mensuel_fixe=2257.0, jours_prestes=15, heures_prestees=114.0,
+    rgpt_actif=False, cheques_repas=False, categorie_employeur='010', code_ffe='C', code_importance='1',
+    periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
+check("Reduction structurelle = mois complet (398,98) meme si calendrier incomplet", r15['reduction_structurelle'], 398.98)
+check("Premier engagement = mois complet (165,27)", r15['reduction_premier_engagement'], 165.27)
+
 print(); print("=" * 70); print("ETUDIANT -- solidarite uniquement"); print("=" * 70)
 r = calculer_fiche_paie('Ryad','Draoui','n','a','BE',date(2005,1,1),date(2026,8,1),'98H','a','b','r',
     'CP 140.03','Etudiant',14.93, heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, type_contrat='STU',
