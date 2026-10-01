@@ -149,10 +149,6 @@ class ProfilTravailleur:
         return ar if ar.get('applicable') else None
 
     @property
-    def cheques_repas_regle(self) -> dict:
-        return self.regles_cp.get('cheques_repas', {})
-
-    @property
     def rgpt_regle(self) -> dict | None:
         r = self.regles_cp.get('rgpt', {})
         return r if r.get('applicable') else None

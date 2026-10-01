@@ -25,12 +25,11 @@ BONUS_B_MAX_EMP = 0.0    # employés
 RED_STRUCT_BASE = 521.47
 RED_STRUCT_BAS_PLAFOND = 4000.0
 
+# (Cheques-repas: aucun montant ici -- source unique cheques_regles.py)
 # ── INDEMNITÉS PAR CP ─────────────────────────────────────────────────
 CP_INDEMNITES = {
     'CP 140.03': {
         'avantage_repas_jour': 1.09,       # soumis ONSS
-        'cr_part_coll_jour': 1.09,          # déduit net travailleur
-        'cr_part_empl_jour': 6.91,          # payé Monizze par employeur
         'rgpt_heure': 1.8175,
         'indem_vetements_jour': 0.0,
         'indem_deplacement_jour': 0.0,
@@ -40,8 +39,6 @@ CP_INDEMNITES = {
     },
     'CP 302': {
         'avantage_repas_jour': 1.09,
-        'cr_part_coll_jour': 1.09,
-        'cr_part_empl_jour': 0.0,
         'indem_vetements_jour': 4.40,
         'indem_deplacement_jour': 1.98,
         'onss_patronal': 0.2700,
@@ -50,8 +47,6 @@ CP_INDEMNITES = {
     },
     'CP 200': {
         'avantage_repas_jour': 0.0,
-        'cr_part_coll_jour': 1.09,
-        'cr_part_empl_jour': 6.91,
         'onss_patronal': 0.2500,
         'type_travailleur': 'employe',
         'sal_bareme_mensuel_etp': 2242.81,
@@ -59,8 +54,6 @@ CP_INDEMNITES = {
     },
     'CP 336': {
         'avantage_repas_jour': 0.0,
-        'cr_part_coll_jour': 1.09,
-        'cr_part_empl_jour': 6.91,
         'onss_patronal': 0.2500,
         'type_travailleur': 'employe',
         'sal_bareme_mensuel_etp': 2254.30,    # minimum sectoriel 01/09/2026
@@ -69,8 +62,6 @@ CP_INDEMNITES = {
     },
     'CP 121': {
         'avantage_repas_jour': 0.0,
-        'cr_part_coll_jour': 1.09,
-        'cr_part_empl_jour': 5.82,
         'rgpt_jour': 1.63,   # PAR JOUR (ACCG, primes CP 121 au 01/07/2026) - corrige le 30/09/2026
         'onss_patronal': 0.2700,
         'type_travailleur': 'ouvrier',
@@ -78,8 +69,6 @@ CP_INDEMNITES = {
     },
     'CP 124': {
         'avantage_repas_jour': 0.0,
-        'cr_part_coll_jour': 1.09,
-        'cr_part_empl_jour': 5.82,
         'onss_patronal': 0.2700,
         'type_travailleur': 'ouvrier',
         'sal_bareme_mensuel_etp': 2500.0,
@@ -403,27 +392,37 @@ def calculer_fiche_paie(
         lignes_indemn.append({'libelle': f'Indemnité km ({km_domicile} km)',
             'detail': f'{taux_km:.4f} €/km', 'jours': jours_prestes, 'montant': montant_km})
 
-    # Chèques-repas — déduction part collectivité uniquement
+    # Chèques-repas — SOURCE UNIQUE: cheques_regles.py (aucun montant dans ce fichier).
+    # 1) cheques_repas_calc: calcul du suivi des cheques du dossier (page « Chèques »).
+    #    La configuration du dossier prime toujours: l'employeur peut accorder plus que
+    #    le minimum sectoriel, dans le cadre legal.
+    # 2) sinon, case cochee: regle sectorielle de la CP a la date de la periode
+    #    (date d'entree en vigueur, anciennete, statut, jours ou heures / 7,4).
     montant_cr_ded = 0.0
-    cr_coll = cp.get('cr_part_coll_jour', 0.0)
-    cr_empl_j = cp.get('cr_part_empl_jour', 0.0)
     cr_empl_total = 0.0
-    if cheques_repas_calc is not None:
-        # Nombre et montants calcules par le SUIVI DES CHEQUES du dossier
-        # (regles sectorielles: jours prestes, ou heures/7,4 en CP 121)
-        nb_cr = int(cheques_repas_calc.get('nombre') or 0)
+    alertes_cheques = []
+    cr_calc, origine_cr = cheques_repas_calc, 'suivi des chèques du dossier'
+    if cr_calc is None and cheques_repas:
+        from cheques_regles import cheques_repas_du_mois
+        ref_cr = periode_fin if periode_fin else date.today()
+        cr_calc = cheques_repas_du_mois(cp_key, statut_profil, ref_cr.year, ref_cr.month, jours_prestes,
+                                        heures_prestees, date_entree, {'actif': False})
+        origine_cr = 'règle sectorielle'
+        if not cr_calc.get('nombre'):
+            alertes_cheques.append(
+                "Chèques-repas demandés mais aucun chèque calculé : "
+                + (cr_calc.get('motif') or f"aucune obligation sectorielle en {cp_key} à cette date.")
+                + " Pour en octroyer, configurez-les dans la page « Chèques » du dossier.")
+    if cr_calc is not None:
+        nb_cr = int(cr_calc.get('nombre') or 0)
         if nb_cr > 0:
-            pt_cr = float(cheques_repas_calc.get('part_travailleur') or 0)
+            pt_cr = float(cr_calc.get('part_travailleur') or 0)
             montant_cr_ded = -round(nb_cr * pt_cr, 2)
-            cr_empl_total = round(nb_cr * float(cheques_repas_calc.get('part_patronale') or 0), 2)
+            cr_empl_total = round(nb_cr * float(cr_calc.get('part_patronale') or 0), 2)
             lignes_indemn.append({'libelle': f'Chèques-repas part travailleur ({nb_cr} x {pt_cr:.2f} €)',
-                'detail': f"{nb_cr} chèques de {float(cheques_repas_calc.get('valeur') or 0):.2f} € — suivi des chèques",
+                'detail': f"{nb_cr} chèques de {float(cr_calc.get('valeur') or 0):.2f} € — {origine_cr}",
                 'jours': 0, 'montant': montant_cr_ded})
-    elif cheques_repas and cr_coll > 0 and jours_prestes > 0:
-        montant_cr_ded = -round(cr_coll * jours_prestes, 2)
-        cr_empl_total = round(cr_empl_j * jours_prestes, 2)
-        lignes_indemn.append({'libelle': f'Chèques-repas part coll. (-{cr_coll:.2f} €/j)',
-            'detail': f'{cr_coll:.2f} €/jour', 'jours': jours_prestes, 'montant': montant_cr_ded})
+        alertes_cheques += [f"Chèques-repas : {a}" for a in cr_calc.get('alertes') or []]
 
     # Frais nets forfaitaires
     montant_frais_nets = 0.0
@@ -609,6 +608,7 @@ def calculer_fiche_paie(
     alertes_calcul = list(avertissements_onss)
     if alerte_plafond_bonus:
         alertes_calcul.append(alerte_plafond_bonus)
+    alertes_calcul += alertes_cheques
     # Salaire sous le minimum de la CP a la date de la periode (etudiants compris):
     # simple alerte, les montants restent ceux saisis (minimums_cp.py)
     from minimums_cp import alerte_minimum

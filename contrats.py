@@ -71,6 +71,19 @@ def _parties(elements, data, cp_info, sN, sB, sJ):
     elements.append(Spacer(1, 0.25*cm))
 
 
+def _clause_cheques_repas(cp_key):
+    """Phrase du contrat sur les cheques-repas, d'apres la regle sectorielle en
+    vigueur (cheques_regles.py, source unique): aucun montant ecrit ici."""
+    from datetime import date
+    from cheques_regles import regles_pour
+    regle = regles_pour(cp_key, date.today())['repas']
+    if not regle:
+        return "Chèques-repas : selon les dispositions sectorielles et d'entreprise en vigueur."
+    valeur = f"{regle['valeur_introduction']:.2f}".replace('.', ',')
+    return (f"Chèques-repas : au moins {valeur} € par jour presté (depuis le {regle['du']:%d/%m/%Y}), "
+            f"selon les conditions sectorielles.")
+
+
 def _signatures(elements, data, sN, sB, sC):
     """Ajoute le bloc des signatures et retourne l'indice du debut de la fin de
     contrat (dernier article = titre, espace, texte, espace: 4 elements), que
@@ -268,7 +281,7 @@ def generer_contrat_cdi(data):
             f"(1) Pour le personnel roulant : respect obligatoire du règlement CE 561/2006 "
             f"(temps de conduite, pauses, repos journaliers et hebdomadaires). "
             f"(2) Tachygraphe : utilisation obligatoire et conforme pour les véhicules >3,5T. "
-            f"(3) Chèques-repas : 3,09€/jour presté (depuis 01/07/2026). "
+            f"(3) {_clause_cheques_repas(cp_key)} "
             f"(4) Vêtements de travail fournis et entretenus par l'employeur. "
             f"(5) Formation CPC obligatoire pour permis C/CE : 35h tous les 5 ans."
         ))
@@ -432,7 +445,7 @@ def generer_contrat_cdd(data):
     if "140" in cp_key:
         articles.append((
             "Article 13 – Dispositions CP 140.03 Transport",
-            f"Personnel roulant : règlement CE 561/2006. Chèques-repas 3,09€/jour. "
+            f"Personnel roulant : règlement CE 561/2006. {_clause_cheques_repas(cp_key)} "
             f"Vêtements fournis. Formation CPC maintenue."
         ))
 

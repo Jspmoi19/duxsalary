@@ -174,6 +174,7 @@ CSSS = {
 # ─────────────────────────────────────────────────────────────────
 # RÈGLES SPÉCIFIQUES PAR CP — la vraie source de vérité par secteur
 # ─────────────────────────────────────────────────────────────────
+# Cheques-repas et ecocheques: voir cheques_regles.py (source unique, regles datees).
 REGLES_CP = {
 
     'CP 140.03': {
@@ -185,13 +186,6 @@ REGLES_CP = {
             'applicable': True,
             'montant_jour': 1.09,
             'soumis_onss': True,     # OUI — c'est soumis, contrairement à CP 200/336
-        },
-        'cheques_repas': {
-            'obligatoire': True,
-            'valeur_totale_jour': 8.00,
-            'part_employeur_jour': 6.91,
-            'part_travailleur_jour': 1.09,
-            'depuis': '01/07/2026',
         },
         'rgpt': {
             'applicable': True,
@@ -216,12 +210,6 @@ REGLES_CP = {
         'onss_patronal_taux_base': 0.25,   # validé fiches Liantis employés CP200/336
         'avantage_repas': {
             'applicable': False,   # employés: pas d'avantage repas soumis ONSS de ce type
-        },
-        'cheques_repas': {
-            'obligatoire': False,   # PAS OBLIGATOIRE en CP 200 — accord d'entreprise requis
-            'valeur_max_legale_jour': 8.00,
-            'part_employeur_max_jour': 6.91,
-            'part_travailleur_min_jour': 1.09,
         },
         'rgpt': {'applicable': False},
         'prime_fin_annee': {
@@ -259,11 +247,6 @@ REGLES_CP = {
         'heures_semaine_defaut': 38,
         'onss_patronal_taux_base': 0.25,   # aligné employés CP200 — à reconfirmer spécifiquement pour 336
         'avantage_repas': {'applicable': False},
-        'cheques_repas': {
-            'obligatoire': False,   # à vérifier par CCT d'entreprise — pas d'obligation sectorielle générale connue
-            'part_employeur_usuelle_jour': 6.91,
-            'part_travailleur_usuelle_jour': 1.09,
-        },
         'rgpt': {'applicable': False},
         'transport': {
             'train_remboursement_pct': 80,   # 80% du prix carte 2e classe
@@ -300,12 +283,6 @@ REGLES_CP = {
         'heures_semaine_defaut': 36.5,   # ATTENTION: différent des autres CP (pas 38h)
         'onss_patronal_taux_base': 0.27,   # ⚠️ NON VALIDÉ — taux ouvrier standard par défaut, à confirmer avant Yassin
         'avantage_repas': {'applicable': False},   # à confirmer — pas d'avantage repas standard connu
-        'cheques_repas': {
-            'obligatoire': True,
-            'valeur_totale_jour': 3.09,
-            'depuis': '01/01/2026',
-            # part employeur/travailleur non confirmées avec certitude — À VÉRIFIER avant Yassin
-        },
         'rgpt': {
             'applicable': True,
             'montant_jour': 1.63,   # PAR JOUR (ACCG, primes CP 121 au 01/07/2026) - corrige le 30/09/2026

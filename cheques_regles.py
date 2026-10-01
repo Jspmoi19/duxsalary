@@ -163,6 +163,8 @@ def cheques_repas_du_mois(cp_key, statut, annee, mois, jours_prestes, heures_pre
                total_travailleur=round(nb * pt, 2))
     # Controle du cadre legal
     alertes = []
+    if valeur > CADRE_LEGAL['repas_valeur_max'] + 1e-9:
+        alertes.append(f"Valeur du cheque {valeur:.2f} > maximum legal {CADRE_LEGAL['repas_valeur_max']:.2f} EUR.")
     if pp > CADRE_LEGAL['repas_part_patronale_max'] + 1e-9:
         alertes.append(f"Part patronale {pp:.2f} > maximum legal {CADRE_LEGAL['repas_part_patronale_max']:.2f} EUR.")
     if valeur and pt < CADRE_LEGAL['repas_part_travailleur_min'] - 1e-9:

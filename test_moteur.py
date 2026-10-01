@@ -25,7 +25,8 @@ def calculer_fiche_paie(*args, **kwargs):
         print(f"❌ {label}"); ECHECS.append(label)
     return r
 def check(label, obtenu, attendu, tol=0.01):
-    ok = abs(obtenu - attendu) <= tol
+    nombres = isinstance(obtenu, (int, float)) and isinstance(attendu, (int, float))
+    ok = abs(obtenu - attendu) <= tol if nombres else obtenu == attendu
     print(f"{'✅' if ok else '❌'} {label}: obtenu={obtenu} attendu={attendu}")
     if not ok: ECHECS.append(label)
 
@@ -39,7 +40,9 @@ r = calculer_fiche_paie('Bilal','Akattof','n','a','BE',date(2008,1,1),date(2026,
 check("ONSS personnel 13,07% x 108%", -r['onss_travailleur'], 109.94)
 check("Bonus emploi A (H/U = 0,29)", r['bonus_emploi_a'], 39.94)
 check("Bonus emploi B (S = 2.669,20)", r['bonus_emploi_b'], 22.71)
-check("Net", r['salaire_net'], 801.38)
+# 01/10/2026: plus de cheques-repas par defaut pour Bilal (entre le 09/07/2026: moins de
+# 6 mois d'anciennete, regle sectorielle CP 140.03) -> la retenue de 17,44 disparait
+check("Net", r['salaire_net'], 818.82)
 check("Part reductible 25% x 108%", r['onss_patronal_reductible'], 210.30)
 check("Vacances 5,57% non reductible", r['onss_vacances_trimestrielle'], 46.85)
 check("Reduction structurelle (temps partiel)", r['reduction_structurelle'], 113.42)
@@ -51,6 +54,8 @@ check("255 accidents du travail 0,02% sur 108%", codes_b.get('255', 0), 0.17)
 check("256 Fonds amiante 0,01% sur 108% (du au T3 2026)", codes_b.get('256', 0), 0.08)
 check("859 chomage temporaire 0,10% sur 108%", codes_b.get('859', 0), 0.84)
 check("ONSS patronal net = vacances + cotisations non reductibles", r['onss_patronal'], 48.78)
+check("Bilal: moins de 6 mois d'anciennete -> aucun cheque-repas sectoriel", r['cr_empl_total'], 0.0)
+check("Bilal: alerte expliquant pourquoi", 1.0 if any('Anciennete 0 mois' in a for a in r['alertes_calcul']) else 0.0, 1.0)
 
 print(); print("=" * 70); print("FICHE REELLE Interconsult -- ouvrier 10/38, 15,2097 EUR/h (socle commun, CP 302 non geree)"); print("=" * 70)
 # Fiches de sources/fiches_reference (CP 302): seul le socle ONSS personnel /
@@ -200,6 +205,55 @@ r = calculer_fiche_paie('N','T','n','a','BE',date(1990,1,1),date(2026,3,1),'X','
     rgpt_actif=True, cheques_repas=False, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
 rg = next((l['montant'] for l in r['lignes_indemn'] if 'RGPT' in l['libelle']), 0)
 check("RGPT = 16 jours x 1,63 (et non 64 h x 1,63)", rg, 26.08)
+
+print(); print("=" * 70); print("CHEQUES-REPAS -- source unique cheques_regles.py, la configuration du dossier prime"); print("=" * 70)
+import io, os
+from cheques_regles import cheques_repas_du_mois
+def fiche_cr(cp, statut_cat, taux, entree, debut, fin, jours, heures, **kw):
+    """Fiche avec la case cheques-repas cochee ; retourne (part employeur, part travailleur retenue, alertes cheques)."""
+    r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),entree,'X','a','b','r',cp,statut_cat,taux,
+        **dict(dict(heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, type_contrat='CDI', jours_prestes=jours,
+                    heures_prestees=heures, rgpt_actif=False, cheques_repas=True, periode_debut=debut, periode_fin=fin), **kw))
+    retenue = -sum(l['montant'] for l in r['lignes_indemn'] if 'Chèques-repas' in l['libelle'])
+    return r['cr_empl_total'], round(retenue, 2), [a for a in r['alertes_calcul'] if 'hèques-repas' in a]
+OCT = (date(2026,10,1), date(2026,10,31))
+e, t, a = fiche_cr('CP 140.03', 'Chauffeur', 15.50, date(2025,1,1), *OCT, 22, 167.2)
+check("CP 140.03, plus de 6 mois: 22 jours x 2,00 employeur", e, 44.00)
+check("CP 140.03: 22 x 1,09 retenus au travailleur", t, 23.98)
+e, t, a = fiche_cr('CP 140.03', 'Chauffeur', 15.50, date(2025,1,1), date(2026,6,1), date(2026,6,30), 22, 167.2)
+check("CP 140.03 avant le 01/07/2026 (entree en vigueur): aucun cheque, alerte", (e, t, len(a)), (0.0, 0.0, 1))
+e, t, a = fiche_cr('CP 140.03', 'Chauffeur', 15.50, date(2026,8,1), *OCT, 22, 167.2)
+check("CP 140.03, moins de 6 mois d'anciennete: aucun cheque, alerte", (e, t, len(a)), (0.0, 0.0, 1))
+e, t, a = fiche_cr('CP 121', 'Nettoyeuse', 17.17, date(2026,9,1), *OCT, 16, 64.0, heures_semaine=36.5, heures_jour=4.0)
+check("CP 121: heures / 7,4 arrondi superieur = 9 cheques x 2,00 (et non 16 jours)", e, 18.00)
+check("CP 121: 9 x 1,09 retenus", t, 9.81)
+e, t, a = fiche_cr('CP 200', 'Employe', 13.71, date(2020,1,1), *OCT, 22, 167.2, salaire_mensuel_fixe=2257.0)
+check("CP 200, case cochee sans configuration du dossier: aucun cheque (pas d'obligation), alerte", (e, t, len(a)), (0.0, 0.0, 1))
+e, t, a = fiche_cr('CP 336', 'Comptable', 13.71, date(2020,1,1), *OCT, 22, 167.2, salaire_mensuel_fixe=2257.0)
+check("CP 336, case cochee sans configuration du dossier: aucun cheque, alerte", (e, t, len(a)), (0.0, 0.0, 1))
+e, t, a = fiche_cr('CP 140.03', 'Etudiant', 15.50, date(2025,1,1), *OCT, 22, 167.2, type_contrat='STU', is_etudiant=True)
+check("Etudiant: non vise par l'obligation sectorielle", (e, t), (0.0, 0.0))
+# Dossier a 8 EUR (6,91 employeur + 1,09 travailleur): la configuration du dossier prime
+cfg8 = {'actif': True, 'valeur': 8.00, 'part_patronale': 6.91, 'part_travailleur': 1.09}
+cr8 = cheques_repas_du_mois('CP 140.03', 'ouvrier', 2026, 10, 22, 167.2, date(2025,1,1), cfg8)
+e, t, a = fiche_cr('CP 140.03', 'Chauffeur', 15.50, date(2025,1,1), *OCT, 22, 167.2, cheques_repas_calc=cr8)
+check("Dossier a 8 EUR en CP 140.03: 22 x 6,91 employeur (plus que le minimum sectoriel)", e, 152.02)
+check("Dossier a 8 EUR: 22 x 1,09 travailleur, aucune alerte (dans le cadre legal)", (t, len(a)), (23.98, 0))
+cr8_200 = cheques_repas_du_mois('CP 200', 'employe', 2026, 10, 22, 167.2, date(2020,1,1), cfg8)
+e, t, a = fiche_cr('CP 200', 'Employe', 13.71, date(2020,1,1), *OCT, 22, 167.2, salaire_mensuel_fixe=2257.0, cheques_repas_calc=cr8_200)
+check("Dossier a 8 EUR en CP 200 (aucune obligation): les cheques du dossier s'appliquent", (e, t), (152.02, 23.98))
+hors = cheques_repas_du_mois('CP 200', 'employe', 2026, 10, 22, 167.2, date(2020,1,1),
+                             {'actif': True, 'valeur': 11.00, 'part_patronale': 10.00, 'part_travailleur': 1.00})
+e, t, a = fiche_cr('CP 200', 'Employe', 13.71, date(2020,1,1), *OCT, 22, 167.2, salaire_mensuel_fixe=2257.0, cheques_repas_calc=hors)
+check("Hors cadre legal (11 EUR, 10 employeur, 1 travailleur): trois alertes dans le calcul", len(a), 3)
+sous = cheques_repas_du_mois('CP 140.03', 'ouvrier', 2026, 10, 22, 167.2, date(2025,1,1),
+                             {'actif': True, 'valeur': 2.50, 'part_patronale': 1.41, 'part_travailleur': 1.09})
+check("Dossier sous le minimum sectoriel (1,41 < 2,00 employeur): alerte", 1.0 if any('minimum sectoriel' in x for x in sous['alertes']) else 0.0, 1.0)
+racine = os.path.dirname(os.path.abspath(__file__))
+en_dur = [f for f in ('moteur_paie.py', 'regles_cp.py', 'profil_travailleur.py', 'contrats.py', 'cp_data.py')
+          if any(m in io.open(os.path.join(racine, f), encoding='utf-8').read() for m in ('6.91', '5.82', '3,09', '3.09', 'cr_part_empl_jour'))]
+check("Aucun montant de cheque-repas ecrit hors de cheques_regles.py", 1.0 if not en_dur else 0.0, 1.0)
+if en_dur: print("   fichiers concernes:", en_dur)
 
 print(); print("=" * 70); print("ALERTE -- salaire sous le minimum de la CP a la date de la periode"); print("=" * 70)
 kw_m = dict(heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, jours_prestes=22, heures_prestees=167.2,
