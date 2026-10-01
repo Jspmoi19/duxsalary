@@ -1639,7 +1639,16 @@ def generer_fiche_depuis_calendrier(dimona_id):
         if prime_fa: libelles_prime.append("Prime de fin d'année")
         if prime_an: libelles_prime.append('Prime annuelle sectorielle')
 
+        # Bonus a l'emploi deja accorde cette annee civile (plafond annuel par
+        # travailleur) -- fiches enregistrees des mois precedents uniquement
+        cur.execute("""SELECT COALESCE(SUM(COALESCE(bonus_emploi_a, 0) + COALESCE(bonus_emploi_b, 0)), 0) AS cumul
+                       FROM fiches_paie
+                       WHERE travailleur_id = %s AND EXTRACT(YEAR FROM periode_fin) = %s AND periode_fin < %s""",
+                    (dimona['travailleur_id'], annee, periode_debut))
+        bonus_cumul_annee = float(cur.fetchone()['cumul'] or 0)
+
         data = calculer_fiche_paie(
+            bonus_emploi_cumul_annee=bonus_cumul_annee,
             cheques_repas_calc=cr_calc,
             prime_exceptionnelle=prime_fa + prime_an,
             libelle_prime=' + '.join(libelles_prime) or "Prime de fin d'année",

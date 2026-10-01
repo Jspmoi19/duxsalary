@@ -7,7 +7,7 @@ from datetime import date
 import math
 import sys as _sys; _sys.path.insert(0, '/var/www/duxsalary')
 from profil_travailleur import construire_profil
-from parametres_dates import get_precompte_params
+from parametres_dates import get_precompte_params, get_bonus_emploi_plafond_annuel
 
 # ── TAUX ONSS 2026 ────────────────────────────────────────────────────
 ONSS_PERSONNEL = 0.1307
@@ -209,6 +209,7 @@ def calculer_fiche_paie(
     rgpt_actif=True, arab_heure=0.0, cheques_repas=True, frais_nets=0.0,
     taux_km=0.4444,
     periode_debut=None, periode_fin=None,
+    bonus_emploi_cumul_annee=0.0,
 ):
     cp = CP_INDEMNITES.get(cp_key, {})
     # Override avec barèmes BDD si disponibles
@@ -286,6 +287,7 @@ def calculer_fiche_paie(
     # l'ancien calcul proratisait par la fraction contractuelle, meme pour un
     # mois incomplet (entree en cours de mois, absences non payees).
     bonus_a, bonus_b = 0.0, 0.0
+    alerte_plafond_bonus = None
     if profil.bonus_emploi_applicable:
         ref_date_params = periode_fin if periode_fin else date.today()
         # Jours/heures declares (prestations, feries, conges payes par l'employeur ;
@@ -308,6 +310,24 @@ def calculer_fiche_paie(
         # au centime contre une simulation Group S reelle CP336 employe).
         if sal_ref_bonus is not None:
             bonus_a, bonus_b = profil.bonus_emploi(sal_ref_bonus, fraction_bonus, onss_du=onss_trav_brut, reference_date=ref_date_params)
+        # Plafond annuel par travailleur (Instructions ONSS 2026/3 p.453). Le cumul
+        # deja accorde dans l'annee vient des fiches enregistrees (fiches_paie).
+        # Imputation du depassement: volet B puis volet A, comme l'ecretement.
+        plafond_bonus = get_bonus_emploi_plafond_annuel(ref_date_params)
+        cumul_bonus = round(float(bonus_emploi_cumul_annee or 0), 2)
+        if plafond_bonus and (bonus_a + bonus_b) > 0:
+            reste_plafond = round(max(0.0, plafond_bonus['plafond_annuel'] - cumul_bonus), 2)
+            exces_plafond = round(bonus_a + bonus_b - reste_plafond, 2)
+            if exces_plafond > 0:
+                retrait_b = min(bonus_b, exces_plafond)
+                bonus_b = round(bonus_b - retrait_b, 2)
+                bonus_a = round(max(0.0, bonus_a - (exces_plafond - retrait_b)), 2)
+                alerte_plafond_bonus = (
+                    f"Bonus à l'emploi limité par le plafond annuel de {plafond_bonus['plafond_annuel']:.2f} € "
+                    f"(déjà accordé cette année : {cumul_bonus:.2f} €).")
+        elif cumul_bonus > 0 and not plafond_bonus:
+            alerte_plafond_bonus = ("Plafond annuel du bonus à l'emploi non chargé pour cette période "
+                                    "(connu à partir du 01/07/2026) : non contrôlé.")
 
     onss_trav_net = round(max(0, onss_trav_brut - bonus_a - bonus_b), 2)
     brut_imposable = round(brut_onss - onss_trav_net, 2)
@@ -484,7 +504,10 @@ def calculer_fiche_paie(
 
     # Jours / heures payes du mois (codes prestation ONSS 1, 3, 4, 5...):
     # prestations + jours feries payes + conges payes par l'employeur
-    jours_payes_onss = (jours_prestes or 0) + (jours_feries_payes or 0) + (jours_conge or 0)
+    # Ouvriers: les vacances legales sont payees par la caisse de vacances (code
+    # prestation 2), pas par l'employeur -> hors J/H (corrige le 01/10/2026).
+    jours_conge_employeur = 0 if is_ouvrier else (jours_conge or 0)
+    jours_payes_onss = (jours_prestes or 0) + (jours_feries_payes or 0) + jours_conge_employeur
     if profil.salaire_est_mensuel_fixe and periode_debut and periode_fin:
         # Employe au mois: le salaire couvre TOUS les jours ouvrables du mois
         # (le calendrier peut etre incomplet en cours de mois). Seules les
@@ -494,7 +517,7 @@ def calculer_fiche_paie(
                               if (periode_debut + _td(n)).weekday() < 5)
         jours_payes_onss = max(0, jours_ouvr_mois - (jours_chomage or 0))
     heures_payees_onss = float(heures_prestees or 0) + float(heures_feries or 0) + \
-                         float(jours_conge or 0) * float(heures_jour or 0)
+                         float(jours_conge_employeur) * float(heures_jour or 0)
     red_struct = 0.0 if is_etudiant else profil.reduction_structurelle(
         onss_pat_reductible, reference_date=ref_date_struct, remuneration_mois=brut_onss,
         jours_payes=jours_payes_onss, heures_payees=heures_payees_onss)
@@ -579,6 +602,8 @@ def calculer_fiche_paie(
     for bloc_d in detail_calcul:
         bloc_d['lignes'] = [x for x in bloc_d['lignes'] if x]
     alertes_calcul = list(avertissements_onss)
+    if alerte_plafond_bonus:
+        alertes_calcul.append(alerte_plafond_bonus)
     if onss_info['parametres_reportes']:
         alertes_calcul.insert(0, f"Taux ONSS du {onss_info['trimestre_demande']} pas encore publiés : "
                                  f"calcul avec le {onss_info['trimestre_utilise']} (à régulariser via la DmfA).")

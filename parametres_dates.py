@@ -43,6 +43,24 @@ BONUS_EMPLOI_VERSIONS = [
         },
     },
     {
+        # Ajoute le 01/10/2026 (version manquante entre mars et juillet). Recoupe
+        # sur 3 sources concordantes (flash info Easypay, Securex lex4you, Partena)
+        # et verifie au centime sur deux fiches reelles Interconsult de mai et
+        # juin 2026 (ouvrier temps partiel). A confirmer sur les Instructions
+        # ONSS 2026/2 (source officielle non disponible dans sources/).
+        'date_debut': date(2026, 4, 1),
+        'source': ('Easypay flash info + Securex lex4you + Partena — Au 1er avril 2026 '
+                   '(hausse du RMMMG) ; verifie sur fiches reelles mai/juin 2026'),
+        'volet_a': {
+            'employe': {'seuil_bas': 2880.32, 'montant_max': 125.04, 'seuil_haut': 3336.98, 'pente': 0.2738},
+            'ouvrier': {'seuil_bas': 2880.32, 'montant_max': 135.04, 'seuil_haut': 3336.98, 'pente': 0.2957},
+        },
+        'volet_b': {
+            'employe': {'seuil_bas': 2255.50, 'montant_max': 168.62, 'seuil_haut': 2880.32, 'pente': 0.2699},
+            'ouvrier': {'seuil_bas': 2255.50, 'montant_max': 182.11, 'seuil_haut': 2880.32, 'pente': 0.2915},
+        },
+    },
+    {
         'date_debut': date(2026, 7, 1),
         'source': 'Partena infoflash — Au 1er juillet 2026',
         'volet_a': {
@@ -118,6 +136,24 @@ def _get_version(versions_list, reference_date):
 def get_bonus_emploi_params(reference_date):
     """reference_date: date de la periode de paie (periode_fin recommande)."""
     return _get_version(BONUS_EMPLOI_VERSIONS, reference_date)
+
+
+# Plafond ANNUEL du bonus a l'emploi, par travailleur et par annee calendrier.
+# Source: Instructions administratives ONSS 2026/3, p.453: "Le montant total
+# de la reduction par travailleur ne peut etre superieur a 3.594,36 EUR par
+# annee calendrier a partir du 1er juillet 2026."
+BONUS_EMPLOI_PLAFOND_ANNUEL_VERSIONS = [
+    {'date_debut': date(2026, 7, 1), 'plafond_annuel': 3594.36,
+     'source': 'Instructions administratives ONSS 2026/3, p.453'},
+]
+
+
+def get_bonus_emploi_plafond_annuel(reference_date):
+    """Plafond annuel en vigueur, ou None si aucune version ne couvre la date
+    (avant le 01/07/2026: montant non charge -- le moteur le signale si un
+    cumul lui est transmis)."""
+    applicables = [v for v in BONUS_EMPLOI_PLAFOND_ANNUEL_VERSIONS if v['date_debut'] <= reference_date]
+    return max(applicables, key=lambda v: v['date_debut']) if applicables else None
 
 
 def get_reduction_structurelle_params(reference_date):

@@ -46,9 +46,32 @@ check("Juillet: bonus emploi B (fiche 21,16)", r['bonus_emploi_b'], 21.16)
 r = calculer_fiche_paie('M','N','n','a','BE',date(2005,10,31),date(2026,5,27),'S','a','b','r','CP 140.03','Nettoyeur',15.2097,
     jours_prestes=3, heures_prestees=6.0, periode_debut=date(2026,5,27), periode_fin=date(2026,5,31), **kw_i)
 check("Mai (entree le 27): ONSS personnel (fiche 12,88)", -r['onss_travailleur'], 12.88)
-# 6 h sur 159,6 h -> H/U = 0,04: le bonus n'efface plus l'ONSS du mois incomplet.
-# (montants de la fiche: 5,40 / 5,28 -- ecart ouvert sur la table de mai-juin 2026)
-check("Mai: bonus proratise sur les prestations reelles (ONSS net > 0)", 1.0 if -r['onss_net'] > 0 else 0.0, 1.0)
+# 6 h sur 159,6 h -> H/U = 0,04 ; table du bonus au 01/04/2026 (A max 135,04)
+check("Mai: bonus emploi A, mois incomplet (fiche 5,40)", r['bonus_emploi_a'], 5.40)
+check("Mai: bonus emploi B, mois incomplet (fiche 5,28)", r['bonus_emploi_b'], 5.28)
+r = calculer_fiche_paie('M','N','n','a','BE',date(2005,10,31),date(2026,5,27),'S','a','b','r','CP 140.03','Nettoyeur',15.2097,
+    jours_prestes=22, heures_prestees=44.0, periode_debut=date(2026,6,1), periode_fin=date(2026,6,30), **kw_i)
+check("Juin: bonus emploi A, table du 01/04/2026 (fiche 35,11)", r['bonus_emploi_a'], 35.11)
+check("Juin: bonus emploi B, table du 01/04/2026 (fiche 25,55)", r['bonus_emploi_b'], 25.55)
+# Vacances legales d'un ouvrier: payees par la caisse -> hors heures payees (mu)
+rc = calculer_fiche_paie('M','N','n','a','BE',date(2005,10,31),date(2026,5,27),'S','a','b','r','CP 140.03','Nettoyeur',15.2097,
+    jours_prestes=22, heures_prestees=44.0, jours_conge=5, periode_debut=date(2026,6,1), periode_fin=date(2026,6,30), **kw_i)
+check("Conges ouvrier sans effet sur la reduction structurelle", rc['reduction_structurelle'], r['reduction_structurelle'])
+check("Conges ouvrier sans effet sur le bonus emploi", rc['bonus_emploi'], r['bonus_emploi'])
+
+print(); print("=" * 70); print("PLAFOND ANNUEL DU BONUS EMPLOI -- 3.594,36 EUR (Instructions ONSS 2026/3 p.453)"); print("=" * 70)
+kw_p = dict(heures_semaine=38.0, heures_jour=2.0, jours_semaine=5, type_contrat='CDI', rgpt_actif=False,
+            cheques_repas=False, jours_prestes=22, heures_prestees=44.0, jours_feries_payes=1, heures_feries=2.0,
+            periode_debut=date(2026,7,1), periode_fin=date(2026,7,31))
+rp = calculer_fiche_paie('M','N','n','a','BE',date(1990,1,1),date(2026,1,1),'S','a','b','r','CP 140.03','X',15.2097,
+    bonus_emploi_cumul_annee=3550.00, **kw_p)
+# reste 44,36 sous le plafond pour 35,81 + 21,16: le volet B est reduit en premier
+check("Plafond: volet A conserve", rp['bonus_emploi_a'], 35.81)
+check("Plafond: volet B limite au solde (44,36 - 35,81)", rp['bonus_emploi_b'], 8.55)
+check("Plafond: alerte affichee", 1.0 if any('plafond annuel' in a for a in rp['alertes_calcul']) else 0.0, 1.0)
+rp0 = calculer_fiche_paie('M','N','n','a','BE',date(1990,1,1),date(2026,1,1),'S','a','b','r','CP 140.03','X',15.2097,
+    bonus_emploi_cumul_annee=3594.36, **kw_p)
+check("Plafond deja atteint: plus de bonus", rp0['bonus_emploi'], 0.0)
 
 print(); print("=" * 70); print("CIWAN -- octobre 2026, employe, Eysel (cat 010, FFE C, importance 1)"); print("=" * 70)
 r = calculer_fiche_paie('Ciwan','Ilhan','n','a','BE',date(2004,11,17),date(2026,10,1),'Eysel','a','b','r',
