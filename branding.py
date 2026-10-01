@@ -38,9 +38,21 @@ CLES_TENANT = ('nom', 'societe', 'bce', 'adresse', 'logo_path', 'logo_url', 'log
                'couleur_primaire', 'couleur_accent')
 
 
+def url_statique(nom):
+    """Adresse d'un fichier de static/ suivie de sa date de modification
+    (ex. /static/style.css?v=1790859000): le navigateur recharge le fichier
+    des qu'il change, et le garde en cache sinon. A utiliser pour TOUT fichier
+    statique (dans les gabarits: {{ statique('style.css') }})."""
+    try:
+        version = int(os.path.getmtime(os.path.join(RACINE, 'static', nom)))
+    except OSError:
+        return f"/static/{nom}"
+    return f"/static/{nom}?v={version}"
+
+
 def get_branding(tenant=None):
     """Identite a appliquer. tenant: dict d'identite propre (marque blanche) ou None."""
-    b = dict(DEFAUT)
+    b = dict(DEFAUT, logo_url=url_statique('logo.png'))
     for cle in CLES_TENANT:
         if (tenant or {}).get(cle):
             b[cle] = tenant[cle]

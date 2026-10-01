@@ -5,7 +5,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_JUSTIFY
-from branding import couleur, pdf_decor, get_branding
+from branding import couleur, pdf_decor, get_branding, url_statique
 import os, json as jsonlib
 from datetime import datetime, date
 import calendar
@@ -36,7 +36,7 @@ def basename_filter(path):
 @app.context_processor
 def injecter_marque():
     """Identite (logo, mentions, couleurs) disponible dans tous les gabarits -- branding.py."""
-    return {'marque': get_branding()}
+    return {'marque': get_branding(), 'statique': url_statique}
 
 def get_context_base():
     tous = get_all_dossiers()

@@ -71,7 +71,7 @@ class Requete:
     def __init__(self, path): self.path = path; self.form = {}; self.args = {}
 dossier = {'id': 7, 'nom': 'Société Fictive SRL', 'bce': '0000.000.000', 'rsz': '000-0000000-00', 'cp_principale': 'CP 200'}
 travailleur = {'id': 3, 'prenom': 'Camille', 'nom': 'Exemple', 'dossier_id': 7}
-commun = dict(marque=b, session={'user_id': 1, 'user_nom': 'Utilisateur'}, tenant={},
+commun = dict(marque=b, statique=branding.url_statique, session={'user_id': 1, 'user_nom': 'Utilisateur'}, tenant={},
               tous_les_dossiers=[dossier, {'id': 8, 'nom': 'Éts Démo SA'}], dossiers_archives=[{'id': 9, 'nom': 'Ancien Client SPRL'}])
 
 def rendre(gabarit, chemin, **ctx):
@@ -89,7 +89,12 @@ ctx_doc = dict(document=doc, formater=formater, date_debut='2026-07-01', date_fi
                         {'libelle': 'Liste de ventilation', 'url': '/dossier/7/ventilation', 'actif': False}])
 
 h = rendre('document_charges.html', '/dossier/7/resume-charge', dossier=dossier, dossier_actif=dossier, **ctx_doc)
-check("En-tete: logo, sans le nom commercial en texte a cote", '<img src="/static/logo.png"' in h and '>DuxSalary<' not in h)
+check("En-tete: logo, sans le nom commercial en texte a cote", '<img src="/static/logo.png?v=' in h and '>DuxSalary<' not in h)
+version_css = int(os.path.getmtime(os.path.join(RACINE, 'static', 'style.css')))
+check("Fichiers statiques versionnes par leur date (style.css?v=<date du fichier>)",
+      f'href="/static/style.css?v={version_css}"' in h and f"logo.png?v={int(os.path.getmtime(b['logo_path']))}" in h)
+check("Aucune adresse /static/ sans version dans les gabarits",
+      [os.path.basename(p) for p in pages if re.search(r'["\']/static/', lire(p))], [])
 check("En-tete: plus de NEXSOCIAL", 'NEX' not in h.upper().replace('NEXT', ''))
 check("Fil d'Ariane: Dossiers › dossier", 'href="/dossiers">Dossiers</a>' in h and 'href="/dossier/7">Société Fictive SRL</a>' in h)
 check("Bouton retour explicite vers le dossier", 'Retour au dossier Société Fictive SRL' in h)
