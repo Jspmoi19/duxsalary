@@ -160,7 +160,7 @@ class ProfilTravailleur:
     @property
     def libelle_salaire_base(self) -> str:
         """Ce que la fiche doit afficher en en-tête — JAMAIS d'horaire pour un employé fixe."""
-        return "Salaire mensuel de base" if self.salaire_est_mensuel_fixe else "Salaire de base"
+        return "Salaire mensuel" if self.salaire_est_mensuel_fixe else "Salaire horaire"
 
     # ── CALCULS ──────────────────────────────────────────────────────────
 

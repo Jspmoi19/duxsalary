@@ -86,7 +86,7 @@ print("TEST 3 — Ciwan Ilhan, Eysel Consult, CP 336, employé CDI, octobre 2026
 print("=" * 70)
 p3 = construire_profil('CP 336', 'employe', type_contrat='CDI', reference_date=date(2026, 10, 31))
 check("Salaire mensuel fixe applicable", 1.0 if p3.salaire_est_mensuel_fixe else 0.0, 1.0)
-check("Libellé salaire", 1.0 if p3.libelle_salaire_base == "Salaire mensuel de base" else 0.0, 1.0)
+check("Libellé salaire", 1.0 if p3.libelle_salaire_base == "Salaire mensuel" else 0.0, 1.0)
 brut_onss3 = 2191.27
 check("ONSS personnel employé", p3.onss_personnel(brut_onss3), 286.40, tol=0.2)
 onss_pat_brut3 = p3.onss_patronal_brut(brut_onss3)

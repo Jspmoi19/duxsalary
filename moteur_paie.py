@@ -183,7 +183,8 @@ def get_cp_from_db(cp_key):
         if rows:
             # Reconstruire le dict barèmes
             baremes = {r['categorie']: {'horaire': float(r['montant_horaire']), 'mensuel': float(r['montant_mensuel'])} for r in rows}
-            return {'baremes': baremes, 'min_mensuel': min(float(r['montant_mensuel']) for r in rows)}
+            return {'baremes': baremes, 'min_mensuel': min(float(r['montant_mensuel']) for r in rows),
+                    'lignes': [dict(r) for r in rows]}
     except:
         pass
     return None
@@ -608,6 +609,16 @@ def calculer_fiche_paie(
     alertes_calcul = list(avertissements_onss)
     if alerte_plafond_bonus:
         alertes_calcul.append(alerte_plafond_bonus)
+    # Salaire sous le minimum de la CP a la date de la periode (etudiants compris):
+    # simple alerte, les montants restent ceux saisis (minimums_cp.py)
+    from minimums_cp import alerte_minimum
+    alerte_min = alerte_minimum(
+        cp_key, periode_fin if periode_fin else date.today(), salaire_horaire=salaire_horaire,
+        salaire_mensuel_etp=(round(sal_mensuel_brut / ratio_tp, 2) if is_employe_fixe and ratio_tp else None),
+        paye_au_mois=is_employe_fixe, categorie=categorie, is_etudiant=is_etudiant,
+        lignes_db=(cp_db or {}).get('lignes'))
+    if alerte_min:
+        alertes_calcul.append(alerte_min)
     if onss_info['parametres_reportes']:
         alertes_calcul.insert(0, f"Taux ONSS du {onss_info['trimestre_demande']} pas encore publiés : "
                                  f"calcul avec le {onss_info['trimestre_utilise']} (à régulariser via la DmfA).")

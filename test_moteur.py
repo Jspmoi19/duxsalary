@@ -201,6 +201,41 @@ r = calculer_fiche_paie('N','T','n','a','BE',date(1990,1,1),date(2026,3,1),'X','
 rg = next((l['montant'] for l in r['lignes_indemn'] if 'RGPT' in l['libelle']), 0)
 check("RGPT = 16 jours x 1,63 (et non 64 h x 1,63)", rg, 26.08)
 
+print(); print("=" * 70); print("ALERTE -- salaire sous le minimum de la CP a la date de la periode"); print("=" * 70)
+kw_m = dict(heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, jours_prestes=22, heures_prestees=167.2,
+            rgpt_actif=False, cheques_repas=False)
+def alerte_min(r):
+    return next((a for a in r['alertes_calcul'] if 'minimum' in a.lower() or 'Minimum' in a), '')
+r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2026,1,1),'X','a','b','r','CP 336','Minimum sectoriel',13.50,
+    salaire_mensuel_fixe=2200.0, type_contrat='CDI', periode_debut=date(2026,10,1), periode_fin=date(2026,10,31), **kw_m)
+check("Employe CP 336 a 2.200 < 2.254,30: alerte", 1.0 if 'inférieur au minimum de la CP 336' in alerte_min(r) and '2 254,30' in alerte_min(r) else 0.0, 1.0)
+check("L'alerte ne modifie pas le salaire saisi", r['brut_onss'], 2200.0)
+r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2026,1,1),'X','a','b','r','CP 336','Minimum sectoriel',13.71,
+    salaire_mensuel_fixe=2257.0, type_contrat='CDI', periode_debut=date(2026,10,1), periode_fin=date(2026,10,31), **kw_m)
+check("Employe CP 336 a 2.257: pas d'alerte", 0.0 if alerte_min(r) else 1.0, 1.0)
+r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2026,1,1),'X','a','b','r','CP 336','Minimum sectoriel',13.71,
+    salaire_mensuel_fixe=1128.5, type_contrat='CDI', periode_debut=date(2026,10,1), periode_fin=date(2026,10,31),
+    **dict(kw_m, heures_jour=3.8))
+check("Mi-temps a 1.128,50 (= 2.257 temps plein): pas d'alerte", 0.0 if alerte_min(r) else 1.0, 1.0)
+r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2026,1,1),'X','a','b','r','CP 336','Minimum sectoriel',13.71,
+    salaire_mensuel_fixe=2257.0, type_contrat='CDI', periode_debut=date(2026,6,1), periode_fin=date(2026,6,30), **kw_m)
+check("Periode anterieure au bareme connu (juin 2026, CP 336): minimum non disponible, pas de comparaison",
+      1.0 if 'non disponible pour cette période' in alerte_min(r) else 0.0, 1.0)
+r = calculer_fiche_paie('A','B','n','a','BE',date(2005,1,1),date(2026,10,1),'X','a','b','r','CP 336','Etudiant',13.00,
+    type_contrat='STU', is_etudiant=True, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31), **kw_m)
+check("Etudiant CP 336 a 13,00 < 13,021 (bareme etudiant 95 %): alerte",
+      1.0 if 'Étudiant (95%)' in alerte_min(r) and '13,0210' in alerte_min(r) else 0.0, 1.0)
+r = calculer_fiche_paie('A','B','n','a','BE',date(2005,1,1),date(2026,10,1),'X','a','b','r','CP 336','Etudiant',13.10,
+    type_contrat='STU', is_etudiant=True, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31), **kw_m)
+check("Etudiant CP 336 a 13,10: pas d'alerte", 0.0 if alerte_min(r) else 1.0, 1.0)
+r = calculer_fiche_paie('A','B','n','a','BE',date(2005,1,1),date(2026,8,1),'X','a','b','r','CP 140.03','Etudiant',14.00,
+    type_contrat='STU', is_etudiant=True, periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), **kw_m)
+check("Etudiant CP 140.03 a 14,00 < 14,9255 (pas de bareme etudiant: minimum ordinaire, signale)",
+      1.0 if '14,9255' in alerte_min(r) and 'pas de barème étudiant' in alerte_min(r) else 0.0, 1.0)
+r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2026,1,1),'X','a','b','r','CP 140.03','Personnel roulant — Niveau 2',15.00,
+    type_contrat='CDI', periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), **kw_m)
+check("Ouvrier CP 140.03 niveau 2 a 15,00 < 15,4490 (categorie du contrat): alerte", 1.0 if '15,4490' in alerte_min(r) else 0.0, 1.0)
+
 print(); print("=" * 70); print("CONTROLE PERMANENT -- cout employeur >= net + ONSS travailleur + precompte + CSS"); print("=" * 70)
 check("Controle applique a tous les calculs de ce fichier", 1.0 if NB_CONTROLES_COUT[0] >= 20 else 0.0, 1.0)
 print(f"  ({NB_CONTROLES_COUT[0]} fiches controlees)")

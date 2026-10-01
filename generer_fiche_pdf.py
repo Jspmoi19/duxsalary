@@ -38,6 +38,16 @@ def style(name, font=None, size=8, bold=False, align=TA_LEFT, color=BLACK):
 def p(text, **kw):
     return Paragraph(str(text) if text is not None else '', style('x', **kw))
 
+def _libelle_categorie(categorie):
+    """Categorie telle que saisie, sauf « etudiant » ecrit sans accent ni majuscule."""
+    import unicodedata
+    texte = (categorie or '—').strip()
+    sans_accent = unicodedata.normalize('NFD', texte).encode('ascii', 'ignore').decode().lower()
+    if sans_accent in ('etudiant', 'etudiante', 'etudiant(e)'):
+        return 'Étudiant'
+    return texte
+
+
 def generer_fiche_paie_pdf(data, filepath):
     """Génère le PDF de la fiche de paie."""
     doc = SimpleDocTemplate(filepath, pagesize=A4,
@@ -75,20 +85,29 @@ def generer_fiche_paie_pdf(data, filepath):
     jours_sem = data.get('jours_semaine', 5)
     h_sem_reel = data.get('heures_semaine_reel', data['heures_semaine'])
     genre = 'Temps partiel' if h_sem_reel < 36 else 'Temps plein'
-    
+    heures_txt = f"{h_sem_reel:.2f}/{data['heures_semaine']:.2f}"
+    categorie = _libelle_categorie(data.get('categorie'))
+    statut = categorie
+    if data.get('is_etudiant'):
+        # Etudiant paye a l'heure: pas de regime « temps plein 38/38 », les heures reelles du mois
+        statut = 'Étudiant'
+        genre = "Contrat d'occupation d'étudiant"
+        heures_mois = float(data.get('heures_prestees') or 0) + float(data.get('heures_feries') or 0)
+        heures_txt = f"{heures_mois:.2f} h prestées ce mois"
+
     left_data = [
         ['Travailleur :', f"{data['prenom']} {data['nom']}"],
-        ['Statut/Profession :', data.get('categorie', '—')[:30]],
+        ['Statut/Profession :', statut[:30]],
         ['Régime/Système :', f"{jours_sem}j/sem · {heures_j}h/j"],
-        ['Salaire mensuel de base :' if not data.get('is_ouvrier') and not data.get('is_etudiant') else 'Salaire de base :',
+        ['Salaire mensuel :' if not data.get('is_ouvrier') and not data.get('is_etudiant') else 'Salaire horaire :',
             f"{data.get('salaire_mensuel_fixe', round(data['salaire_horaire'] * data.get('heures_semaine', 38) * 52 / 12, 2)):.2f} €"
             if not data.get('is_ouvrier') and not data.get('is_etudiant')
             else f"{data['salaire_horaire']:.4f} €/heure"],
         ['Genre travail :', genre],
-        ['Heures :', f"{h_sem_reel:.2f}/{data['heures_semaine']:.2f}"],
+        ['Heures :', heures_txt],
         ['Commission Paritaire :', f"{data['cp_key']}"],
         ['N° NISS :', data.get('niss', '—')],
-        ['Catégorie prof. :', data.get('categorie', '—')[:20]],
+        ['Catégorie prof. :', categorie[:20]],
         ['Date d\'entrée :', f"{date_entree_fmt}  Anc.: {data.get('anciennete', '0a')}"],
         ['', ''],
         ['Etat civil :', libelle_etat_civil(data.get('etat_civil'))],

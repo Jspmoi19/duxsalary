@@ -1421,11 +1421,12 @@ def generer_fiche_depuis_calendrier(dimona_id):
     # priorite, sinon celui qui couvre le mois -- meme termine ou archive (un mois
     # sous contrat etudiant reste etudiant quand un CDI est actif depuis).
     # A defaut seulement: le contrat actif, comme avant.
-    from occupation import contrat_de_la_periode
+    from occupation import contrat_de_la_periode, date_premiere_occupation
     from calendar import monthrange as _jours_du_mois   # (calendar est reimporte plus bas dans la fonction)
     cur.execute('SELECT * FROM contrats WHERE travailleur_id = %s', (dimona['travailleur_id'],))
+    tous_contrats = [dict(c) for c in cur.fetchall()]
     contrat = contrat_de_la_periode(
-        [dict(c) for c in cur.fetchall()],
+        tous_contrats,
         date(annee, mois, 1), date(annee, mois, _jours_du_mois(annee, mois)[1]),
         contrat_id=dimona.get('contrat_id'), type_contrat=dimona.get('type_dimona'))
     if not contrat:
@@ -1549,7 +1550,10 @@ def generer_fiche_depuis_calendrier(dimona_id):
             niss=dimona['niss'] or '—', adresse=dimona['adresse'] or '—',
             iban=dimona['iban'] or '—',
             date_naissance=dimona['date_naissance'],
-            date_entree=contrat['date_debut'] if contrat else periode_debut,
+            # Date d'entree et anciennete: PREMIERE occupation chez l'employeur
+            # (premier contrat, etudiant compris), comme sur le compte individuel
+            date_entree=date_premiere_occupation(tous_contrats)
+                        or (contrat['date_debut'] if contrat else periode_debut),
             nom_societe=dimona['dossier_nom'],
             adresse_societe=dimona['dossier_adresse'] or '—',
             bce_societe=dimona['bce'] or '—',

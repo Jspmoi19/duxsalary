@@ -12,6 +12,7 @@ from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from branding import get_branding, pdf_decor, pdf_logo
@@ -79,8 +80,17 @@ def generer_pdf_charges(document, tenant=None):
         for l in section['lignes']:
             total = l['style'] == 'total'
             valeurs = [formater(v, l['fmt']) or ('0,00' if total and l['fmt'] == 'montant' and v is not None else '') for v in l['valeurs']]
+            def cellule(v):
+                # Une valeur ne se coupe jamais: si elle depasse la colonne (ex. « 2 257,00 €/mois »
+                # sur 12 mois), sa police est reduite juste assez pour tenir sur une ligne
+                police = FNB if total else FN
+                place, besoin = (l_val - 6.5) * 0.93, stringWidth(v, police, taille)
+                if besoin <= place:
+                    return Paragraph(v, s_num_g if total else s_num)
+                reduite = max(4.0, taille * place / besoin)
+                return Paragraph(v, st('r', font=police, size=reduite, size_l=taille + 2.5, alignment=TA_RIGHT))
             data.append([Paragraph(l['libelle'], s_gras if total else (st('i', color=secondaire) if l['style'] == 'info' else s_cell))]
-                        + [Paragraph(v, s_num_g if total else s_num) for v in valeurs])
+                        + [cellule(v) for v in valeurs])
             if total:
                 style.append(('LINEABOVE', (0, len(data) - 1), (-1, len(data) - 1), 0.6, texte))
     e.append(Table(data, colWidths=[l_lib] + [l_val] * nb_col, repeatRows=1, style=TableStyle(style)))

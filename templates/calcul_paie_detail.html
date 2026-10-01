@@ -51,7 +51,11 @@
     <div>Catégorie employeur : <b>{{ data.onss_categorie_employeur }}</b></div>
     <div>Taux patronal appliqué : <b>{{ "%.2f"|format(data.onss_taux_patronal_applique * 100) }} %</b></div>
     <div>Statut : <b>{{ 'Étudiant' if data.is_etudiant else ('Ouvrier' if data.is_ouvrier else 'Employé') }}</b></div>
-    <div>Salaire de base : <b>{{ data.libelle_salaire_base }}</b></div>
+    {% if data.libelle_salaire_base == 'Salaire mensuel' %}
+    <div>Salaire mensuel : <b>{{ "%.2f"|format(data.lignes_salaire[0].base) }} €</b></div>
+    {% else %}
+    <div>Salaire horaire : <b>{{ "%.4f"|format(data.salaire_horaire) }} €/h</b></div>
+    {% endif %}
   </div>
 </div>
 
