@@ -19,12 +19,36 @@ r = calculer_fiche_paie('Bilal','Akattof','n','a','BE',date(2008,1,1),date(2026,
     'CP 140.03','Chauffeur',14.93, heures_semaine=38.0, heures_jour=3.0, jours_semaine=5, type_contrat='CDD',
     premier_engagement=True, jours_prestes=16, heures_prestees=48.0, jours_feries_payes=1, heures_feries=3.0,
     periode_debut=date(2026,7,1), periode_fin=date(2026,7,31))
-check("Net (inchange)", r['salaire_net'], 848.67)
+# 01/10/2026: ONSS personnel sur 108% + bonus emploi sur prestations reelles
+# (Instructions ONSS 2026/3 p.176 et p.449-453) -> net 801,38 (etait 848,67)
+check("ONSS personnel 13,07% x 108%", -r['onss_travailleur'], 109.94)
+check("Bonus emploi A (H/U = 0,29)", r['bonus_emploi_a'], 39.94)
+check("Bonus emploi B (S = 2.669,20)", r['bonus_emploi_b'], 22.71)
+check("Net", r['salaire_net'], 801.38)
 check("Part reductible 25% x 108%", r['onss_patronal_reductible'], 210.30)
 check("Vacances 5,57% non reductible", r['onss_vacances_trimestrielle'], 46.85)
 check("Reduction structurelle (temps partiel)", r['reduction_structurelle'], 113.42)
 check("Premier engagement", r['reduction_premier_engagement'], 96.88)
 check("ONSS patronal net = vacances + FFE speciale", r['onss_patronal'], 47.69)
+
+print(); print("=" * 70); print("FICHE REELLE Interconsult -- ouvrier 10/38, 15,2097 EUR/h (socle commun, CP 302 non geree)"); print("=" * 70)
+# Fiches de sources/fiches_reference (CP 302): seul le socle ONSS personnel /
+# bonus emploi est compare, via le profil ouvrier de la CP 140.03.
+kw_i = dict(heures_semaine=38.0, heures_jour=2.0, jours_semaine=5, type_contrat='CDI',
+            rgpt_actif=False, cheques_repas=False, categorie_employeur='017')
+r = calculer_fiche_paie('M','N','n','a','BE',date(2005,10,31),date(2026,5,27),'S','a','b','r','CP 140.03','Nettoyeur',15.2097,
+    jours_prestes=22, heures_prestees=44.0, jours_feries_payes=1, heures_feries=2.0,
+    periode_debut=date(2026,7,1), periode_fin=date(2026,7,31), **kw_i)
+check("Juillet: brut", r['brut_onss'], 699.65)
+check("Juillet: ONSS personnel sur 108% (fiche 98,76)", -r['onss_travailleur'], 98.76)
+check("Juillet: bonus emploi A (fiche 35,81)", r['bonus_emploi_a'], 35.81)
+check("Juillet: bonus emploi B (fiche 21,16)", r['bonus_emploi_b'], 21.16)
+r = calculer_fiche_paie('M','N','n','a','BE',date(2005,10,31),date(2026,5,27),'S','a','b','r','CP 140.03','Nettoyeur',15.2097,
+    jours_prestes=3, heures_prestees=6.0, periode_debut=date(2026,5,27), periode_fin=date(2026,5,31), **kw_i)
+check("Mai (entree le 27): ONSS personnel (fiche 12,88)", -r['onss_travailleur'], 12.88)
+# 6 h sur 159,6 h -> H/U = 0,04: le bonus n'efface plus l'ONSS du mois incomplet.
+# (montants de la fiche: 5,40 / 5,28 -- ecart ouvert sur la table de mai-juin 2026)
+check("Mai: bonus proratise sur les prestations reelles (ONSS net > 0)", 1.0 if -r['onss_net'] > 0 else 0.0, 1.0)
 
 print(); print("=" * 70); print("CIWAN -- octobre 2026, employe, Eysel (cat 010, FFE C, importance 1)"); print("=" * 70)
 r = calculer_fiche_paie('Ciwan','Ilhan','n','a','BE',date(2004,11,17),date(2026,10,1),'Eysel','a','b','r',

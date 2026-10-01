@@ -278,19 +278,36 @@ def calculer_fiche_paie(
     brut_onss = round(sum(l['montant'] for l in lignes_salaire if l['soumis_onss']), 2)
 
     # ── ONSS TRAVAILLEUR ──────────────────────────────────────────────
-    onss_trav_brut = round(brut_onss * onss_pers_taux, 2)
+    # Ouvriers: base a 108% (Instructions ONSS 2026/3 p.176) -- corrige le 01/10/2026
+    onss_trav_brut = profil.onss_personnel(brut_onss)
 
-    # Bonus emploi sur salaire barémique ETP
+    # Bonus emploi: salaire de reference S et prorata sur les PRESTATIONS REELLES
+    # du mois (Instructions ONSS 2026/3 p.449-453) -- corrige le 01/10/2026:
+    # l'ancien calcul proratisait par la fraction contractuelle, meme pour un
+    # mois incomplet (entree en cours de mois, absences non payees).
     bonus_a, bonus_b = 0.0, 0.0
     if profil.bonus_emploi_applicable:
-        # Salaire PROPRE du travailleur en ETP (pas le minimum sectoriel — corrigé 29/09/2026)
-        sal_propre_etp = salaire_horaire * heures_semaine * 52 / 12
-        # Ecretement CORRECT integre dans bonus_emploi(): volet B en premier,
-        # jusqu'a 0, PUIS volet A si toujours insuffisant -- PAS une reduction
-        # proportionnelle des deux (erreur corrigee le 29/09/2026, verifiee
-        # au centime contre une simulation Group S reelle CP336 employe).
         ref_date_params = periode_fin if periode_fin else date.today()
-        bonus_a, bonus_b = profil.bonus_emploi(sal_propre_etp, ratio_tp, onss_du=onss_trav_brut, reference_date=ref_date_params)
+        # Jours/heures declares (prestations, feries, conges payes par l'employeur ;
+        # les vacances legales des ouvriers sont payees par la caisse: exclues)
+        jours_conge_payes = 0 if is_ouvrier else (jours_conge or 0)
+        jours_bonus = (jours_prestes or 0) + (jours_feries_payes or 0) + jours_conge_payes
+        if is_employe_fixe and periode_debut and periode_fin:
+            from datetime import timedelta as _td_b
+            jours_bonus = max(0, sum(1 for n in range((periode_fin - periode_debut).days + 1)
+                                     if (periode_debut + _td_b(n)).weekday() < 5) - (jours_chomage or 0))
+        if is_employe_fixe:
+            heures_bonus = jours_bonus * float(heures_jour or 0)
+        else:
+            heures_bonus = float(heures_prestees or 0) + float(heures_feries or 0) + \
+                           jours_conge_payes * float(heures_jour or 0)
+        sal_ref_bonus, fraction_bonus = profil.reference_bonus_emploi(
+            brut_onss, ref_date_params, jours=jours_bonus, heures=heures_bonus, temps_partiel=ratio_tp < 1.0)
+        # Ecretement integre dans bonus_emploi(): volet B en premier, jusqu'a 0,
+        # PUIS volet A si toujours insuffisant (Instructions p.452, verifie
+        # au centime contre une simulation Group S reelle CP336 employe).
+        if sal_ref_bonus is not None:
+            bonus_a, bonus_b = profil.bonus_emploi(sal_ref_bonus, fraction_bonus, onss_du=onss_trav_brut, reference_date=ref_date_params)
 
     onss_trav_net = round(max(0, onss_trav_brut - bonus_a - bonus_b), 2)
     brut_imposable = round(brut_onss - onss_trav_net, 2)
@@ -408,7 +425,7 @@ def calculer_fiche_paie(
     remu_annuelle_normale = round((salaire_mensuel_fixe or brut_onss) * 12, 2)
     prime_onss = prime_imposable = prime_precompte = 0.0
     if prime_exceptionnelle and prime_exceptionnelle > 0 and not is_etudiant:
-        prime_onss = _r2_prime = round(prime_exceptionnelle * onss_pers_taux, 2)
+        prime_onss = _r2_prime = profil.onss_personnel(prime_exceptionnelle)
         prime_imposable = round(prime_exceptionnelle - prime_onss, 2)
         prime_precompte, taux_pp_prime = profil.precompte_exceptionnel(
             prime_imposable, remu_annuelle_normale, 'autres', reference_date=ref_date_fiscale)
@@ -520,7 +537,8 @@ def calculer_fiche_paie(
              for l in lignes_salaire] +
             [L('Brut soumis à l\'ONSS', brut_onss, total=True)]},
         {'titre': 'ONSS travailleur', 'lignes': [
-            L('Cotisation personnelle', -onss_trav_brut, base=brut_onss, taux=onss_pers_taux,
+            L('Cotisation personnelle' + (' (base 108 %)' if profil.coeff_base_onss_patronal != 1.0 else ''),
+              -onss_trav_brut, base=profil.base_onss_patronale(brut_onss), taux=onss_pers_taux,
               source=f"TechLib ONSS {onss_info['trimestre_utilise']}, code {onss_info['code_travailleur']}"),
             L('Bonus à l\'emploi volet A', bonus_a, source='Tables datées bonus emploi (parametres_dates)'),
             L('Bonus à l\'emploi volet B', bonus_b, source='Écrêtement : volet B en premier'),

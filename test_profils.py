@@ -25,24 +25,28 @@ print("=" * 70)
 p = construire_profil('CP 140.03', 'ouvrier', type_contrat='CDD', reference_date=date(2026, 7, 31))
 brut_onss = 778.87   # 48h prestées + 3h férié + avantage repas 16j, tel que fiche validée
 onss_pers = p.onss_personnel(brut_onss)
-check("ONSS personnel brut", onss_pers, 101.80)
+# CORRECTION 01/10/2026: ONSS personnel ouvrier sur 108% (Instructions ONSS
+# 2026/3 p.176 ; fiches reelles Interconsult et Liantis FDLR): 841,18 x 13,07%.
+check("ONSS personnel brut (13,07% x 108%)", onss_pers, 109.94)
 
-# Bilal: 15h/38h (temps partiel). NOTE 29/09/2026: le bonus emploi a des
-# seuils dates (mise a jour plusieurs fois/an) -- on ne peut plus verifier
-# les montants de juillet 2026 sans la table historique de cette periode.
-# Assertion retiree ici (etait basee sur une structure pre-reforme fausse) --
-# a re-verifier si besoin de regenerer une fiche de juillet 2026 exactement.
-ratio_bilal = 15 / 38
-bonus_a, bonus_b = p.bonus_emploi(2457.73, ratio_temps_partiel=ratio_bilal, onss_du=101.80,
+# CORRECTION 01/10/2026: bonus emploi selon la formule officielle (Instructions
+# ONSS 2026/3 p.449-453), sur les prestations REELLES du mois:
+# juillet 2026 = 23 jours -> U = 23 x 7,6 = 174,8 h ; H = 51 h
+# S = (W/H) x U = 15,27 x 174,8 = 2.669,20 ; H/U = 0,29
+# L'ancien calcul (fraction contractuelle 15/38, salaire horaire x 38 x 52/12)
+# effacait a tort tout l'ONSS de Bilal.
+s_bilal, frac_bilal = p.reference_bonus_emploi(brut_onss, date(2026, 7, 31), heures=51.0, temps_partiel=True)
+check("Bonus emploi: salaire de reference S", s_bilal, 2669.20)
+check("Bonus emploi: fraction H/U", frac_bilal, 0.29)
+bonus_a, bonus_b = p.bonus_emploi(s_bilal, ratio_temps_partiel=frac_bilal, onss_du=onss_pers,
                                     reference_date=date(2026, 7, 31))
-# CORRECTION 29/09/2026: les valeurs 35.70/10.61 initialement "validees" en
-# debut de session utilisaient l'ancienne structure PRE-reforme 2024 (jamais
-# croisee avec une source externe). Avec la vraie table de juillet 2026,
-# le bonus emploi efface ENTIEREMENT l'ONSS de Bilal (54.37+47.43=101.80).
-# ==> LA FICHE DE BILAL DEJA ENVOYEE AU CLIENT EST A CORRIGER.
-check("Bonus emploi volet A (vraie table JUILLET 2026)", bonus_a, 54.37, tol=0.02)
-check("Bonus emploi volet B (vraie table JUILLET 2026, ecrete)", bonus_b, 47.43, tol=0.02)
-check("Total bonus = ONSS du (extinction complete)", round(bonus_a+bonus_b,2), 101.80, tol=0.02)
+check("Bonus emploi volet A (137,74 x 0,29)", bonus_a, 39.94)
+check("Bonus emploi volet B (78,31 x 0,29)", bonus_b, 22.71)
+# Temps plein, mois incomplet: S = (W/J) x D, P = (J/D) x R (exemple 1 des Instructions)
+p_tp = construire_profil('CP 200', 'employe', reference_date=date(2026, 7, 31))
+s_inc, frac_inc = p_tp.reference_bonus_emploi(2015.00, date(2026, 7, 31), jours=19)
+check("Temps plein incomplet: S = (2015/19 = 106,05) x 23", s_inc, 2439.15)
+check("Temps plein incomplet: J/D = 19/23", frac_inc, 0.83)
 
 onss_pat_brut = p.onss_patronal_brut(brut_onss)
 # CORRECTION 30/09/2026: l'ancien 227.12 utilisait 27% (sans source officielle).

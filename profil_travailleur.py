@@ -173,7 +173,39 @@ class ProfilTravailleur:
         return round(base * self.onss_patronal_taux_base, 2)
 
     def onss_personnel(self, brut_onss: float) -> float:
-        return round(brut_onss * self.onss_personnel_taux, 2)
+        """Cotisation personnelle. Ouvriers: calculee sur le brut a 108%, comme
+        les cotisations patronales (Instructions ONSS 2026/3 p.176: 'les
+        cotisations personnelles et patronales' ; exemple 2 p.453: 13,07% de
+        1.336,00 + 8%). Confirme par les fiches reelles Interconsult (CP 302)
+        et Liantis FDLR. Corrige le 01/10/2026 (etait sur 100%)."""
+        return self._r2(self.base_onss_patronale(brut_onss) * self.onss_personnel_taux)
+
+    def reference_bonus_emploi(self, salaire_brut_mois, mois_reference, jours=0, heures=0.0,
+                               temps_partiel=False):
+        """Salaire mensuel de reference S et fraction de prestation du bonus a
+        l'emploi (Instructions ONSS 2026/3 p.449-453). W = brut du mois a 100%.
+        - temps partiel et assimiles: S = (W/H) x U, P = (H/U) x R
+        - temps plein: S = W si J = D, sinon S = (W/J) x D, P = (J/D) x R
+        D = jours de prestation maximum du MOIS CIVIL dans le regime, U = heures
+        mensuelles correspondant a D, J/H = jours/heures declares (codes 1, 3,
+        4, 5, 20, 38). W/J et W/H arrondis a l'eurocent, J/D et H/U a la 2eme
+        decimale (0,005 vers le haut), jamais superieurs a 1.
+        Retourne (S, fraction), ou (None, 0.0) sans prestation."""
+        import calendar
+        nb = calendar.monthrange(mois_reference.year, mois_reference.month)[1]
+        jours_regime = 5 if temps_partiel else (self.jours_semaine or 5)
+        D = sum(1 for j in range(1, nb + 1)
+                if _date(mois_reference.year, mois_reference.month, j).weekday() < jours_regime)
+        if temps_partiel:
+            U = D * (self.heures_semaine or 38.0) / 5
+            if not heures or heures <= 0:
+                return None, 0.0
+            return self._r2(self._r2(salaire_brut_mois / heures) * U), min(1.0, self._r2(heures / U))
+        if not jours or jours <= 0:
+            return None, 0.0
+        if jours >= D:
+            return self._r2(salaire_brut_mois), 1.0
+        return self._r2(self._r2(salaire_brut_mois / jours) * D), self._r2(jours / D)
 
     def bonus_emploi(self, salaire_propre_etp_mensuel, ratio_temps_partiel=1.0,
                       onss_du=None, reference_date=None):
