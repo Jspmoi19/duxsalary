@@ -4,139 +4,272 @@
 
 <div class="page-header">
   <div class="page-header-left">
-    <h2>Contrat étudiant</h2>
-    <div class="breadcrumb"><a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> · {{ travailleur.prenom }} {{ travailleur.nom }}</div>
+    <h2>Nouveau contrat d'occupation d'étudiant</h2>
+    <div class="breadcrumb">{{ dossier.nom }} · {{ travailleur.prenom }} {{ travailleur.nom }}</div>
   </div>
 </div>
+
+{% if request.args.get('erreur') == 'cp' %}
+<div class="login-error">⚠ Contrat non généré : la commission paritaire choisie n'est pas encore gérée par l'outil.</div>
+{% endif %}
 
 <form method="POST">
 <div class="two-col">
-  <div class="card">
-    <div class="card-header"><h3>Données employeur</h3></div>
-    <div class="card-body form-grid">
-      <div class="form-group">
-        <label>Société</label>
-        <input type="text" name="nom_societe" value="{{ dossier.nom }}" required>
+  <!-- COL 1 -->
+  <div>
+    <div class="card">
+      <div class="card-header"><h3>Étudiant</h3></div>
+      <div class="card-body form-grid">
+        <div class="form-group">
+          <label class="form-label">Nom complet *</label>
+          <input type="text" name="nom_etudiant" class="form-control" value="{{ travailleur.prenom }} {{ travailleur.nom }}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">NISS</label>
+          <input type="text" name="niss_etudiant" class="form-control" value="{{ travailleur.niss or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date de naissance</label>
+          <input type="text" name="ddn_etudiant" class="form-control" placeholder="JJ/MM/AAAA"
+                 value="{{ travailleur.date_naissance.strftime('%d/%m/%Y') if travailleur.date_naissance else '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">École / établissement</label>
+          <input type="text" name="ecole_etudiant" class="form-control" placeholder="Nom de l'école">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Adresse</label>
+          <input type="text" name="adresse_etudiant" class="form-control" value="{{ travailleur.adresse or '' }}">
+        </div>
       </div>
-      <div class="form-group">
-        <label>Adresse</label>
-        <input type="text" name="adresse_societe" value="{{ dossier.adresse or '' }}">
-      </div>
-      <div class="form-group">
-        <label>BCE</label>
-        <input type="text" name="bce_societe" value="{{ dossier.bce or '' }}">
-      </div>
-      <div class="form-group">
-        <label>N° RSZ</label>
-        <input type="text" name="rsz_societe" value="{{ dossier.rsz or '' }}">
-      </div>
-      <div class="form-group">
-        <label>Représentant</label>
-        <input type="text" name="representant" value="{{ dossier.representant or '' }}">
-      </div>
-      <div class="form-group">
-        <label>Assurance AT</label>
-        <input type="text" name="assurance_at" value="{{ dossier.assurance_at or '' }}" placeholder="Nom assureur">
+    </div>
+
+    <!-- CONTINGENT -->
+    <div class="card">
+      <div class="card-header"><h3>Contingent étudiant {{ contingent.annee }}</h3></div>
+      <div class="card-body">
+        {% if contingent.plafond %}
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center;margin-bottom:10px">
+          <div style="background:#f8fafc;border-radius:6px;padding:10px">
+            <div class="form-label" style="margin:0">Contingent annuel</div>
+            <div style="font-size:18px;font-weight:700;color:var(--marque)">{{ '%g'|format(contingent.plafond) }} h</div>
+          </div>
+          <div style="background:#f8fafc;border-radius:6px;padding:10px">
+            <div class="form-label" style="margin:0">Déjà prestées chez cet employeur uniquement</div>
+            <div style="font-size:18px;font-weight:700;color:var(--marque)">{{ '%g'|format(contingent.deja) }} h</div>
+          </div>
+          <div style="background:#f8fafc;border-radius:6px;padding:10px">
+            <div class="form-label" style="margin:0">Ce contrat</div>
+            <div style="font-size:18px;font-weight:700;color:var(--marque)" id="heures_contrat">— h</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Heures déjà prestées chez d'autres employeurs (attestation Student@work)</label>
+          <input type="number" name="heures_autres_employeurs" id="heures_autres" class="form-control" min="0" step="0.5" value="0" oninput="majContingent()">
+          <div class="form-hint">Demandez à l'étudiant son attestation sur
+            <a href="{{ student_at_work }}" target="_blank" rel="noopener">Student@work (studentatwork.be)</a> :
+            elle indique les heures restantes de son contingent.</div>
+        </div>
+        <div id="contingent_alerte" style="display:none;margin-bottom:10px;padding:10px;border-radius:6px;font-size:13px;font-weight:600;border:1px solid"></div>
+        <div class="form-hint">
+          <strong>Le contingent de {{ '%g'|format(contingent.plafond) }} heures vaut par étudiant, tous employeurs confondus.</strong>
+          Le compteur ci-dessus ne compte que les heures encodées dans le calendrier de cet employeur ;
+          les heures chez d'autres employeurs doivent être saisies à la main. Au-delà du contingent,
+          les cotisations ordinaires sont dues. Source : {{ contingent.source }}.
+        </div>
+        {% else %}
+        <div class="form-hint">⚠ {{ contingent.alerte }}</div>
+        {% endif %}
       </div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-header"><h3>Données étudiant</h3></div>
-    <div class="card-body form-grid">
-      <div class="form-group">
-        <label>Nom complet</label>
-        <input type="text" name="nom_etudiant" value="{{ travailleur.prenom }} {{ travailleur.nom }}" required>
+  <!-- COL 2 -->
+  <div>
+    <div class="card">
+      <div class="card-header"><h3>Employeur</h3></div>
+      <div class="card-body form-grid">
+        <div class="form-group">
+          <label class="form-label">Société</label>
+          <input type="text" name="nom_societe" class="form-control" value="{{ dossier.nom }}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">BCE</label>
+          <input type="text" name="bce_societe" class="form-control" value="{{ dossier.bce or '' }}">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Adresse</label>
+          <input type="text" name="adresse_societe" class="form-control" value="{{ dossier.adresse or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">N° RSZ</label>
+          <input type="text" name="rsz_societe" class="form-control" value="{{ dossier.rsz or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Représentant</label>
+          <input type="text" name="representant" class="form-control" value="{{ dossier.representant or '' }}">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Assurance AT</label>
+          <input type="text" name="assurance_at" class="form-control" value="{{ dossier.assurance_at or '' }}" placeholder="Nom de l'assureur">
+        </div>
       </div>
-      <div class="form-group">
-        <label>Adresse</label>
-        <input type="text" name="adresse_etudiant" value="{{ travailleur.adresse or '' }}">
-      </div>
-      <div class="form-group">
-        <label>Date de naissance</label>
-        <input type="text" name="ddn_etudiant" value="{{ travailleur.date_naissance.strftime('%d/%m/%Y') if travailleur.date_naissance else '' }}" placeholder="JJ/MM/AAAA">
-      </div>
-      <div class="form-group">
-        <label>NISS</label>
-        <input type="text" name="niss_etudiant" value="{{ travailleur.niss or '' }}">
-      </div>
-      <div class="form-group">
-        <label>École / établissement</label>
-        <input type="text" name="ecole_etudiant" placeholder="Nom de l'école">
-      </div>
-      <div class="form-group">
-        <label>État civil</label>
-        <select name="etat_civil">
-          <option value="célibataire">Célibataire</option>
-          <option value="marié(e)">Marié(e)</option>
-          <option value="cohabitant(e) légal(e)">Cohabitant(e) légal(e)</option>
-        </select>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Conditions du contrat</h3></div>
+      <div class="card-body form-grid">
+        <div class="form-group full">
+          <label class="form-label">Commission paritaire *</label>
+          <select name="commission_paritaire_key" id="cp_select" class="form-control" onchange="majCP()" required>
+            {% for cp_key, cp_val in cp_data.items() %}
+            <option value="{{ cp_key }}" {% if dossier.cp_principale == cp_key %}selected{% endif %}>{{ cp_key }} – {{ cp_val.meta.secteurs[0] if cp_val.meta.secteurs else cp_val.meta.nom }}{% if cp_key not in cp_gerees %} — non gérée{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Fonction *</label>
+          <input type="text" name="fonction" class="form-control" placeholder="Ex : Assistant administratif" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date de début *</label>
+          <input type="text" name="date_debut" id="date_debut" class="form-control" placeholder="JJ/MM/AAAA" oninput="majSalaire()" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date de fin *</label>
+          <input type="text" name="date_fin" class="form-control" placeholder="JJ/MM/AAAA" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nombre de jours de travail *</label>
+          <input type="number" name="nb_jours" id="nb_jours" min="1" class="form-control" placeholder="Ex : 10" oninput="majContingent()" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Heures par jour *</label>
+          <input type="number" name="heures_jour" id="heures_jour" step="0.1" min="0.5" max="12" class="form-control" value="7.6" oninput="majContingent()" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Horaire journalier</label>
+          <input type="text" name="horaire_journalier" class="form-control" placeholder="Ex : 08h00 – 16h00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Salaire horaire brut (€) *</label>
+          <input type="number" name="salaire_horaire" id="salaire_horaire" step="0.0001" class="form-control" oninput="majSalaire()" required>
+          <div class="form-hint" id="min_hint"></div>
+          <div id="salaire_alerte" style="display:none;margin-top:8px;padding:10px;border-radius:6px;font-size:13px;font-weight:600;border:1px solid"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lieu de signature</label>
+          <input type="text" name="lieu_signature" class="form-control" value="{{ lieu_signature }}" placeholder="Commune">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lieu de travail</label>
+          <input type="text" name="lieu_travail" class="form-control" value="{{ dossier.adresse or '' }}">
+        </div>
+
+        <!-- Regles de la CP -->
+        <div class="form-group full" id="cp_info_box" style="background:#e8f4fd;border-left:4px solid var(--marque);padding:10px 14px;border-radius:4px;font-size:12px;color:var(--marque)"></div>
+
+        <!-- Bareme etudiant -->
+        <div class="form-group full" id="bareme_table" style="background:#f8fafc;border-radius:6px;padding:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--marque);margin-bottom:8px">Barème applicable à l'étudiant</div>
+          <div id="bareme_rows" style="font-size:12px"></div>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
-<div class="two-col">
-  <div class="card">
-    <div class="card-header"><h3>Conditions du contrat</h3></div>
-    <div class="card-body form-grid">
-      <div class="form-group">
-        <label>Commission paritaire</label>
-        <select name="commission_paritaire_key" required>
-          {% for cp_key, cp_val in cp_data.items() %}
-          <option value="{{ cp_key }}" {% if dossier.cp_principale == cp_key %}selected{% endif %}>{{ cp_key }} — {{ cp_val.meta.nom }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Fonction</label>
-        <input type="text" name="fonction" placeholder="Ex: Assistant administratif" required>
-      </div>
-      <div class="form-group">
-        <label>Lieu de travail</label>
-        <input type="text" name="lieu_travail" value="{{ dossier.adresse or '' }}">
-      </div>
-      <div class="form-group">
-        <label>Date de début</label>
-        <input type="text" name="date_debut" placeholder="JJ/MM/AAAA" required>
-      </div>
-      <div class="form-group">
-        <label>Date de fin</label>
-        <input type="text" name="date_fin" placeholder="JJ/MM/AAAA" required>
-      </div>
-      <div class="form-group">
-        <label>Nombre de jours ouvrables</label>
-        <input type="number" name="nb_jours" min="1" placeholder="Ex: 10" required>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-header"><h3>Rémunération</h3></div>
-    <div class="card-body form-grid">
-      <div class="form-group">
-        <label>Heures par jour</label>
-        <input type="number" name="heures_jour" step="0.1" value="7.6" required>
-      </div>
-      <div class="form-group">
-        <label>Horaire journalier</label>
-        <input type="text" name="horaire_journalier" placeholder="Ex: 08h00-16h00">
-      </div>
-      <div class="form-group">
-        <label>Salaire horaire brut (€)</label>
-        <input type="number" name="salaire_horaire" step="0.01" placeholder="Ex: 13.50" required>
-      </div>
-      <div class="form-group">
-        <label>Lieu de signature</label>
-        <input type="text" name="lieu_signature" value="Bruxelles">
-      </div>
-    </div>
-  </div>
-</div>
-
-<div style="text-align:right;margin-top:16px;display:flex;gap:10px;justify-content:flex-end;">
+<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;align-items:center">
+  <span class="form-hint" style="margin-right:auto">Ce bouton génère uniquement le contrat. Les fiches de paie se font depuis le calendrier, avec « Calculer la paie ».</span>
   <a href="/travailleur/{{ travailleur.id }}" class="btn btn-secondary">Annuler</a>
-  <button type="submit" class="btn btn-primary">Générer le contrat étudiant + fiche de paie</button>
+  <button type="submit" class="btn btn-primary" id="btn_generer">Générer le contrat PDF</button>
 </div>
 </form>
+
+{% endblock %}
+{% block scripts %}
+<script>
+const REGLES_CP = {{ regles_json | safe }};
+const MINIMUMS = {{ minimums_json | safe }};
+const CP_GEREES = {{ cp_gerees | tojson }};
+const CONTINGENT = { plafond: {{ contingent.plafond or 'null' }}, deja: {{ contingent.deja }}, annee: {{ contingent.annee }} };
+const fr = (x, d) => x.toFixed(d).replace('.', ',');
+
+function majCP() {
+  const cp = document.getElementById('cp_select').value;
+  // CP non geree: pas de contrat (le serveur le refuse aussi)
+  const bouton = document.getElementById('btn_generer'), geree = CP_GEREES.includes(cp);
+  bouton.disabled = !geree;
+  bouton.style.opacity = geree ? '' : '0.5';
+  bouton.title = geree ? '' : "Cette commission paritaire n'est pas encore gérée par l'outil";
+  const regles = REGLES_CP[cp] || [];
+  document.getElementById('cp_info_box').innerHTML =
+    '<div style="font-weight:700;font-size:11px;margin-bottom:6px;text-transform:uppercase">Règles de la ' + cp + '</div>' +
+    regles.map(r => '<div style="padding:2px 0">' + r + '</div>').join('');
+  const m = MINIMUMS[cp] || {};
+  const lignes = document.getElementById('bareme_rows'), champ = document.getElementById('salaire_horaire');
+  if (m.horaire) {
+    lignes.innerHTML = '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>' + m.categorie +
+      (m.note ? ' <span style="color:#64748B">(' + m.note + ')</span>' : '') + '</span><span style="font-weight:700">' + fr(m.horaire, 4) + ' €/h</span></div>' +
+      '<div style="color:#64748B;padding-top:4px">En vigueur depuis le ' + m.depuis_fr + (m.source ? ' — ' + m.source : '') + '</div>';
+    champ.placeholder = 'Minimum : ' + fr(m.horaire, 4);
+    document.getElementById('min_hint').textContent = 'Minimum de la ' + cp + ' : ' + fr(m.horaire, 4) + ' €/h';
+  } else {
+    lignes.innerHTML = '<div style="color:#92400e">⚠ ' + (m.raison || 'Aucun barème enregistré pour cette CP.') + '</div>';
+    champ.placeholder = '';
+    document.getElementById('min_hint').textContent = '';
+  }
+  majSalaire();
+}
+
+function dateSaisie() {
+  const p = document.getElementById('date_debut').value.split('/');
+  return p.length === 3 && p[2].length === 4 ? p[2] + '-' + p[1].padStart(2, '0') + '-' + p[0].padStart(2, '0') : null;
+}
+
+function alerte(el, type, texte) {
+  const style = { erreur: ['#fde8e8', '#e74c3c', '#c0392b'], ok: ['#f0f9f0', '#27ae60', '#1b7f4b'], info: ['#fff8e1', '#f59e0b', '#92400e'] }[type];
+  el.style.display = 'block'; el.style.background = style[0]; el.style.borderColor = style[1]; el.style.color = style[2];
+  el.textContent = texte;
+}
+
+// Alerte de salaire sous le minimum des la saisie (memes regles que minimums_cp.py)
+function majSalaire() {
+  const cp = document.getElementById('cp_select').value, m = MINIMUMS[cp] || {};
+  const h = parseFloat(document.getElementById('salaire_horaire').value) || 0;
+  const el = document.getElementById('salaire_alerte'), debut = dateSaisie();
+  if (!h) { el.style.display = 'none'; return; }
+  if (!m.horaire) { alerte(el, 'info', m.raison || 'Minimum non disponible : salaire non contrôlé.'); return; }
+  if (debut && debut < m.depuis) {
+    alerte(el, 'info', 'Minimum de la ' + cp + ' non disponible pour cette période (barème connu à partir du ' + m.depuis_fr + ') : salaire non contrôlé.');
+  } else if (h + 0.00005 < m.horaire) {
+    alerte(el, 'erreur', 'Salaire horaire de ' + fr(h, 4) + ' € inférieur au minimum de la ' + cp + ' : ' + fr(m.horaire, 4) + ' € (' + m.categorie + ').');
+  } else {
+    alerte(el, 'ok', '✓ Salaire conforme au minimum (' + fr(m.horaire, 4) + ' €/h).');
+  }
+}
+
+// Contingent etudiant: heures du contrat = jours x heures par jour
+function majContingent() {
+  const jours = parseFloat(document.getElementById('nb_jours').value) || 0;
+  const hj = parseFloat(document.getElementById('heures_jour').value) || 0;
+  const heures = Math.round(jours * hj * 100) / 100;
+  const cellule = document.getElementById('heures_contrat'), el = document.getElementById('contingent_alerte');
+  if (!cellule) return;
+  cellule.textContent = heures ? fr(heures, 1).replace(',0', '') + ' h' : '— h';
+  if (!heures || !CONTINGENT.plafond) { el.style.display = 'none'; return; }
+  const autres = parseFloat(document.getElementById('heures_autres').value) || 0;
+  const total = CONTINGENT.deja + autres + heures, depassement = Math.round((total - CONTINGENT.plafond) * 100) / 100;
+  const detail = fr(CONTINGENT.deja, 1) + ' h chez cet employeur + ' + fr(autres, 1) + ' h chez d\'autres employeurs + ' + fr(heures, 1) + ' h pour ce contrat';
+  if (depassement > 0) {
+    alerte(el, 'erreur', 'Ce contrat fait dépasser le contingent de ' + CONTINGENT.plafond + ' heures pour ' + CONTINGENT.annee + ' (' + detail + ') : ' +
+      fr(depassement, 1) + ' h au-delà, soumises aux cotisations ordinaires.');
+  } else {
+    alerte(el, 'ok', '✓ Après ce contrat : ' + fr(total, 1) + ' h sur ' + CONTINGENT.plafond + ' (' + detail + '). Reste ' + fr(CONTINGENT.plafond - total, 1) + ' h.');
+  }
+}
+
+majCP();
+majContingent();
+</script>
 {% endblock %}

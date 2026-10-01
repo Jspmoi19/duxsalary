@@ -323,6 +323,46 @@ REGLES_CP = {
 }
 
 
+def cp_geree(cp_key: str) -> bool:
+    """La CP a-t-elle ses regles enregistrees ? Sinon: ni contrat ni paie depuis l'outil."""
+    return cp_key in REGLES_CP
+
+
+MESSAGE_CP_NON_GEREE = ("Cette commission paritaire n'est pas encore gérée par l'outil : "
+                        "ses règles ne sont pas enregistrées, le contrat ne peut pas être généré.")
+
+
+def resume_regles_cp(cp_key: str, etudiant: bool = False) -> list:
+    """Regles de la CP en phrases simples, pour les formulaires de contrat.
+    Construit a partir de REGLES_CP (aucune regle ecrite ailleurs). CP absente:
+    un seul message expliquant qu'elle n'est pas geree par le moteur de paie."""
+    r = REGLES_CP.get(cp_key)
+    if not r:
+        return [f"⚠ {cp_key} — non gérée. {MESSAGE_CP_NON_GEREE}"]
+    lignes = [f"{r['nom']} — {r['heures_semaine_defaut']:g} h/semaine à temps plein"]
+    cr = r.get('cheques_repas', {})
+    if cr.get('obligatoire'):
+        valeur = cr.get('valeur_totale_jour')
+        lignes.append("Chèques-repas obligatoires" + (f" : {valeur:.2f} € par jour".replace('.', ',') if valeur else '')
+                      + (f" (depuis le {cr['depuis']})" if cr.get('depuis') else ''))
+    else:
+        lignes.append("Chèques-repas non obligatoires (accord d'entreprise)")
+    rg = r.get('rgpt', {})
+    if rg.get('applicable'):
+        if rg.get('montant_jour'):
+            lignes.append(f"Indemnité RGPT : {rg['montant_jour']:.2f} € par jour".replace('.', ','))
+        elif rg.get('montant_heure'):
+            lignes.append(f"Indemnité RGPT : {rg['montant_heure']:.4f} € par heure".replace('.', ','))
+    ar = r.get('avantage_repas', {})
+    if ar.get('applicable'):
+        lignes.append(f"Avantage repas {ar['montant_jour']:.2f} € par jour, soumis à l'ONSS".replace('.', ','))
+    if r.get('indexation', {}).get('derniere'):
+        lignes.append(f"Dernière indexation : {r['indexation']['derniere']}")
+    if etudiant:
+        lignes.append("Étudiant : cotisation de solidarité à la place de l'ONSS ordinaire, dans la limite du contingent annuel")
+    return lignes
+
+
 def get_regles_cp(cp_key: str) -> dict:
     """Retourne les règles d'une CP, ou lève une erreur explicite si CP non gérée."""
     if cp_key not in REGLES_CP:

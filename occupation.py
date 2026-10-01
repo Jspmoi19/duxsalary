@@ -24,6 +24,45 @@ def libelle_etat_civil(code):
     return LIBELLES_ETAT_CIVIL.get(code, str(code).replace('_', ' ').capitalize())
 
 
+def commune_de_l_adresse(adresse):
+    """Commune d'une adresse belge (« Rue X 2, 1853 Grimbergen » -> « Grimbergen »),
+    pour le lieu de signature des contrats. Chaine vide si elle n'est pas reconnue."""
+    import re
+    m = re.search(r'\b\d{4}\s+([^,;\d]+?)\s*$', (adresse or '').strip())
+    if not m:
+        return ''
+    commune = m.group(1).strip(' -')
+    return commune.title() if commune.isupper() else commune
+
+
+def suivi_contingent_etudiant(heures_deja, heures_contrat, reference_date, heures_autres_employeurs=0):
+    """Suivi du contingent etudiant de l'annee civile de reference_date. Le
+    contingent vaut PAR ETUDIANT, tous employeurs confondus:
+    - heures_deja: heures deja prestees cette annee CHEZ CET EMPLOYEUR (calendrier) ;
+    - heures_autres_employeurs: heures chez d'autres employeurs, saisies d'apres
+      l'attestation Student@work de l'etudiant (l'outil ne peut pas les connaitre).
+    Retourne un dict (plafond, deja, autres, contrat, restant, depassement, alerte,
+    source) ; plafond None si le contingent de l'annee n'est pas charge."""
+    from parametres_dates import get_contingent_etudiant
+    v = get_contingent_etudiant(reference_date)
+    deja, contrat = round(float(heures_deja or 0), 2), round(float(heures_contrat or 0), 2)
+    autres = round(float(heures_autres_employeurs or 0), 2)
+    if v is None:
+        return {'annee': reference_date.year, 'plafond': None, 'deja': deja, 'autres': autres, 'contrat': contrat,
+                'restant': None, 'depassement': 0.0, 'source': None,
+                'alerte': f"Contingent étudiant {reference_date.year} non chargé dans l'outil : non contrôlé."}
+    plafond = float(v['heures'])
+    depassement = round(max(0.0, deja + autres + contrat - plafond), 2)
+    alerte = None
+    if depassement > 0:
+        alerte = (f"Ce contrat fait dépasser le contingent étudiant de {plafond:g} heures pour {reference_date.year} "
+                  f"({deja:g} h chez cet employeur + {autres:g} h chez d'autres employeurs + {contrat:g} h prévues) : "
+                  f"{depassement:g} h au-delà du contingent, soumises aux cotisations ordinaires.")
+    return {'annee': reference_date.year, 'plafond': plafond, 'deja': deja, 'autres': autres, 'contrat': contrat,
+            'restant': round(max(0.0, plafond - deja - autres), 2), 'depassement': depassement,
+            'alerte': alerte, 'source': v['source']}
+
+
 def date_premiere_occupation(contrats):
     """Date d'entree chez l'employeur = debut du PREMIER contrat, quel que soit
     son type (etudiant compris) et son statut (actif, termine, archive)."""

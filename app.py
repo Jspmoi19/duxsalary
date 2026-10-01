@@ -579,8 +579,14 @@ def nouveau_contrat_dossier(dossier_id):
     cp_json = jsonlib.dumps(cp_data_merged)
     prefill_travailleur_id = request.args.get('travailleur_id', type=int)
 
+    from regles_cp import cp_geree
+    from contrat_etudiant import contexte_regles
     if request.method == 'POST':
         form = request.form
+        if not cp_geree(form.get('cp_key', '')):
+            # CP sans regles enregistrees: aucun contrat (le formulaire bloque deja le bouton)
+            return redirect(url_for('nouveau_contrat_dossier', dossier_id=dossier_id, erreur='cp',
+                                    travailleur_id=form.get('travailleur_id')))
         travailleur_id = int(form['travailleur_id'])
         travailleur = get_travailleur(travailleur_id)
         type_contrat = form.get('type_contrat', 'CDI')
@@ -602,7 +608,7 @@ def nouveau_contrat_dossier(dossier_id):
             'salaire_unite': form.get('salaire_unite', 'horaire'),
             'salaire_mensuel': form.get('salaire_mensuel', '').replace(' €', ''),
             'lieu_travail': form.get('lieu_travail', dossier['adresse'] or ''),
-            'lieu_signature': form.get('lieu_signature', 'Bruxelles'),
+            'lieu_signature': form.get('lieu_signature') or contexte_regles(dossier)['lieu_signature'],
             'date_signature': datetime.now().strftime('%d/%m/%Y'),
             'motif_cdd': form.get('motif_cdd', ''),
             'heures_jour': float(form.get('heures_jour', 7.6) or 7.6),
@@ -661,7 +667,8 @@ def nouveau_contrat_dossier(dossier_id):
                            travailleurs_json=travailleurs_json,
                            prefill_travailleur_id=prefill_travailleur_id,
                            prefill_travailleur=prefill_travailleur,
-                           prefill_contrat=prefill_contrat, **ctx)
+                           prefill_contrat=prefill_contrat,
+                           **contexte_regles(dossier), **ctx)
 
 # ── DOWNLOAD ──────────────────────────────────────────────────────────
 @app.route('/download/<filename>')
@@ -1104,6 +1111,9 @@ def generer_pdf_etudiant(data, filepath):
 @app.route('/contrat/etudiant/nouveau', methods=['GET', 'POST'])
 @login_required
 def nouveau_contrat_etudiant():
+    """Genere UNIQUEMENT le contrat d'occupation d'etudiant (PDF + enregistrement).
+    Aucune fiche de paie ici: elles passent par le calendrier et « Calculer la paie »."""
+    from occupation import commune_de_l_adresse
     dossier_id = request.args.get('dossier_id', type=int) or request.form.get('dossier_id', type=int)
     travailleur_id = request.args.get('travailleur_id', type=int) or request.form.get('travailleur_id', type=int)
     dossier = get_dossier(dossier_id)
@@ -1114,6 +1124,11 @@ def nouveau_contrat_etudiant():
     if request.method == 'POST':
         form = request.form
         cp_key = form.get('commission_paritaire_key', dossier.get('cp_principale', 'CP 140.03'))
+        from regles_cp import cp_geree
+        if not cp_geree(cp_key):
+            # CP sans regles enregistrees: aucun contrat (le formulaire bloque deja le bouton)
+            return redirect(url_for('nouveau_contrat_etudiant', dossier_id=dossier_id,
+                                    travailleur_id=travailleur_id, erreur='cp'))
 
         def pd(d):
             if not d: return None
@@ -1143,7 +1158,7 @@ def nouveau_contrat_etudiant():
             'salaire_horaire': form.get('salaire_horaire', 0),
             'fonction': form.get('fonction', ''),
             'lieu_travail': form.get('lieu_travail', dossier.get('adresse', '')),
-            'lieu_signature': form.get('lieu_signature', 'Bruxelles'),
+            'lieu_signature': form.get('lieu_signature') or commune_de_l_adresse(dossier.get('adresse')),
             'cp_key': cp_key,
         }
 
@@ -1175,10 +1190,29 @@ def nouveau_contrat_etudiant():
 
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id, tab='contrats'))
 
+    # Formulaire: regles de la CP, bareme etudiant, contingent annuel, lieu de signature
+    from psycopg2.extras import RealDictCursor
+    from contrat_etudiant import contexte_formulaire
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM baremes_cp ORDER BY cp_key, montant_mensuel")
+    baremes_db = {}
+    for r in cur.fetchall():
+        baremes_db.setdefault(r['cp_key'], []).append(dict(r))
+    # Heures etudiant deja prestees cette annee civile chez cet employeur (calendrier des prestations)
+    cur.execute("""SELECT COALESCE(SUM(p.heures), 0) AS heures
+                   FROM prestations p JOIN dimona d ON d.id = p.dimona_id
+                   WHERE p.travailleur_id = %s AND d.dossier_id = %s AND d.type_dimona = 'STU'
+                     AND p.code_journee IN ('P', 'S', 'HS', 'PP')
+                     AND EXTRACT(YEAR FROM p.date_prestation) = %s""",
+                (travailleur_id, dossier_id, date.today().year))
+    heures_deja = float(cur.fetchone()['heures'] or 0)
+    cur.close(); conn.close()
+
     return render_template('contrat_etudiant.html',
                            dossier=dossier, travailleur=travailleur,
                            dossier_actif=dossier,
                            cp_data=CP_DATABASE,
+                           **contexte_formulaire(dossier, heures_deja, date.today(), baremes_db),
                            **ctx)
 
 

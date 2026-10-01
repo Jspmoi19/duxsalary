@@ -156,6 +156,24 @@ def get_bonus_emploi_plafond_annuel(reference_date):
     return max(applicables, key=lambda v: v['date_debut']) if applicables else None
 
 
+# Contingent ETUDIANT: heures par annee civile sous cotisation de solidarite,
+# aupres d'un ou plusieurs employeurs. Source: Instructions administratives ONSS
+# 2026/3, p.25-26: "pour maximum 650 heures (= le contingent)", "Le decompte des
+# 650 heures est etabli par annee civile", "Lorsque le contingent est depasse,
+# les cotisations ordinaires sont dues a partir de la 651eme heure".
+# Annees anterieures: non chargees (ne pas deviner).
+CONTINGENT_ETUDIANT_VERSIONS = [
+    {'date_debut': date(2026, 1, 1), 'heures': 650,
+     'source': 'Instructions administratives ONSS 2026/3, p.25-26'},
+]
+
+
+def get_contingent_etudiant(reference_date):
+    """Contingent etudiant en vigueur, ou None si aucune version ne couvre la date."""
+    applicables = [v for v in CONTINGENT_ETUDIANT_VERSIONS if v['date_debut'] <= reference_date]
+    return max(applicables, key=lambda v: v['date_debut']) if applicables else None
+
+
 def get_reduction_structurelle_params(reference_date):
     return _get_version(REDUCTION_STRUCTURELLE_VERSIONS, reference_date)
 

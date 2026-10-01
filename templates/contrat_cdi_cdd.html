@@ -12,6 +12,10 @@
   </div>
 </div>
 
+{% if request.args.get('erreur') == 'cp' %}
+<div class="login-error">⚠ Contrat non généré : la commission paritaire choisie n'est pas encore gérée par l'outil.</div>
+{% endif %}
+
 <form method="POST">
 <input type="hidden" name="type_contrat" id="type_contrat" value="CDI">
 
@@ -144,7 +148,7 @@
             <option value="{{ cp_key }}"
               {% if prefill_contrat and prefill_contrat.cp_key == cp_key %}selected
               {% elif profil.cp_principale == cp_key %}selected{% elif not prefill_contrat and loop.first %}selected{% endif %}>
-              {{ cp_key }} – {{ cp_val.meta.secteurs[0] if cp_val.meta.secteurs else '' }}
+              {{ cp_key }} – {{ cp_val.meta.secteurs[0] if cp_val.meta.secteurs else '' }}{% if cp_key not in cp_gerees %} — non gérée{% endif %}
             </option>
             {% endfor %}
           </select>
@@ -208,7 +212,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Lieu de signature</label>
-          <input type="text" name="lieu_signature" class="form-control" value="Bruxelles">
+          <input type="text" name="lieu_signature" class="form-control" value="{{ lieu_signature }}" placeholder="Commune">
         </div>
         <div class="form-group full">
           <label class="form-label">Lieu de travail</label>
@@ -235,7 +239,7 @@
   {% else %}
   <a href="/dossier/{{ profil.id }}" class="btn btn-secondary">Annuler</a>
   {% endif %}
-  <button type="submit" class="btn btn-primary">Générer le contrat PDF</button>
+  <button type="submit" class="btn btn-primary" id="btn_generer">Générer le contrat PDF</button>
 </div>
 </form>
 
@@ -267,44 +271,17 @@ function prefillTravailleur(id) {
   document.getElementById('f_iban').value = t.iban || '';
 }
 
-// Règles CP
-const CP_REGLES = {
-  'CP 140.03': [
-    '✓ Chèques-repas: 8.00€/j (empl 6.91€ + coll 1.09€) — OBLIGATOIRE',
-    '✓ RGPT: 1.8175€/h (exonéré ONSS+IPP)',
-    '⚠ Avantage repas 1.09€/j SOUMIS ONSS',
-    'Statut OUVRIER — base ONSS patronal × 1.08',
-    'Prochaine indexation: Janvier 2027',
-  ],
-  'CP 200': [
-    '⚠ Chèques-repas PAS OBLIGATOIRES — accord entreprise nécessaire',
-    'Statut EMPLOYÉ — ONSS patronal 25%',
-    'Prime fin d\'année: 330.84\u20ac bruts/an (proratisée)',
-    'Fonds formation: CEFORA',
-    'Prochaine indexation: Janvier 2027',
-  ],
-  'CP 336': [
-    '✓ Chèques-repas: 6.91€/j (empl) + 1.09€/j (coll)',
-    'Statut EMPLOYÉ — ONSS patronal 25%',
-    'Minimum légal: 2141.59€/mois depuis 09/2026',
-    'Prochaine indexation: Janvier 2027',
-  ],
-  'CP 302': [
-    '⚠ Pas de chèques-repas sectoriels',
-    '✓ Indemnité vêtements: 2.20€/j + nuit: 1.62€/h',
-    'Statut OUVRIER — base ONSS patronal × 1.08',
-    'Dernière indexation: Janvier 2026 (+2.189%)',
-  ],
-  'CP 121': [
-    '✓ Chèques-repas OBLIGATOIRES depuis 01/01/2026: 3.09€/j',
-    '✓ RGPT: 1.63€/h',
-    'Statut OUVRIER — base ONSS patronal × 1.08',
-    'Dernière indexation: Juillet 2026',
-  ],
-};
+// Règles de chaque CP: source unique regles_cp.py (resume_regles_cp)
+const CP_REGLES = {{ regles_json | safe }};
+const CP_GEREES = {{ cp_gerees | tojson }};
 
 function updateCP() {
   const cp = document.getElementById('cp_select').value;
+  // CP non geree: pas de contrat (le serveur le refuse aussi)
+  const bouton = document.getElementById('btn_generer'), geree = CP_GEREES.includes(cp);
+  bouton.disabled = !geree;
+  bouton.style.opacity = geree ? '' : '0.5';
+  bouton.title = geree ? '' : "Cette commission paritaire n'est pas encore gérée par l'outil";
   const info = CP_INFO[cp];
   if (!info) return;
   const h = info.duree_travail.heures_semaine;

@@ -117,6 +117,60 @@ if SORTIE:
     io.open(os.path.join(SORTIE, 'apercu_login.html'), 'w', encoding='utf-8').write(
         env.get_template('login.html').render(marque=b, tenant={}, error=None).replace('"/static/', '"../static/'))
 
+print(); print("=" * 70); print("FORMULAIRE CONTRAT ETUDIANT -- regles CP, minimum, contingent, lieu de signature"); print("=" * 70)
+import json
+from contrat_etudiant import contexte_formulaire
+from cp_data import CP_DATABASE
+from occupation import commune_de_l_adresse, suivi_contingent_etudiant
+check("Commune du dossier", commune_de_l_adresse('Jozef Van Elewijckstraat 86, 1853 Grimbergen'), 'Grimbergen')
+check("Commune en majuscules remise en forme", commune_de_l_adresse('BOULEVARD EXEMPLE 93 1000 BRUXELLES'), 'Bruxelles')
+check("Adresse sans code postal: pas de commune devinee", commune_de_l_adresse('Rue Exemple 1'), '')
+s = suivi_contingent_etudiant(600, 76, date(2026, 10, 1))
+check("Contingent 650 h par annee civile (Instructions ONSS p.25-26)", (s['plafond'], s['restant'], s['depassement']), (650.0, 50.0, 26.0))
+check("Depassement: alerte et cotisations ordinaires", 'cotisations ordinaires' in (s['alerte'] or ''))
+check("Sous le contingent: pas d'alerte", suivi_contingent_etudiant(100, 76, date(2026, 10, 1))['alerte'], None)
+check("Annee sans contingent charge: signale, pas de chiffre devine",
+      (suivi_contingent_etudiant(0, 10, date(2025, 6, 1))['plafond'], 'non chargé' in suivi_contingent_etudiant(0, 10, date(2025, 6, 1))['alerte']), (None, True))
+
+dossier_e = dict(dossier, adresse='Rue Exemple 1, 1853 Grimbergen', cp_principale='CP 336')
+ctx_e = contexte_formulaire(dossier_e, 120.0, date(2026, 10, 1))
+minimums = json.loads(ctx_e['minimums_json'])
+check("Bareme etudiant de la CP 336 (95 %)", (minimums['CP 336']['horaire'], minimums['CP 336']['categorie']), (13.021, 'Étudiant (95%)'))
+check("CP sans bareme etudiant: minimum ordinaire, signale", 'pas de barème étudiant' in minimums['CP 200']['note'])
+check("CP sans bareme date: raison affichee, pas de minimum", 'raison' in minimums['CP 302'] and 'horaire' not in minimums['CP 302'])
+check("Regles de la CP issues de regles_cp.py", any('Chèques-repas' in l for l in json.loads(ctx_e['regles_json'])['CP 140.03']))
+s = suivi_contingent_etudiant(100, 76, date(2026, 10, 1), heures_autres_employeurs=500)
+check("Heures chez d'autres employeurs comptees dans le contingent (100 + 500 + 76 = 676)", (s['depassement'], s['restant']), (26.0, 50.0))
+check("L'alerte detaille les heures chez d'autres employeurs", "500 h chez d'autres employeurs" in (s['alerte'] or ''))
+check("CP 302 et CP 124 non gerees ; les quatre CP du moteur gerees",
+      sorted(ctx_e['cp_gerees']), ['CP 121', 'CP 140.03', 'CP 200', 'CP 336'])
+h = rendre('contrat_etudiant.html', '/contrat/etudiant/nouveau', dossier=dossier_e, dossier_actif=dossier_e,
+           travailleur=dict(travailleur, niss='', adresse='', date_naissance=None), cp_data=CP_DATABASE, **ctx_e)
+check("Le bouton ne genere que le contrat", 'Générer le contrat PDF</button>' in h and 'fiche de paie</button>' not in h)
+check("Plus de valeur ni d'exemple sous le minimum (13.50)", '13.50' in h or '13,50' in h, False)
+check("Lieu de signature = commune du dossier, modifiable", 'name="lieu_signature" class="form-control" value="Grimbergen"' in h)
+check("Plus de « Bruxelles » en dur", 'value="Bruxelles"' in h, False)
+check("Contingent: heures deja prestees affichees", '>120 h<' in h and '>650 h<' in h)
+check("Memes composants que le formulaire CDI/CDD", h.count('class="form-label"') >= 15 and 'cp_info_box' in h and 'bareme_table' in h)
+check("Alerte de salaire des la saisie", 'oninput="majSalaire()"' in h and 'inférieur au minimum' in h)
+check("Contingent: par etudiant, compteur limite a cet employeur, champ autres employeurs, Student@work",
+      'tous employeurs confondus' in h and 'chez cet employeur uniquement' in h
+      and 'name="heures_autres_employeurs"' in h and 'https://www.studentatwork.be' in h)
+check("CP non geree marquee dans la liste et bouton bloque", 'CP 302 – Restaurants — non gérée' in h and 'bouton.disabled = !geree' in h)
+
+print(); print("=" * 70); print("FORMULAIRE CDI / CDD -- meme source que le formulaire etudiant"); print("=" * 70)
+from contrat_etudiant import contexte_regles
+h = rendre('contrat_cdi_cdd.html', '/dossier/7/contrat/nouveau', profil=dossier_e, dossier=dossier_e, dossier_actif=dossier_e,
+           travailleurs=[travailleur], cp_data=CP_DATABASE, cp_json=json.dumps({k: {'meta': v['meta'], 'duree_travail': v['duree_travail'],
+           'baremes': v['baremes']} for k, v in CP_DATABASE.items()}), travailleurs_json='[]', prefill_travailleur_id=None,
+           prefill_travailleur=None, prefill_contrat=None, **contexte_regles(dossier_e))
+check("Regles de la CP tirees de regles_cp.py (plus de liste ecrite dans la page)",
+      'Sous-commission paritaire du transport routier et logistique' in h and "Prime fin d\\'année: 330.84" not in h)
+check("Lieu de signature = commune du dossier", 'name="lieu_signature" class="form-control" value="Grimbergen"' in h and 'value="Bruxelles"' not in h)
+check("CP non geree marquee et bouton bloque", '— non gérée' in h and 'bouton.disabled = !geree' in h)
+from regles_cp import cp_geree
+check("Refus cote serveur: cp_geree()", (cp_geree('CP 302'), cp_geree('CP 124'), cp_geree('CP 200')), (False, False, True))
+
 print(); print("=" * 70); print("PDF -- logo et mentions sur les documents"); print("=" * 70)
 import tempfile
 from pypdf import PdfReader
