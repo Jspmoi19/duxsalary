@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Modifier dossier — DuxSalary{% endblock %}
+{% block title %}Modifier dossier{% endblock %}
 {% block content %}
 
 <div class="page-header">
@@ -112,7 +112,7 @@
               Données ONSS de l'employeur — Répertoire des employeurs (consultation sécurisée)
             </div>
             {% if erreur_onss %}
-            <div style="font-size:12px;color:#c0392b;margin-bottom:8px">⚠️ {{ erreur_onss }}</div>
+            <div style="font-size:12px;color:#c0392b;margin-bottom:8px">⚠ {{ erreur_onss }}</div>
             {% endif %}
             <div style="display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:12px">
               <div>
@@ -169,7 +169,7 @@
 
     <hr style="margin:24px 0;border:none;border-top:1px solid var(--border)">
     <div class="archive-notice">
-      ⚠️ <strong>Obligation légale</strong> — La législation belge (art. 30 L. 16/05/2003 et Code des sociétés) impose la conservation des documents sociaux pendant minimum 7 ans. L'archivage est irréversible.
+      ⚠<strong>Obligation légale</strong> — La législation belge (art. 30 L. 16/05/2003 et Code des sociétés) impose la conservation des documents sociaux pendant minimum 7 ans. L'archivage est irréversible.
     </div>
     <form method="POST" action="/dossier/{{ dossier.id }}/archiver" onsubmit="return confirm('Archiver ce dossier ? Il sera en lecture seule et inaccessible depuis la liste principale. Cette action est conforme à vos obligations légales de conservation.')">
       <button type="submit" class="btn btn-secondary" style="color:#7a4000;border-color:#e0c060">Archiver ce dossier</button>

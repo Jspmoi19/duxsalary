@@ -14,6 +14,7 @@ from moteur_paie import calculer_fiche_paie
 from documents_charges import (valeurs_fiche, compte_individuel, attestation_salariale,
                                liste_ventilation, formater)
 from pdf_charges import generer_pdf_charges
+from branding import get_branding
 
 ECHECS = []
 def check(label, obtenu, attendu, tol=0.011):
@@ -139,7 +140,7 @@ env = Environment(loader=ChoiceLoader([DictLoader({'base.html': '{% block conten
 for nom, doc in (('compte individuel', ci_a), ('attestation', at), ('ventilation', ve)):
     html = env.get_template('document_charges.html').render(
         document=doc, formater=formater, date_debut='2026-07-01', date_fin='2026-08-31', retour_url='/', retour_libelle='x',
-        onglets=[], tenant={'couleur_primaire': '#1F4E79'})
+        onglets=[], marque=get_branding())
     check(f"Ecran {nom}: toutes les lignes affichees", html.count('<tr') - 1,
           sum(1 + len(s['lignes']) for s in doc['sections']))
     pdf = generer_pdf_charges(doc)

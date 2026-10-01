@@ -1,10 +1,9 @@
 {% extends "base.html" %}
-{% block title %}{{ travailleur.prenom }} {{ travailleur.nom }} — DuxSalary{% endblock %}
+{% block title %}{{ travailleur.prenom }} {{ travailleur.nom }}{% endblock %}
 {% block content %}
 
 <div class="page-header">
   <div class="page-header-left">
-    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
     <h2>{{ travailleur.prenom }} {{ travailleur.nom }}</h2>
     <div class="breadcrumb">Fiche travailleur</div>
   </div>
@@ -33,8 +32,8 @@
     <a href="/dossier/{{ dossier.id }}/contrat/nouveau?travailleur_id={{ travailleur.id }}" class="btn btn-primary btn-sm">+ Contrat CDI/CDD</a>
     <a href="/contrat/etudiant/nouveau?dossier_id={{ dossier.id }}&travailleur_id={{ travailleur.id }}" class="btn btn-primary btn-sm">+ Contrat étudiant</a>
     <a href="/travailleur/{{ travailleur.id }}/dimona" class="btn btn-secondary btn-sm">Dimona / Prestations</a>
-    <a href="/travailleur/{{ travailleur.id }}/conges" class="btn btn-secondary btn-sm">🏖️ Congés</a>
-    <a href="/travailleur/{{ travailleur.id }}/compte-individuel" class="btn btn-secondary btn-sm">📘 Compte individuel</a>
+    <a href="/travailleur/{{ travailleur.id }}/conges" class="btn btn-secondary btn-sm">Congés</a>
+    <a href="/travailleur/{{ travailleur.id }}/compte-individuel" class="btn btn-secondary btn-sm">Compte individuel</a>
     <a href="/travailleur/{{ travailleur.id }}/document/ajouter" class="btn btn-secondary btn-sm">+ Document</a>
   </div>
 
@@ -94,8 +93,8 @@
       <td>{{ c.date_debut }}</td>
       <td>{{ c.date_fin or 'En cours' }}</td>
       <td style="display:flex;gap:6px;align-items:center">
-        {% if c.pdf_path %}<a href="/download/{{ c.pdf_path|basename }}" class="btn btn-secondary btn-xs">⬇ PDF</a>{% else %}<span style="color:#ccc">—</span>{% endif %}
-        <a href="/contrat/{{ c.id }}/fin-contrat" class="btn btn-secondary btn-xs">📋 Fin contrat</a>
+        {% if c.pdf_path %}<a href="/download/{{ c.pdf_path|basename }}" class="btn btn-secondary btn-xs">PDF</a>{% else %}<span style="color:#ccc">—</span>{% endif %}
+        <a href="/contrat/{{ c.id }}/fin-contrat" class="btn btn-secondary btn-xs">Fin contrat</a>
         <form method="POST" action="/contrat/{{ c.id }}/archiver" style="display:inline" onsubmit="return confirm('Archiver ce contrat ?')">
           <button type="submit" class="btn btn-danger btn-xs">Supprimer</button>
         </form>
@@ -122,7 +121,7 @@
       <td>{{ f.salaire_net }} €</td>
       <td>{{ f.total_onss }} €</td>
       <td style="display:flex;gap:6px">
-        {% if f.pdf_path %}<a href="/download/{{ f.pdf_path|basename }}" class="btn btn-secondary btn-xs">⬇ PDF</a>{% endif %}
+        {% if f.pdf_path %}<a href="/download/{{ f.pdf_path|basename }}" class="btn btn-secondary btn-xs">PDF</a>{% endif %}
         <form method="POST" action="/fiche/{{ f.id }}/supprimer" style="display:inline" onsubmit="return confirm('Supprimer cette fiche de paie ?')">
           <button type="submit" class="btn btn-danger btn-xs">Supprimer</button>
         </form>
@@ -142,10 +141,10 @@
   {% if documents %}
     {% for doc in documents %}
     <div class="doc-row">
-      <span style="font-size:20px">📄</span>
+      <span style="font-size:20px"></span>
       <span class="doc-name">{{ doc.nom }}</span>
       <span class="doc-meta">{{ doc.type_document or '—' }} · {{ doc.uploaded_at.strftime('%d/%m/%Y') }}</span>
-      <a href="/document/{{ doc.id }}/download" class="btn btn-secondary btn-xs">⬇ Télécharger</a>
+      <a href="/document/{{ doc.id }}/download" class="btn btn-secondary btn-xs">Télécharger</a>
     </div>
     {% endfor %}
   {% else %}

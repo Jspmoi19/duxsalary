@@ -3,7 +3,6 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
     <h2>Lettre ONSS — {{ mois_nom }} {{ annee }}</h2>
   </div>
 </div>
@@ -46,8 +45,8 @@
     </tbody>
   </table>
   <div style="padding:16px;text-align:right">
-    <form method="POST">
-      <button type="submit" class="btn btn-primary">📄 Générer la lettre ONSS PDF</button>
+    <form method="POST" data-pdf="Lettre ONSS">
+      <button type="submit" class="btn btn-primary">Générer la lettre ONSS PDF</button>
     </form>
   </div>
   {% else %}

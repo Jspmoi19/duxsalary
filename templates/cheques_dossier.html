@@ -14,8 +14,7 @@
 
 <div class="page-header">
   <div class="page-header-left">
-    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
-    <h2>🎟️ Suivi des chèques</h2>
+    <h2>Suivi des chèques</h2>
     <p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">Chèques-repas et écochèques : obligations sectorielles, configuration du dossier et quantités à commander.</p>
   </div>
 </div>
@@ -37,7 +36,7 @@
     <div class="regle">
       <div style="font-weight:700;color:#1F4E79;margin-bottom:6px">{{ cp }}</div>
       {% if not r.connue %}
-        <div>⚠️ CP non encore documentée dans le suivi des chèques : vérifier la CCT sectorielle.</div>
+        <div>⚠ CP non encore documentée dans le suivi des chèques : vérifier la CCT sectorielle.</div>
       {% else %}
         <div><b>Chèques-repas :</b>
           {% if r.repas %}
@@ -124,7 +123,7 @@
         <td style="font-size:12px">
           {% if l.repas.obligatoire %}<span class="badge b-oblig">obligatoire</span>{% elif not l.repas.eligible %}<span class="badge b-info">pas encore dû</span>{% elif config.actif %}<span class="badge b-ok">volontaire</span>{% endif %}
           <div>{{ l.repas.motif }}</div>
-          {% for a in l.repas.alertes or [] %}<div style="color:#c0392b">⚠️ {{ a }}</div>{% endfor %}
+          {% for a in l.repas.alertes or [] %}<div style="color:#c0392b">⚠ {{ a }}</div>{% endfor %}
         </td>
         <td class="num"><b>{{ l.repas.nombre }}</b></td>
         <td class="num">{{ "%.2f"|format(l.repas.total_valeur or 0) }} €</td>
@@ -183,7 +182,7 @@
 </div>
 
 <div style="display:flex;justify-content:flex-end;margin:0 0 30px">
-  <button type="submit" class="btn btn-primary">💾 Enregistrer la configuration</button>
+  <button type="submit" class="btn btn-primary">Enregistrer la configuration</button>
 </div>
 </form>
 {% endblock %}

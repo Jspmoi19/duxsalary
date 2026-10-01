@@ -13,6 +13,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from branding import couleur, pdf_decor, get_branding
 
 try:
     pdfmetrics.registerFont(TTFont('DVSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
@@ -39,7 +40,7 @@ def p(text, **kw):
 def generer_fiche_paie_pdf(data, filepath):
     """Génère le PDF de la fiche de paie."""
     doc = SimpleDocTemplate(filepath, pagesize=A4,
-        topMargin=1.2*cm, bottomMargin=1.5*cm,
+        topMargin=1.5*cm, bottomMargin=1.5*cm,   # marge haute: place du logo (branding.pdf_decor)
         leftMargin=1.5*cm, rightMargin=1.5*cm)
     
     w = 18*cm  # largeur utile
@@ -244,7 +245,7 @@ def generer_fiche_paie_pdf(data, filepath):
             [p('COMMUNICATION:', bold=True, size=8)],
             [p('', size=8)],
             [p('')],
-            [p('Etabli par : DUXSALARY — Secrétariat Social Digital', size=7.5, color=GRAY)],
+            [p(f"Etabli par : {get_branding()['societe']}", size=7.5, color=GRAY)],
         ], colWidths=[9*cm]),
         Table([
             [p('DECOMPTE:', bold=True, size=8), ''],
@@ -271,7 +272,7 @@ def generer_fiche_paie_pdf(data, filepath):
         f"{data['a_payer']:.2f} EUR par virement sur compte bancaire {iban} "
         f"de {data['prenom']} {data['nom']}", size=8))
     
-    doc.build(elems)
+    doc.build(elems, **pdf_decor())
     return filepath
 
 def _fmt_date(d):

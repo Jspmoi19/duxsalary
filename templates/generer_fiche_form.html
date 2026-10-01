@@ -4,7 +4,6 @@
 
 <div class="page-header">
   <div class="page-header-left">
-    <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois }}" class="btn-back">← Retour au calendrier</a>
     <h2>Fiche de paie — {{ mois_nom }} {{ annee }}</h2>
     <div class="breadcrumb">{{ dimona.prenom }} {{ dimona.nom }} · {{ cp_key }}</div>
   </div>
@@ -109,7 +108,7 @@
       </div>
       {% endif %}
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:16px;font-size:13px;color:#166534">
-        ✅ Le PDF de la fiche de paie sera généré automatiquement et téléchargé.
+        ✓ Le PDF de la fiche de paie sera généré automatiquement et téléchargé.
       </div>
     </div>
   </div>
@@ -132,7 +131,7 @@
     {% if mois == 12 %}
     <div style="padding:12px 14px;background:#fff8e1;border-left:4px solid #f39c12;border-radius:6px;margin-bottom:14px">
       <div style="font-weight:700;color:#b9770e;font-size:13px;margin-bottom:4px">
-        🎁 Décembre — Prime de fin d'année (optionnel)
+        Décembre — Prime de fin d'année (optionnel)
       </div>
       <div style="font-size:12px;color:#555;margin-bottom:10px">
         Que la CP le prévoie ou non — libre à vous d'accorder une prime.
@@ -141,7 +140,7 @@
       </div>
       {% if prime_suggestion and prime_suggestion.droit %}
       <div style="font-size:12px;background:white;border:1px solid #f39c12;border-radius:4px;padding:6px 10px;margin-bottom:8px">
-        💡 <b>Indication {{ cp_key }}</b> —
+        <b>Indication {{ cp_key }}</b> —
         {% if prime_suggestion.montant_brut is not none %}
           suggestion : <b>{{ "%.2f"|format(prime_suggestion.montant_brut) }} €</b> brut
           <span style="color:#888">({{ prime_suggestion.methode }})</span>
@@ -154,7 +153,7 @@
       </div>
       {% elif prime_suggestion and not prime_suggestion.droit %}
       <div style="font-size:12px;background:#fde8e8;border:1px solid #e74c3c;border-radius:4px;padding:6px 10px;margin-bottom:8px;color:#c0392b">
-        ⚠️ {{ prime_suggestion.raison }}
+        ⚠ {{ prime_suggestion.raison }}
       </div>
       {% endif %}
       <div style="display:flex;gap:10px;align-items:center">
@@ -168,13 +167,13 @@
     {% if mois in [5, 6] %}
     <div style="padding:12px 14px;background:#e8f5e9;border-left:4px solid #27ae60;border-radius:6px;margin-bottom:14px">
       <div style="font-weight:700;color:#1e7e34;font-size:13px;margin-bottom:4px">
-        🏖️ {{ 'Mai' if mois == 5 else 'Juin' }} — Double pécule de vacances (employés)
+        {{ 'Mai' if mois == 5 else 'Juin' }} — Double pécule de vacances (employés)
       </div>
       <div style="font-size:12px;color:#555;margin-bottom:10px">
         Employés uniquement (les ouvriers sont payés par l'ONVA).
         Retenue spéciale de 13,07 % sur 85/92 du montant, puis précompte
         « allocations exceptionnelles » calculé automatiquement (barème 2026).
-        {% if pecule_suggestion %}<br>💡 <b>Indication</b> : {{ "%.2f"|format(pecule_suggestion.montant) }} € brut
+        {% if pecule_suggestion %}<br><b>Indication</b> : {{ "%.2f"|format(pecule_suggestion.montant) }} € brut
         <span style="color:#888">({{ pecule_suggestion.methode }})</span>{% endif %}
       </div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -198,17 +197,17 @@
     {% if mois == 6 and prime_annuelle_suggestion %}
     <div style="padding:12px 14px;background:#fff8e1;border-left:4px solid #f39c12;border-radius:6px;margin-bottom:14px">
       <div style="font-weight:700;color:#b9770e;font-size:13px;margin-bottom:4px">
-        💶 Juin — Prime annuelle sectorielle ({{ cp_key }})
+        Juin — Prime annuelle sectorielle ({{ cp_key }})
       </div>
       <div style="font-size:12px;color:#555;margin-bottom:8px">
         {{ prime_annuelle_suggestion.regle }}<br>
-        💡 <b>Indication</b> : {{ "%.2f"|format(prime_annuelle_suggestion.montant) }} € brut
+        <b>Indication</b> : {{ "%.2f"|format(prime_annuelle_suggestion.montant) }} € brut
         <span style="color:#888">({{ prime_annuelle_suggestion.methode }})</span>
       </div>
       <div style="display:flex;gap:10px;align-items:center">
         <input type="number" name="prime_annuelle" step="0.01" min="0" value="0"
                class="form-control" style="max-width:140px" placeholder="0.00">
-        <span style="font-size:13px;color:var(--text-muted)">€ brut — c'est vous qui décidez (écochèques : voir 🎟️ Chèques)</span>
+        <span style="font-size:13px;color:var(--text-muted)">€ brut — c'est vous qui décidez (écochèques : voir Chèques)</span>
       </div>
     </div>
     {% endif %}
@@ -218,7 +217,7 @@
 
 <div style="text-align:right;margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
   <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois }}" class="btn btn-secondary">Annuler</a>
-  <button type="submit" name="action" value="calculer" class="btn btn-primary">🧮 Calculer la paie</button>
+  <button type="submit" name="action" value="calculer" class="btn btn-primary">Calculer la paie</button>
 </div>
 </form>
 

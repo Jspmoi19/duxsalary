@@ -1,10 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Nouveau travailleur — DuxSalary{% endblock %}
+{% block title %}Nouveau travailleur{% endblock %}
 {% block content %}
 
 <div class="page-header">
   <div class="page-header-left">
-    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
     <h2>Nouveau travailleur</h2>
   </div>
 </div>
@@ -14,7 +13,7 @@
 
   <!-- COL 1 : Infos personnelles -->
   <div class="card">
-    <div class="card-header"><h3>👤 Informations personnelles</h3></div>
+    <div class="card-header"><h3>Informations personnelles</h3></div>
     <div class="card-body form-grid">
       <div class="form-group">
         <label class="form-label">Prénom *</label>
@@ -80,7 +79,7 @@
 
   <!-- COL 2 : Contrat et CP -->
   <div class="card">
-    <div class="card-header"><h3>📋 Contrat et commission paritaire</h3></div>
+    <div class="card-header"><h3>Contrat et commission paritaire</h3></div>
     <div class="card-body form-grid">
       <div class="form-group">
         <label class="form-label">Type de contrat *</label>
@@ -139,9 +138,11 @@
 
 <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
   <a href="/dossier/{{ dossier.id }}" class="btn btn-secondary">Annuler</a>
-  <button type="submit" class="btn btn-primary">💾 Créer le travailleur</button>
+  <button type="submit" class="btn btn-primary">Créer le travailleur</button>
 </div>
 </form>
+
+{% endblock %}
 
 {% block scripts %}
 <script>
@@ -151,5 +152,4 @@ function toggleDateFin(type) {
 }
 toggleDateFin(document.querySelector('[name=type_contrat]').value);
 </script>
-{% endblock %}
 {% endblock %}

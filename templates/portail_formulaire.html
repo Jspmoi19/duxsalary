@@ -7,12 +7,12 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', sans-serif; background: #f5f7fa; color: #1a1a1a; }
-.header { background: #1F4E79; color: white; padding: 20px 32px; display: flex; align-items: center; gap: 16px; }
+.header { background: {{ marque.couleur_primaire }}; color: white; padding: 20px 32px; display: flex; align-items: center; gap: 16px; }
 .header h1 { font-size: 20px; font-weight: 700; }
 .header p { font-size: 13px; opacity: 0.8; }
 .container { max-width: 860px; margin: 32px auto; padding: 0 16px; }
 .card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 24px; overflow: hidden; }
-.card-header { background: #1F4E79; color: white; padding: 14px 24px; font-weight: 700; font-size: 14px; letter-spacing: 0.5px; }
+.card-header { background: {{ marque.couleur_primaire }}; color: white; padding: 14px 24px; font-weight: 700; font-size: 14px; letter-spacing: 0.5px; }
 .card-body { padding: 24px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .form-grid.three { grid-template-columns: 1fr 1fr 1fr; }
@@ -24,24 +24,24 @@ input[type=text], input[type=email], input[type=date], input[type=number], selec
   border: 1px solid #dde3ea; border-radius: 8px; padding: 10px 12px; font-size: 14px;
   transition: border-color 0.2s; width: 100%; background: #fafbfc;
 }
-input:focus, select:focus, textarea:focus { outline: none; border-color: #1F4E79; background: white; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: {{ marque.couleur_primaire }}; background: white; }
 .checkbox-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
 .checkbox-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
   border: 1px solid #dde3ea; border-radius: 8px; cursor: pointer; font-size: 13px;
   background: #fafbfc; transition: all 0.15s; }
-.checkbox-item:hover { border-color: #1F4E79; background: #e8f0f8; }
+.checkbox-item:hover { border-color: {{ marque.couleur_primaire }}; background: #e8f0f8; }
 .checkbox-item input { margin: 0; width: 16px; height: 16px; cursor: pointer; }
 .radio-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
 .radio-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px;
   border: 2px solid #dde3ea; border-radius: 8px; cursor: pointer; font-size: 13px;
   background: white; transition: all 0.15s; }
-.radio-item:hover { border-color: #1F4E79; }
-.radio-item input[type=radio]:checked + span { color: #1F4E79; font-weight: 600; }
-.radio-item:has(input:checked) { border-color: #1F4E79; background: #e8f0f8; }
-.section-sub { font-size: 12px; font-weight: 700; color: #1F4E79; text-transform: uppercase; 
+.radio-item:hover { border-color: {{ marque.couleur_primaire }}; }
+.radio-item input[type=radio]:checked + span { color: {{ marque.couleur_primaire }}; font-weight: 600; }
+.radio-item:has(input:checked) { border-color: {{ marque.couleur_primaire }}; background: #e8f0f8; }
+.section-sub { font-size: 12px; font-weight: 700; color: {{ marque.couleur_primaire }}; text-transform: uppercase; 
   letter-spacing: 0.5px; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #e8f0f8; }
 .hidden { display: none; }
-.btn-submit { background: #1F4E79; color: white; border: none; padding: 14px 32px;
+.btn-submit { background: {{ marque.couleur_primaire }}; color: white; border: none; padding: 14px 32px;
   border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; width: 100%;
   margin-top: 8px; transition: background 0.2s; }
 .btn-submit:hover { background: #163d61; }
@@ -52,10 +52,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #1F4E79
 </head>
 <body>
 
-<div class="header">
+<div class="header" style="background:#fff;color:{{ marque.couleur_texte }};border-bottom:3px solid {{ marque.couleur_primaire }};display:flex;align-items:center;gap:20px;padding:14px 32px">
+  {% if marque.logo_path %}<img src="{{ marque.logo_url }}" alt="{{ marque.nom }}" style="height:48px;display:block">{% else %}<strong style="font-size:20px;color:{{ marque.couleur_primaire }}">{{ marque.nom }}</strong>{% endif %}
   <div>
-    <h1>DuxSalary — Déclaration Nouveau Travailleur</h1>
-    <p>{{ portail.dossier_nom }} — Ce document sert de base au calcul du salaire. Complétez-le intégralement.</p>
+    <div style="font-size:17px;font-weight:700;color:{{ marque.couleur_primaire }}">Déclaration d'un nouveau travailleur</div>
+    <div style="font-size:13px;color:{{ marque.couleur_texte_secondaire }}">{{ portail.dossier_nom }} — Ce document sert de base au calcul du salaire. Complétez-le intégralement.</div>
   </div>
 </div>
 
@@ -364,7 +365,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #1F4E79
 
 <div class="card">
   <div class="card-body">
-    <p class="note">⚠️ Ce document sert de base au calcul du salaire. S'il n'est pas complété correctement et intégralement, cela peut produire des effets sur le calcul du salaire.</p>
+    <p class="note">⚠ Ce document sert de base au calcul du salaire. S'il n'est pas complété correctement et intégralement, cela peut produire des effets sur le calcul du salaire.</p>
     <button type="submit" class="btn-submit">✅ Envoyer la déclaration</button>
   </div>
 </div>
@@ -387,5 +388,6 @@ function toggleVoiture() {
   document.getElementById('bloc_voiture').classList.toggle('hidden', val !== 'oui');
 }
 </script>
+<div style="text-align:center;font-size:11px;color:{{ marque.couleur_texte_secondaire }};padding:18px 16px 26px">{{ marque.mentions }}</div>
 </body>
 </html>

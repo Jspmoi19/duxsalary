@@ -5,6 +5,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_JUSTIFY
+from branding import couleur, pdf_decor, get_branding
 import os, json as jsonlib
 from datetime import datetime, date
 import calendar
@@ -31,6 +32,11 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @app.template_filter('basename')
 def basename_filter(path):
     return os.path.basename(path) if path else ''
+
+@app.context_processor
+def injecter_marque():
+    """Identite (logo, mentions, couleurs) disponible dans tous les gabarits -- branding.py."""
+    return {'marque': get_branding()}
 
 def get_context_base():
     tous = get_all_dossiers()
@@ -657,133 +663,6 @@ def nouveau_contrat_dossier(dossier_id):
                            prefill_travailleur=prefill_travailleur,
                            prefill_contrat=prefill_contrat, **ctx)
 
-# ── FICHES DE PAIE ────────────────────────────────────────────────────
-def calcul_paie_etudiant(salaire_horaire, heures_jour, nb_jours, transport=None):
-    heures_totales = round(heures_jour * nb_jours, 2)
-    brut = round(salaire_horaire * heures_totales, 2)
-    onss_personnel = round(brut * 0.0271, 2)
-    transport_montant = transport['montant'] if transport else 0
-    net = round(brut - onss_personnel + transport_montant, 2)
-    onss_patronal = round(brut * 0.0542, 2)
-    return {'heures_totales': heures_totales, 'nb_jours': nb_jours, 'brut': brut,
-            'onss_personnel': onss_personnel, 'net': net, 'onss_patronal': onss_patronal,
-            'cout_employeur': round(brut + onss_patronal + transport_montant, 2),
-            'total_onss': round(onss_personnel + onss_patronal, 2),
-            'transport_montant': transport_montant}
-
-def generer_fiche_paie(data, calcul):
-    filename = f"fiche_{data.get('nom_etudiant','').replace(' ','_')}_{data.get('date_debut','').replace('/','')}.pdf"
-    filepath = os.path.join(OUTPUT_DIR, filename)
-    from reportlab.platypus import KeepTogether
-    BLUE = colors.HexColor('#1F4E79')
-    DARK = colors.HexColor('#1a1a1a')
-    GREY_BG = colors.HexColor('#f5f5f5')
-    GREY_LINE = colors.HexColor('#cccccc')
-    sN = ParagraphStyle('sN', fontName='Helvetica', fontSize=8, leading=11, textColor=DARK)
-    sB = ParagraphStyle('sB', fontName='Helvetica-Bold', fontSize=8, leading=11, textColor=DARK)
-    sRB = ParagraphStyle('sRB', fontName='Helvetica-Bold', fontSize=9, leading=12, textColor=DARK, alignment=TA_RIGHT)
-    sCB = ParagraphStyle('sCB', fontName='Helvetica-Bold', fontSize=8, leading=11, textColor=DARK, alignment=TA_CENTER)
-    sTitle = ParagraphStyle('sTitle', fontName='Helvetica-Bold', fontSize=11, leading=14, textColor=colors.white, alignment=TA_RIGHT)
-    sSub = ParagraphStyle('sSub', fontName='Helvetica', fontSize=7.5, leading=10, textColor=colors.HexColor('#555555'))
-
-    doc = SimpleDocTemplate(filepath, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm, leftMargin=1.8*cm, rightMargin=1.8*cm)
-    elements = []
-
-    header = Table([[
-        Table([[Paragraph(f"<b>{data.get('nom_societe','')}</b>", sB)],
-               [Paragraph(data.get('adresse_societe',''), sN)],
-               [Paragraph(f"BCE : {data.get('bce_societe','')}  |  N° RSZ : {data.get('rsz_societe','')}", sN)]],
-              colWidths=[9*cm], style=[('TOPPADDING',(0,0),(-1,-1),1),('BOTTOMPADDING',(0,0),(-1,-1),1)]),
-        Table([[Paragraph("DÉCOMPTE DE RÉMUNÉRATION", sTitle)],
-               [Paragraph(f"Période du {data.get('date_debut','')} au {data.get('date_fin','')}", ParagraphStyle('',fontName='Helvetica',fontSize=8,textColor=colors.white,alignment=TA_RIGHT))]],
-              colWidths=[8*cm], style=[('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2)])
-    ]], colWidths=[9*cm, 8.4*cm])
-    header.setStyle(TableStyle([('BACKGROUND',(1,0),(1,0),BLUE),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
-        ('LEFTPADDING',(1,0),(1,0),8),('RIGHTPADDING',(1,0),(1,0),8),
-        ('TOPPADDING',(0,0),(-1,-1),8),('BOTTOMPADDING',(0,0),(-1,-1),8)]))
-    elements.append(header)
-    elements.append(Spacer(1, 0.3*cm))
-
-    table_data = [
-        ['Code', 'Description', 'Jours', 'Heures', 'Montants'],
-        ['1100', 'Salaire de base', str(calcul['nb_jours']), f"{calcul['heures_totales']}h", f"{calcul['brut']:.2f}"],
-        ['', Paragraph('<b>Montant brut</b>', sB), '', '', Paragraph(f"<b>{calcul['brut']:.2f}</b>", sRB)],
-        ['2500', f"Cotisation ONSS ({100*0.0271:.2f}%)", '', '', f"-{calcul['onss_personnel']:.2f}"],
-        ['', Paragraph('<b>Imposable</b>', sB), '', '', Paragraph(f"<b>{calcul['brut']-calcul['onss_personnel']:.2f}</b>", sRB)],
-        ['3000', 'Précompte professionnel', '', '', '0,00'],
-        ['', Paragraph('<b>Salaire net</b>', sB), '', '', Paragraph(f"<b>{calcul['net']:.2f}</b>", sRB)],
-    ]
-    pt = Table(table_data, colWidths=[1.2*cm, 10*cm, 1.5*cm, 1.8*cm, 2.9*cm])
-    pt.setStyle(TableStyle([
-        ('BACKGROUND',(0,0),(-1,0),DARK),('TEXTCOLOR',(0,0),(-1,0),colors.white),
-        ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),8),
-        ('ALIGN',(2,0),(-1,-1),'RIGHT'),('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,GREY_BG]),
-        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
-        ('LEFTPADDING',(0,0),(-1,-1),4),('RIGHTPADDING',(0,0),(-1,-1),4),
-        ('BACKGROUND',(0,2),(-1,2),colors.HexColor('#e8e8e8')),
-        ('BACKGROUND',(0,4),(-1,4),colors.HexColor('#e8e8e8')),
-        ('BACKGROUND',(0,-1),(-1,-1),DARK),('TEXTCOLOR',(0,-1),(-1,-1),colors.white),
-        ('FONTNAME',(0,-1),(-1,-1),'Helvetica-Bold'),('GRID',(0,0),(-1,-1),0.3,GREY_LINE),
-    ]))
-    elements.append(pt)
-    elements.append(Spacer(1, 0.3*cm))
-    net_box = Table([[Paragraph("net reporté", sSub),
-        Paragraph(f"€ {calcul['net']:.2f}", ParagraphStyle('',fontName='Helvetica-Bold',fontSize=10,alignment=TA_RIGHT,textColor=DARK))]],
-        colWidths=[14*cm, 3.4*cm])
-    net_box.setStyle(TableStyle([('LINEABOVE',(0,0),(-1,0),1,DARK),('LINEBELOW',(0,0),(-1,0),1,DARK),
-        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]))
-    elements.append(net_box)
-    doc.build(elements)
-    return filepath, filename
-
-@app.route('/dossier/<int:dossier_id>/fiche/nouvelle', methods=['GET', 'POST'])
-@login_required
-def nouvelle_fiche(dossier_id):
-    dossier = get_dossier(dossier_id)
-    travailleurs = get_travailleurs(dossier_id)
-    ctx = get_context_base()
-    ctx['tenant'] = get_tenant()
-    prefill_travailleur_id = request.args.get('travailleur_id', type=int)
-
-    if request.method == 'POST':
-        form = request.form
-        travailleur_id = int(form['travailleur_id'])
-        travailleur = get_travailleur(travailleur_id)
-        heures_jour = float(form.get('heures_jour', 7.6))
-        nb_jours = int(form.get('nb_jours', 0))
-        salaire_horaire = float(form.get('salaire_horaire', 0))
-        transport_montant = float(form.get('transport_montant', 0) or 0)
-        transport = {'montant': transport_montant, 'description': form.get('transport_desc',''), 'moyen': 'autre'}
-        calcul = calcul_paie_etudiant(salaire_horaire, heures_jour, nb_jours, transport)
-        data = {
-            'nom_societe': dossier['nom'], 'adresse_societe': dossier['adresse'] or '',
-            'bce_societe': dossier['bce'] or '', 'rsz_societe': dossier['rsz'] or '',
-            'nom_etudiant': f"{travailleur['prenom']} {travailleur['nom']}",
-            'niss_etudiant': travailleur['niss'] or '',
-            'date_debut': form['date_debut'], 'date_fin': form['date_fin'],
-            'salaire_horaire': str(salaire_horaire), 'transport': transport,
-            'fonction': form.get('fonction', ''),
-        }
-        filepath, filename = generer_fiche_paie(data, calcul)
-
-        def pd(d):
-            if not d: return None
-            try: p = d.split('/'); return f"{p[2]}-{p[1]}-{p[0]}"
-            except: return None
-
-        create_fiche_paie({'dossier_id': dossier_id, 'travailleur_id': travailleur_id, 'contrat_id': None,
-            'periode_debut': pd(form['date_debut']), 'periode_fin': pd(form['date_fin']),
-            'nb_jours': nb_jours, 'heures_totales': calcul['heures_totales'],
-            'salaire_brut': calcul['brut'], 'onss_personnel': calcul['onss_personnel'],
-            'precompte': 0, 'transport_montant': transport_montant,
-            'salaire_net': calcul['net'], 'onss_patronal': calcul['onss_patronal'],
-            'cout_employeur': calcul['cout_employeur'], 'total_onss': calcul['total_onss'],
-            'pdf_path': os.path.join(OUTPUT_DIR, filename)})
-        return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id, tab='fiches'))
-
-    return render_template('nouvelle_fiche.html', dossier=dossier, dossier_actif=dossier,
-                           travailleurs=travailleurs, prefill_travailleur_id=prefill_travailleur_id, **ctx)
-
 # ── DOWNLOAD ──────────────────────────────────────────────────────────
 @app.route('/download/<filename>')
 @login_required
@@ -791,7 +670,8 @@ def download(filename):
     filepath = os.path.join(OUTPUT_DIR, filename)
     if not os.path.exists(filepath):
         return "Fichier introuvable — veuillez regénérer la fiche.", 404
-    return send_file(filepath, as_attachment=True)
+    # Les PDF s'affichent dans le navigateur (lien ouvert dans un nouvel onglet par base.html)
+    return send_file(filepath, as_attachment=not filename.lower().endswith('.pdf'))
 
 # ── BASE CP ──────────────────────────────────────────────────────────
 @app.route('/base-cp')
@@ -1036,7 +916,7 @@ def generer_pdf_etudiant(data, filepath):
     from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
     from datetime import datetime
 
-    NAVY  = colors.HexColor('#1F4E79')
+    NAVY  = couleur('primaire')
     DARK  = colors.HexColor('#1a1a1a')
     MUTED = colors.HexColor('#555555')
 
@@ -1218,7 +1098,7 @@ def generer_pdf_etudiant(data, filepath):
         "Document etabli conformement a la loi du 3 juillet 1978 et au Titre VII relatif aux contrats d'occupation d'etudiants.",
         sMu))
 
-    doc.build(e)
+    doc.build(e, **pdf_decor())
 
 
 @app.route('/contrat/etudiant/nouveau', methods=['GET', 'POST'])
@@ -1909,7 +1789,7 @@ def generer_lettre_onss_pdf(dossier, fiches, annee, mois, mois_nom):
     except:
         FN, FNB = 'Helvetica', 'Helvetica-Bold'
 
-    NAVY = colors.HexColor('#1F4E79')
+    NAVY = couleur('primaire')
     LGRAY = colors.HexColor('#f5f5f5')
     LINE = colors.HexColor('#cccccc')
 
@@ -2007,9 +1887,9 @@ def generer_lettre_onss_pdf(dossier, fiches, annee, mois, mois_nom):
     e.append(Spacer(1, 0.2*cm))
     e.append(p("Note : Ce montant correspond aux cotisations ONSS de base. Des cotisations sectorielles CP 140.03 (Fonds de sécurité d'existence, formation) seront calculées et facturées directement par l'ONSS après introduction de la DmfA trimestrielle.", size=8))
     e.append(Spacer(1, 0.1*cm))
-    e.append(p(f"Etabli par : DuxSalary — Secrétariat Social Digital", size=8))
+    e.append(p(f"Etabli par : {get_branding()['societe']}", size=8))
 
-    doc.build(e)
+    doc.build(e, **pdf_decor())
     # Sauvegarder en base
     from psycopg2.extras import RealDictCursor as RDC
     conn2 = get_conn()
@@ -2088,7 +1968,7 @@ def generer_certificat_travail(c):
     except:
         FN, FNB = 'Helvetica', 'Helvetica-Bold'
 
-    NAVY = colors.HexColor('#1F4E79')
+    NAVY = couleur('primaire')
     sN = ParagraphStyle('N', fontName=FN, fontSize=10, leading=15)
     sB = ParagraphStyle('B', fontName=FNB, fontSize=10, leading=15)
     sT = ParagraphStyle('T', fontName=FNB, fontSize=14, leading=20, alignment=TA_CENTER)
@@ -2141,7 +2021,7 @@ def generer_certificat_travail(c):
     e.append(Paragraph(f"{c.get('representant', '—')}", sN))
     e.append(Paragraph(f"{c['dossier_nom']}", sN))
 
-    doc.build(e)
+    doc.build(e, **pdf_decor())
     return send_file(filepath, as_attachment=False, download_name=filename, mimetype='application/pdf')
 
 
@@ -2161,7 +2041,7 @@ def generer_c4(c, form):
     except:
         FN, FNB = 'Helvetica', 'Helvetica-Bold'
 
-    NAVY = colors.HexColor('#1F4E79')
+    NAVY = couleur('primaire')
     sN = ParagraphStyle('N', fontName=FN, fontSize=9, leading=13)
     sB = ParagraphStyle('B', fontName=FNB, fontSize=9, leading=13)
     sT = ParagraphStyle('T', fontName=FNB, fontSize=13, leading=18, alignment=TA_CENTER)
@@ -2254,7 +2134,7 @@ def generer_c4(c, form):
     ]], colWidths=[8*cm, 8*cm])
     e.append(sig)
 
-    doc.build(e)
+    doc.build(e, **pdf_decor())
     return send_file(filepath, as_attachment=False, download_name=filename, mimetype='application/pdf')
 
 

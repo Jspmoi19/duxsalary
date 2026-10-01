@@ -12,9 +12,9 @@ from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm
-from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from branding import get_branding
+from branding import get_branding, pdf_decor, pdf_logo
 from documents_charges import formater
 
 FN, FNB = 'Helvetica', 'Helvetica-Bold'
@@ -39,24 +39,15 @@ def generer_pdf_charges(document, tenant=None):
     largeur = landscape(A4)[0] - 2 * cm
     debut, fin = document['periode']
 
-    def pied(canvas, doc):
-        canvas.saveState()
-        canvas.setFont(FN, 7); canvas.setFillColor(secondaire)
-        canvas.drawString(1 * cm, 0.7 * cm, f"{b['pied_de_page']} — imprimé le {datetime.now():%d/%m/%Y à %H:%M}")
-        canvas.drawRightString(landscape(A4)[0] - 1 * cm, 0.7 * cm, f"Page {doc.page}")
-        canvas.restoreState()
-
     doc = SimpleDocTemplate(tampon, pagesize=landscape(A4), topMargin=1 * cm, bottomMargin=1.3 * cm,
                             leftMargin=1 * cm, rightMargin=1 * cm, title=document['titre'], author=b['nom'])
     e = []
 
     # ── En-tete: logo (ou nom) + titre ──
-    if b['logo_path']:
-        marque = Image(b['logo_path'], width=3.2 * cm, height=1.2 * cm, kind='proportional')
-    else:
-        marque = Paragraph(b['logo_text'], st('logo', font=FNB, size=15, size_l=18, color=primaire))
+    marque = pdf_logo(4.6, tenant)
     titre = [Paragraph(document['titre'], st('t', font=FNB, size=14, size_l=17, color=primaire, alignment=TA_RIGHT)),
-             Paragraph(f"Période : {debut:%d/%m/%Y} – {fin:%d/%m/%Y}", st('p', size=8.5, size_l=11, color=secondaire, alignment=TA_RIGHT))]
+             Paragraph(f"Période : {debut:%d/%m/%Y} – {fin:%d/%m/%Y} — imprimé le {datetime.now():%d/%m/%Y}",
+                       st('p', size=8.5, size_l=11, color=secondaire, alignment=TA_RIGHT))]
     e.append(Table([[marque, titre]], colWidths=[largeur * 0.4, largeur * 0.6],
                    style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LINEBELOW', (0, 0), (-1, 0), 1.2, primaire),
                                      ('BOTTOMPADDING', (0, 0), (-1, 0), 6)])))
@@ -98,5 +89,5 @@ def generer_pdf_charges(document, tenant=None):
         e.append(Spacer(1, 0.2 * cm))
         e.append(Paragraph(a, st('a', size=7.5, size_l=10, color=secondaire)))
 
-    doc.build(e, onFirstPage=pied, onLaterPages=pied)
+    doc.build(e, **pdf_decor(tenant, logo=False))
     return tampon.getvalue()

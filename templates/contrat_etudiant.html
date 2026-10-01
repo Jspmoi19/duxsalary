@@ -1,10 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Contrat étudiant — DuxSalary{% endblock %}
+{% block title %}Contrat étudiant{% endblock %}
 {% block content %}
 
 <div class="page-header">
   <div class="page-header-left">
-    <a href="/travailleur/{{ travailleur.id }}" class="btn-back">← {{ travailleur.prenom }} {{ travailleur.nom }}</a>
     <h2>Contrat étudiant</h2>
     <div class="breadcrumb"><a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> · {{ travailleur.prenom }} {{ travailleur.nom }}</div>
   </div>

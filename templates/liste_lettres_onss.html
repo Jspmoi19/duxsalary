@@ -3,7 +3,6 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <a href="/dossier/{{ dossier.id }}" class="btn-back">← {{ dossier.nom }}</a>
     <h2>Lettres ONSS</h2>
   </div>
   <div class="page-actions">
@@ -21,7 +20,7 @@
       <td>{{ "%.2f"|format(l.total_onss_personnel or 0) }} €</td>
       <td>{{ "%.2f"|format(l.total_onss_patronal or 0) }} €</td>
       <td><strong>{{ "%.2f"|format(l.total_onss or 0) }} €</strong></td>
-      <td><a href="/lettre-onss/{{ l.id }}/download" class="btn btn-secondary btn-xs">⬇ PDF</a></td>
+      <td><a href="/lettre-onss/{{ l.id }}/download" class="btn btn-secondary btn-xs">PDF</a></td>
     </tr>
     {% else %}
     <tr class="empty"><td colspan="6">Aucune lettre ONSS générée</td></tr>

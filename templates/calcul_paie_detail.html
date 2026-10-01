@@ -18,8 +18,7 @@
 
 <div class="page-header">
   <div class="page-header-left">
-    <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee }}&mois={{ mois }}" class="btn-back">← Calendrier</a>
-    <h2>🧮 Calcul de paie — {{ dimona.prenom }} {{ dimona.nom }}</h2>
+    <h2>Calcul de paie — {{ dimona.prenom }} {{ dimona.nom }}</h2>
     <p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">
       {{ mois_nom }} {{ annee }} · {{ data.cp_key }} · {{ data.type_contrat }}
       · Rien n'est enregistré tant que vous n'avez pas cliqué sur « Générer la fiche PDF ».
@@ -31,7 +30,7 @@
 <div class="card" style="margin-bottom:16px;border-left:4px solid #f39c12">
   <div class="card-body" style="padding:12px 16px">
     {% for a in data.alertes_calcul %}
-    <div style="font-size:13px;color:#8a5a00;padding:2px 0">⚠️ {{ a }}</div>
+    <div style="font-size:13px;color:#8a5a00;padding:2px 0">⚠ {{ a }}</div>
     {% endfor %}
   </div>
 </div>
@@ -78,11 +77,11 @@
 {% endif %}
 {% endfor %}
 
-<form method="POST" action="/dimona/{{ dimona.id }}/generer-paie?annee={{ annee }}&mois={{ mois }}">
+<form method="POST" data-pdf="Fiche de paie" action="/dimona/{{ dimona.id }}/generer-paie?annee={{ annee }}&mois={{ mois }}">
   {% for k, v in champs %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
   <div style="display:flex;gap:10px;justify-content:flex-end;margin:18px 0 30px">
-    <button type="button" onclick="history.back()" class="btn btn-secondary">✏️ Modifier les paramètres</button>
-    <button type="submit" name="action" value="generer" class="btn btn-primary">🧾 Générer la fiche PDF</button>
+    <button type="button" onclick="history.back()" class="btn btn-secondary">✏Modifier les paramètres</button>
+    <button type="submit" name="action" value="generer" class="btn btn-primary">Générer la fiche PDF</button>
   </div>
 </form>
 {% endblock %}

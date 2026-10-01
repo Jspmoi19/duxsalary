@@ -1,13 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Nouveau contrat — DuxSalary{% endblock %}
+{% block title %}Nouveau contrat{% endblock %}
 {% block content %}
 
 <div class="page-header">
   <div class="page-header-left">
     {% if prefill_travailleur_id %}
-    <a href="/travailleur/{{ prefill_travailleur_id }}" class="btn-back">← Retour au travailleur</a>
     {% else %}
-    <a href="/dossier/{{ profil.id }}" class="btn-back">← {{ profil.nom }}</a>
     {% endif %}
     <h2>Nouveau contrat CDI / CDD</h2>
     <div class="breadcrumb">{{ profil.nom }}</div>
@@ -27,11 +25,11 @@
         <div style="display:flex;gap:12px;margin-bottom:12px">
           <div class="type-btn active" id="btn-cdi" onclick="setType('CDI')"
                style="flex:1;padding:14px;border:2px solid #1F4E79;border-radius:8px;cursor:pointer;text-align:center;background:#e8f0f8;font-weight:700;font-size:14px;color:#1F4E79">
-            📄 CDI<br><small style="font-weight:400;font-size:11px">Durée indéterminée</small>
+            CDI<br><small style="font-weight:400;font-size:11px">Durée indéterminée</small>
           </div>
           <div class="type-btn" id="btn-cdd" onclick="setType('CDD')"
                style="flex:1;padding:14px;border:2px solid #dde3ea;border-radius:8px;cursor:pointer;text-align:center;background:white;font-weight:700;font-size:14px">
-            ⏱️ CDD<br><small style="font-weight:400;font-size:11px">Durée déterminée</small>
+            ⏱CDD<br><small style="font-weight:400;font-size:11px">Durée déterminée</small>
           </div>
         </div>
         <div id="bloc-cdd" style="display:none">
@@ -52,7 +50,7 @@
             </div>
           </div>
           <div style="background:#fff8e1;border-left:4px solid #f59e0b;padding:10px 14px;border-radius:4px;font-size:12px;color:#92400e;margin-top:8px">
-            ⚠️ Maximum 4 CDD successifs OU 2 ans cumulés — sinon requalification en CDI automatique.
+            ⚠ Maximum 4 CDD successifs OU 2 ans cumulés — sinon requalification en CDI automatique.
           </div>
         </div>
       </div>
@@ -60,7 +58,7 @@
 
     <!-- TRAVAILLEUR -->
     <div class="card">
-      <div class="card-header"><h3>👤 Travailleur</h3></div>
+      <div class="card-header"><h3>Travailleur</h3></div>
       <div class="card-body form-grid">
         <div class="form-group">
           <label class="form-label">Travailleur *</label>
@@ -106,7 +104,7 @@
   <div>
     <!-- EMPLOYEUR -->
     <div class="card">
-      <div class="card-header"><h3>🏢 Employeur</h3></div>
+      <div class="card-header"><h3>Employeur</h3></div>
       <div class="card-body form-grid">
         <div class="form-group">
           <label class="form-label">Société</label>
@@ -137,7 +135,7 @@
 
     <!-- CONTRAT -->
     <div class="card">
-      <div class="card-header"><h3>📋 Conditions du contrat</h3></div>
+      <div class="card-header"><h3>Conditions du contrat</h3></div>
       <div class="card-body form-grid">
         <div class="form-group">
           <label class="form-label">Commission paritaire *</label>
@@ -237,12 +235,13 @@
   {% else %}
   <a href="/dossier/{{ profil.id }}" class="btn btn-secondary">Annuler</a>
   {% endif %}
-  <button type="submit" class="btn btn-primary">🚀 Générer le contrat PDF</button>
+  <button type="submit" class="btn btn-primary">Générer le contrat PDF</button>
 </div>
 </form>
 
 {% endblock %}
 {% block scripts %}
+<script>
 
 const CP_INFO = {{ cp_json | safe }};
 const TRAVAILLEURS = {{ travailleurs_json | safe }};
@@ -271,36 +270,36 @@ function prefillTravailleur(id) {
 // Règles CP
 const CP_REGLES = {
   'CP 140.03': [
-    '✅ Chèques-repas: 8.00€/j (empl 6.91€ + coll 1.09€) — OBLIGATOIRE',
-    '✅ RGPT: 1.8175€/h (exonéré ONSS+IPP)',
-    '⚠️ Avantage repas 1.09€/j SOUMIS ONSS',
-    '👷 Statut OUVRIER — base ONSS patronal × 1.08',
-    '📅 Prochaine indexation: Janvier 2027',
+    '✓ Chèques-repas: 8.00€/j (empl 6.91€ + coll 1.09€) — OBLIGATOIRE',
+    '✓ RGPT: 1.8175€/h (exonéré ONSS+IPP)',
+    '⚠ Avantage repas 1.09€/j SOUMIS ONSS',
+    'Statut OUVRIER — base ONSS patronal × 1.08',
+    'Prochaine indexation: Janvier 2027',
   ],
   'CP 200': [
-    '⚠️ Chèques-repas PAS OBLIGATOIRES — accord entreprise nécessaire',
-    '👔 Statut EMPLOYÉ — ONSS patronal 25%',
-    '💰 Prime fin d\'année: 330.84\u20ac bruts/an (proratisée)',
-    '📚 Fonds formation: CEFORA',
-    '📅 Prochaine indexation: Janvier 2027',
+    '⚠ Chèques-repas PAS OBLIGATOIRES — accord entreprise nécessaire',
+    'Statut EMPLOYÉ — ONSS patronal 25%',
+    'Prime fin d\'année: 330.84\u20ac bruts/an (proratisée)',
+    'Fonds formation: CEFORA',
+    'Prochaine indexation: Janvier 2027',
   ],
   'CP 336': [
-    '✅ Chèques-repas: 6.91€/j (empl) + 1.09€/j (coll)',
-    '👔 Statut EMPLOYÉ — ONSS patronal 25%',
-    '💶 Minimum légal: 2141.59€/mois depuis 09/2026',
-    '📅 Prochaine indexation: Janvier 2027',
+    '✓ Chèques-repas: 6.91€/j (empl) + 1.09€/j (coll)',
+    'Statut EMPLOYÉ — ONSS patronal 25%',
+    'Minimum légal: 2141.59€/mois depuis 09/2026',
+    'Prochaine indexation: Janvier 2027',
   ],
   'CP 302': [
-    '⚠️ Pas de chèques-repas sectoriels',
-    '✅ Indemnité vêtements: 2.20€/j + nuit: 1.62€/h',
-    '👷 Statut OUVRIER — base ONSS patronal × 1.08',
-    '📅 Dernière indexation: Janvier 2026 (+2.189%)',
+    '⚠ Pas de chèques-repas sectoriels',
+    '✓ Indemnité vêtements: 2.20€/j + nuit: 1.62€/h',
+    'Statut OUVRIER — base ONSS patronal × 1.08',
+    'Dernière indexation: Janvier 2026 (+2.189%)',
   ],
   'CP 121': [
-    '✅ Chèques-repas OBLIGATOIRES depuis 01/01/2026: 3.09€/j',
-    '✅ RGPT: 1.63€/h',
-    '👷 Statut OUVRIER — base ONSS patronal × 1.08',
-    '📅 Dernière indexation: Juillet 2026',
+    '✓ Chèques-repas OBLIGATOIRES depuis 01/01/2026: 3.09€/j',
+    '✓ RGPT: 1.63€/h',
+    'Statut OUVRIER — base ONSS patronal × 1.08',
+    'Dernière indexation: Juillet 2026',
   ],
 };
 
@@ -386,7 +385,7 @@ function calcSalaire() {
       alertEl.style.background = '#f0f9f0';
       alertEl.style.borderColor = '#27ae60';
       alertEl.style.color = '#27ae60';
-      alertEl.innerHTML = `✅ Salaire conforme au minimum légal (min: ${minH.toFixed(4)} €/h)`;
+      alertEl.innerHTML = `✓ Salaire conforme au minimum légal (min: ${minH.toFixed(4)} €/h)`;
     }
   } else {
     alertEl.style.display = 'none';
@@ -412,7 +411,7 @@ function calcSalaire() {
         alertEl.style.background = '#f0f9f0';
         alertEl.style.borderColor = '#27ae60';
         alertEl.style.color = '#27ae60';
-        alertEl.innerHTML = '✅ Salaire conforme au minimum légal (min: ' + minH.toFixed(4) + ' €/h)';
+        alertEl.innerHTML = '✓ Salaire conforme au minimum légal (min: ' + minH.toFixed(4) + ' €/h)';
       }
     }
   }
@@ -437,5 +436,5 @@ updateCP();
 {% if prefill_travailleur_id %}
 prefillTravailleur({{ prefill_travailleur_id }});
 {% endif %}
-
+</script>
 {% endblock %}

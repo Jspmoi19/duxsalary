@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ tenant.nom }} — Connexion</title>
+<title>Connexion — {{ marque.nom }}</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
@@ -55,7 +55,7 @@ body {
 .client-logo-text {
   font-size: 26px;
   font-weight: 800;
-  color: {{ tenant.couleur_primaire }};
+  color: {{ marque.couleur_primaire }};
   letter-spacing: -0.5px;
 }
 .client-logo-sub {
@@ -68,7 +68,7 @@ body {
 .client-divider {
   width: 40px;
   height: 3px;
-  background: {{ tenant.couleur_primaire }};
+  background: {{ marque.couleur_primaire }};
   margin: 12px auto 0;
   border-radius: 2px;
 }
@@ -98,7 +98,7 @@ body {
   transition: border-color 0.2s;
   outline: none;
 }
-.form-group input:focus { border-color: {{ tenant.couleur_primaire }}; }
+.form-group input:focus { border-color: {{ marque.couleur_primaire }}; }
 
 {% if error %}
 <div style="background:#fff0f0;border:1px solid #fcc;border-radius:8px;padding:10px 14px;font-size:13px;color:#c00;margin-bottom:16px;text-align:left">
@@ -109,7 +109,7 @@ body {
 .btn-login {
   width: 100%;
   padding: 12px;
-  background: {{ tenant.couleur_primaire }};
+  background: {{ marque.couleur_primaire }};
   color: white;
   border: none;
   border-radius: 8px;
@@ -132,19 +132,9 @@ body {
 </head>
 <body>
 
-<!-- NexSocial brand en haut -->
-<div class="nexsocial-brand">
-  <div class="logo-text">NEX<span>SOCIAL</span></div>
-  <div class="tagline">Payroll Management</div>
-</div>
-
 <!-- Carte login avec branding client -->
 <div class="login-card">
-  <div class="client-logo">
-    <div class="client-logo-text">{{ tenant.logo_text }}</div>
-    <div class="client-logo-sub">Espace client</div>
-    <div class="client-divider"></div>
-  </div>
+  <div style="display:flex;justify-content:center;margin-bottom:22px">{% if marque.logo_path %}<img src="{{ marque.logo_url }}" alt="{{ marque.nom }}" style="height:48px;display:block">{% else %}<strong style="font-size:20px;color:{{ marque.couleur_primaire }}">{{ marque.nom }}</strong>{% endif %}</div>
 
   <p class="login-title">Connectez-vous à votre espace</p>
 
@@ -166,7 +156,7 @@ body {
     <button type="submit" class="btn-login">Connexion</button>
   </form>
 
-  <div class="powered-by">Propulsé par <span>NexSocial</span></div>
+  <div class="powered-by">{{ marque.mentions }}</div>
 </div>
 
 </body>

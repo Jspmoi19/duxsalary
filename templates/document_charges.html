@@ -3,7 +3,6 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <a href="{{ retour_url }}" class="btn-back">← {{ retour_libelle }}</a>
     <h2>{{ document.titre }}</h2>
   </div>
   <div>
@@ -26,13 +25,13 @@
         <input type="date" name="date_fin" value="{{ date_fin }}" class="form-control">
       </div>
       <button type="submit" class="btn btn-primary">Actualiser</button>
-      <button type="submit" name="format" value="pdf" class="btn btn-secondary">⬇ Exporter en PDF</button>
+      <button type="submit" name="format" value="pdf" class="btn btn-secondary" formtarget="_blank" data-pdf="{{ document.titre }}">Exporter en PDF</button>
     </form>
   </div>
 </div>
 
 {% for a in document.avertissements %}
-<div style="background:#fff8e1;border:1px solid #f0d58c;border-radius:6px;padding:10px 14px;font-size:12px;margin-bottom:12px">⚠️ {{ a }}</div>
+<div style="background:#fff8e1;border:1px solid #f0d58c;border-radius:6px;padding:10px 14px;font-size:12px;margin-bottom:12px">⚠ {{ a }}</div>
 {% endfor %}
 
 {% if document.entete %}
@@ -56,7 +55,7 @@
     <tbody>
     {% for section in document.sections %}
       <tr><td colspan="{{ document.colonnes|length + 1 }}"
-              style="background:#f5f7fa;font-weight:700;color:{{ tenant.couleur_primaire or '#1F4E79' }};text-transform:uppercase;font-size:11px">{{ section.titre }}</td></tr>
+              style="background:#f5f7fa;font-weight:700;color:{{ marque.couleur_primaire }};text-transform:uppercase;font-size:11px">{{ section.titre }}</td></tr>
       {% for l in section.lignes %}
       <tr style="{% if l.style == 'total' %}font-weight:700;border-top:1px solid #333{% elif l.style == 'info' %}color:#888{% endif %}">
         <td style="white-space:normal">{{ l.libelle }}</td>

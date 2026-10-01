@@ -6,9 +6,10 @@ Utilise cp_data.py pour les données sectorielles
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, PageBreak, KeepTogether
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+from branding import couleur, pdf_decor, get_branding
 from datetime import datetime
 import os
 
@@ -16,7 +17,7 @@ from cp_data import CP_DATABASE, calcul_preavis_semaines, is_ouvrier, get_heures
 
 OUTPUT_DIR = "outputs"
 
-BLUE = colors.HexColor('#1F4E79')
+BLUE = couleur('primaire')
 DARK = colors.HexColor('#1a1a1a')
 GREY = colors.HexColor('#f5f5f5')
 GREY_LINE = colors.HexColor('#cccccc')
@@ -71,12 +72,17 @@ def _parties(elements, data, cp_info, sN, sB, sJ):
 
 
 def _signatures(elements, data, sN, sB, sC):
-    elements.append(HRFlowable(width="100%", thickness=0.5, color=GREY_LINE))
-    elements.append(Spacer(1, 0.3*cm))
-    elements.append(Paragraph(
+    """Ajoute le bloc des signatures et retourne l'indice du debut de la fin de
+    contrat (dernier article = titre, espace, texte, espace: 4 elements), que
+    l'appelant garde d'un seul tenant avec _fin_sur_une_page()."""
+    debut_fin = max(0, len(elements) - 4)
+    bloc = elements
+    bloc.append(HRFlowable(width="100%", thickness=0.5, color=GREY_LINE))
+    bloc.append(Spacer(1, 0.3*cm))
+    bloc.append(Paragraph(
         f"Fait à <b>{data['lieu_signature']}</b>, le <b>{data['date_signature']}</b>, "
         f"en deux exemplaires originaux, dont un exemplaire remis à chaque partie.", sN))
-    elements.append(Spacer(1, 0.8*cm))
+    bloc.append(Spacer(1, 0.8*cm))
     sig_style = TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('TOPPADDING', (0,0), (-1,-1), 3),
@@ -100,9 +106,16 @@ def _signatures(elements, data, sN, sB, sC):
         [Spacer(1, 0.5*cm), Spacer(1, 0.5*cm)],
         [Paragraph("Lu et approuvé,", sNc), Paragraph("Lu et approuvé,", sNc)],
     ]
-    sig_table = Table(sig_data, colWidths=[9*cm, 9*cm])
+    sig_table = Table(sig_data, colWidths=[8*cm, 8*cm])   # largeur utile de la page: 16 cm
     sig_table.setStyle(sig_style)
-    elements.append(sig_table)
+    bloc.append(sig_table)
+    return debut_fin
+
+
+def _fin_sur_une_page(elements, debut_fin):
+    """Dernier article, signatures et bases legales sur la meme page: jamais de
+    page finale presque vide ni de bloc de signatures coupe."""
+    elements[debut_fin:] = [KeepTogether(elements[debut_fin:])]
 
 
 def generer_contrat_cdi(data):
@@ -278,7 +291,7 @@ def generer_contrat_cdi(data):
         elements.append(Paragraph(texte_art, sJ))
         elements.append(Spacer(1, 0.35*cm))
 
-    _signatures(elements, data, sN, sB, sC)
+    debut_fin = _signatures(elements, data, sN, sB, sC)
 
     # Mentions légales CCT
     elements.append(Spacer(1, 0.3*cm))
@@ -290,7 +303,8 @@ def generer_contrat_cdi(data):
         for m in mentions:
             elements.append(Paragraph(f"• {m}", ParagraphStyle('', fontName='Helvetica', fontSize=8, leading=11)))
 
-    doc.build(elements)
+    _fin_sur_une_page(elements, debut_fin)
+    doc.build(elements, **pdf_decor())
     return filepath, filename
 
 
@@ -428,7 +442,7 @@ def generer_contrat_cdd(data):
         elements.append(Paragraph(texte_art, sJ))
         elements.append(Spacer(1, 0.35*cm))
 
-    _signatures(elements, data, sN, sB, sC)
+    debut_fin = _signatures(elements, data, sN, sB, sC)
 
     elements.append(Spacer(1, 0.3*cm))
     elements.append(HRFlowable(width="100%", thickness=0.5, color=GREY_LINE))
@@ -439,7 +453,8 @@ def generer_contrat_cdd(data):
         for m in mentions:
             elements.append(Paragraph(f"• {m}", ParagraphStyle('', fontName='Helvetica', fontSize=8, leading=11)))
 
-    doc.build(elements)
+    _fin_sur_une_page(elements, debut_fin)
+    doc.build(elements, **pdf_decor())
     return filepath, filename
 
 

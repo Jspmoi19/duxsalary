@@ -3,7 +3,6 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <a href="/travailleur/{{ travailleur.id }}" class="btn-back">&#8592; {{ travailleur.prenom }} {{ travailleur.nom }}</a>
     <h2>Prestations &#8212; {{ travailleur.prenom }} {{ travailleur.nom }}</h2>
     <div class="breadcrumb">
       <a href="/dossier/{{ dossier.id }}">{{ dossier.nom }}</a> &#183;
@@ -22,7 +21,7 @@
     {% else %}
     <a href="/dimona/{{ dimona.id }}/prestations?annee={{ annee + 1 }}&mois=1" class="btn btn-secondary">Mois suivant &#8594;</a>
     {% endif %}
-    <a href="/dimona/{{ dimona.id }}/generer-paie?annee={{ annee }}&mois={{ mois }}" class="btn btn-primary">🧾 Générer fiche de paie</a>
+    <a href="/dimona/{{ dimona.id }}/generer-paie?annee={{ annee }}&mois={{ mois }}" class="btn btn-primary">Générer fiche de paie</a>
   </div>
 </div>
 

@@ -13,6 +13,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from branding import couleur, pdf_decor, get_branding
 
 try:
     pdfmetrics.registerFont(TTFont('DVSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
@@ -21,7 +22,7 @@ try:
 except:
     FN, FNB = 'Helvetica', 'Helvetica-Bold'
 
-NAVY = colors.HexColor('#1F4E79')
+NAVY = couleur('primaire')
 DARK = colors.HexColor('#1a1a1a')
 GRAY = colors.HexColor('#555555')
 LINE = colors.HexColor('#cccccc')
@@ -194,7 +195,7 @@ def generer_contrat_cdd_nl(data):
     e.append(HRFlowable(width='100%', thickness=0.5, color=LINE))
     e.append(p("Opgesteld overeenkomstig de wet van 3 juli 1978 betreffende de arbeidsovereenkomsten.", size=8, color=GRAY))
 
-    doc.build(e)
+    doc.build(e, **pdf_decor())
     return filepath, filename
 
 
@@ -243,7 +244,7 @@ def generer_certificat_travail_nl(c):
     e.append(p(c.get('representant','—'), size=10))
     e.append(p(c['dossier_nom'], size=10))
 
-    doc.build(e)
+    doc.build(e, **pdf_decor())
     return send_file(filepath, as_attachment=False, download_name=filename, mimetype='application/pdf')
 
 
@@ -342,5 +343,5 @@ def generer_c4_nl(c, form):
     ]], colWidths=[8*cm, 8*cm])
     e.append(sig)
 
-    doc.build(e)
+    doc.build(e, **pdf_decor())
     return filepath, filename

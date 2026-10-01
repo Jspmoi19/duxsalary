@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Ajouter un document — DuxSalary{% endblock %}
+{% block title %}Ajouter un document{% endblock %}
 {% block content %}
 
 <div class="page-header">
@@ -32,7 +32,7 @@
       <div class="form-group">
         <label class="form-label">Fichier</label>
         <label class="upload-zone" for="file_input">
-          <div class="upload-icon">📎</div>
+          <div class="upload-icon"></div>
           <p>Cliquez pour sélectionner un fichier</p>
           <p style="font-size:11px;margin-top:4px">PDF, JPG, PNG — max 10 MB</p>
           <input type="file" id="file_input" name="fichier" accept=".pdf,.jpg,.jpeg,.png" required onchange="document.getElementById('fname').textContent = this.files[0]?.name || ''">

@@ -3,7 +3,6 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <a href="/travailleur/{{ contrat.travailleur_id }}" class="btn-back">← {{ contrat.prenom }} {{ contrat.nom }}</a>
     <h2>Documents fin de contrat</h2>
   </div>
 </div>
@@ -11,12 +10,12 @@
 <div class="two-col">
 
   <div class="card">
-    <div class="card-header"><h3>📄 Certificat de travail</h3></div>
+    <div class="card-header"><h3>Certificat de travail</h3></div>
     <div class="card-body">
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
         Obligatoire légalement (art. 21 loi 03/07/1978). Mentionne uniquement les dates et la nature du travail.
       </p>
-      <form method="POST">
+      <form method="POST" data-pdf="Certificat de travail">
         <input type="hidden" name="doc_type" value="certificat">
         <button type="submit" class="btn btn-primary">Générer le certificat de travail</button>
       </form>
@@ -24,12 +23,12 @@
   </div>
 
   <div class="card">
-    <div class="card-header"><h3>📋 Formulaire C4 (chômage)</h3></div>
+    <div class="card-header"><h3>Formulaire C4 (chômage)</h3></div>
     <div class="card-body">
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
         Obligatoire — à remettre le dernier jour de travail (AR 25/11/1991 art. 137).
       </p>
-      <form method="POST">
+      <form method="POST" data-pdf="Formulaire C4">
         <input type="hidden" name="doc_type" value="c4">
         <div class="form-group">
           <label>Motif de fin de contrat</label>

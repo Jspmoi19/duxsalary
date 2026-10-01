@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Confirmation — DuxSalary</title>
+<title>Confirmation </title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', sans-serif; background: #f5f7fa; min-height: 100vh; }
-.header { background: #1F4E79; padding: 20px 32px; }
+.header { background: {{ marque.couleur_primaire }}; padding: 20px 32px; }
 .header h1 { color: white; font-size: 20px; font-weight: 700; }
 .header p { color: rgba(255,255,255,0.8); font-size: 13px; margin-top: 4px; }
 .container { max-width: 600px; margin: 60px auto; padding: 0 16px; text-align: center; }
@@ -15,23 +15,27 @@ body { font-family: 'Segoe UI', sans-serif; background: #f5f7fa; min-height: 100
 .icon { font-size: 64px; margin-bottom: 20px; }
 h2 { font-size: 24px; color: #27ae60; margin-bottom: 12px; }
 p { color: #555; line-height: 1.6; margin-bottom: 32px; }
-.btn { display: inline-block; background: #1F4E79; color: white; padding: 14px 32px;
+.btn { display: inline-block; background: {{ marque.couleur_primaire }}; color: white; padding: 14px 32px;
   border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 15px; }
 .btn:hover { background: #163d61; }
 </style>
 </head>
 <body>
-<div class="header">
-  <h1>DuxSalary — Secrétariat Social Digital</h1>
-  <p>{{ portail.dossier_nom }}</p>
+<div class="header" style="background:#fff;color:{{ marque.couleur_texte }};border-bottom:3px solid {{ marque.couleur_primaire }};display:flex;align-items:center;gap:20px;padding:14px 32px">
+  {% if marque.logo_path %}<img src="{{ marque.logo_url }}" alt="{{ marque.nom }}" style="height:48px;display:block">{% else %}<strong style="font-size:20px;color:{{ marque.couleur_primaire }}">{{ marque.nom }}</strong>{% endif %}
+  <div>
+    <div style="font-size:17px;font-weight:700;color:{{ marque.couleur_primaire }}">Portail client</div>
+    <div style="font-size:13px;color:{{ marque.couleur_texte_secondaire }}">{{ portail.dossier_nom }}</div>
+  </div>
 </div>
 <div class="container">
   <div class="card">
-    <div class="icon">✅</div>
+    <div class="icon" style="color:#1b7f4b">✓</div>
     <h2>Déclaration envoyée !</h2>
-    <p>Votre déclaration a bien été transmise à votre secrétariat social DuxSalary. Nous allons traiter votre demande dans les plus brefs délais et vous contacterons si des informations complémentaires sont nécessaires.</p>
-    <a href="/portail/{{ token }}/nouveau-travailleur" class="btn">➕ Nouvelle déclaration</a>
+    <p>Votre déclaration a bien été transmise à votre secrétariat social. Nous allons traiter votre demande dans les plus brefs délais et vous contacterons si des informations complémentaires sont nécessaires.</p>
+    <a href="/portail/{{ token }}/nouveau-travailleur" class="btn">Nouvelle déclaration</a>
   </div>
 </div>
+<div style="text-align:center;font-size:11px;color:{{ marque.couleur_texte_secondaire }};padding:18px 16px 26px">{{ marque.mentions }}</div>
 </body>
 </html>
