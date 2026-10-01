@@ -205,6 +205,16 @@ def supprimer_dossier(dossier_id):
     return redirect(url_for('dossiers'))
 
 # ── TRAVAILLEURS ──────────────────────────────────────────────────────
+def _enregistrer_charges_famille(cur, travailleur_id, form):
+    """Situation familiale et charges de famille (gabarit _charges_famille.html):
+    memes colonnes pour la creation et la modification d'un travailleur."""
+    from occupation import charges_famille_du_formulaire
+    valeurs = charges_famille_du_formulaire(form)
+    colonnes = list(valeurs)
+    cur.execute(f"UPDATE travailleurs SET {', '.join(c + ' = %s' for c in colonnes)} WHERE id = %s",
+                [valeurs[c] for c in colonnes] + [travailleur_id])
+
+
 @app.route('/dossier/<int:dossier_id>/travailleur/nouveau', methods=['GET', 'POST'])
 @login_required
 def nouveau_travailleur(dossier_id):
@@ -220,6 +230,9 @@ def nouveau_travailleur(dossier_id):
                 p = ddn.split('/'); data['date_naissance'] = f"{p[2]}-{p[1]}-{p[0]}"
             except: data['date_naissance'] = None
         tid = create_travailleur(data)
+        conn = get_conn(); cur = conn.cursor()
+        _enregistrer_charges_famille(cur, tid, request.form)
+        conn.commit(); cur.close(); conn.close()
         return redirect(url_for('fiche_travailleur', travailleur_id=tid))
     return render_template('nouveau_travailleur.html', dossier=dossier, dossier_actif=dossier, cp_keys=list(CP_DATABASE.keys()), **ctx)
 
@@ -256,23 +269,16 @@ def modifier_travailleur(travailleur_id):
             except: pass
         cur.execute("""UPDATE travailleurs SET prenom=%s, nom=%s, niss=%s, date_naissance=%s,
             adresse=%s, iban=%s, email=%s, telephone=%s, langue=%s,
-            etat_civil=%s, partenaire_revenus_pro=%s, partenaire_pensions=%s,
-            nb_enfants_sans_handicap=%s, nb_enfants_avec_handicap=%s, nb_personnes_charge_66=%s,
             sexe=%s, date_sortie=%s, caisse_allocations_familiales=%s
             WHERE id=%s""",
             (request.form['prenom'], request.form['nom'], request.form.get('niss'),
              ddn_db, request.form.get('adresse'), request.form.get('iban'),
              request.form.get('email'), request.form.get('telephone'),
              request.form.get('langue', 'fr'),
-             request.form.get('etat_civil', 'celibataire'),
-             request.form.get('partenaire_revenus_pro', 'non'),
-             request.form.get('partenaire_pensions', 'non'),
-             int(request.form.get('nb_enfants_sans_handicap', 0) or 0),
-             int(request.form.get('nb_enfants_avec_handicap', 0) or 0),
-             int(request.form.get('nb_personnes_charge_66', 0) or 0),
              request.form.get('sexe') or None, request.form.get('date_sortie') or None,
              request.form.get('caisse_allocations_familiales') or None,
              travailleur_id))
+        _enregistrer_charges_famille(cur, travailleur_id, request.form)
         conn.commit(); cur.close(); conn.close()
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id))
     return render_template('modifier_travailleur.html', travailleur=travailleur, dossier=dossier, dossier_actif=dossier, cp_keys=list(CP_DATABASE.keys()), **ctx)

@@ -139,6 +139,55 @@ check("Bareme etudiant de la CP 336 (95 %)", (minimums['CP 336']['horaire'], min
 check("CP sans bareme etudiant: minimum ordinaire, signale", 'pas de barème étudiant' in minimums['CP 200']['note'])
 check("CP sans bareme date: raison affichee, pas de minimum", 'raison' in minimums['CP 302'] and 'horaire' not in minimums['CP 302'])
 check("Regles de la CP issues de regles_cp.py", any('Chèques-repas' in l for l in json.loads(ctx_e['regles_json'])['CP 140.03']))
+from regles_cp import resume_regles_cp
+r200 = ' | '.join(resume_regles_cp('CP 200', reference_date=date(2026, 10, 1)))
+check("CP 200: 13e mois et prime annuelle (regles_cp.py)",
+      "13e mois) : 1 mois de salaire, après 6 mois d'ancienneté" in r200 and 'Prime annuelle : 330,84 € brut, payée en juin' in r200)
+check("CP 200: ecocheques 250 EUR en juin, pas d'obligation de cheques-repas (cheques_regles.py)",
+      'Écochèques : 250,00 € par an à temps plein' in r200 and 'payés en juin' in r200 and 'Chèques-repas : aucune obligation sectorielle' in r200)
+r140 = ' | '.join(resume_regles_cp('CP 140.03', reference_date=date(2026, 10, 1)))
+check("CP 140.03: cheques-repas 3,09 depuis le 01/07/2026, ecocheques 200 EUR sous condition",
+      'Chèques-repas obligatoires depuis le 01/07/2026 : 3,09 € par jour (2,00 € employeur + 1,09 € travailleur)' in r140
+      and 'Écochèques : 200,00 €' in r140 and 'personnel non roulant et garage' in r140)
+check("CP 140.03 avant le 01/07/2026: pas encore d'obligation de cheques-repas",
+      'Chèques-repas : aucune obligation' in ' | '.join(resume_regles_cp('CP 140.03', reference_date=date(2026, 6, 1))))
+check("CP sans prime enregistree: dit clairement, sans rien inventer", 'non enregistrées dans l\'outil' in r140)
+check("CP 336: prime de fin d'annee signalee a verifier", 'à vérifier' in ' | '.join(resume_regles_cp('CP 336')))
+check("Etudiant: non vise par cheques et ecocheques", 'Étudiant : non visé' in ' | '.join(resume_regles_cp('CP 200', etudiant=True)))
+
+print(); print("=" * 70); print("TACHE 3 -- charges de famille dans les formulaires travailleur"); print("=" * 70)
+from occupation import charges_famille_du_formulaire
+c = charges_famille_du_formulaire({'etat_civil': 'marie', 'partenaire_revenus_pro': 'non', 'nb_enfants_sans_handicap': '2',
+                                   'nb_enfants_avec_handicap': '1', 'nb_personnes_charge_66': '1', 'nb_autres_personnes_charge': '',
+                                   'handicape': 'on', 'conjoint_handicape': 'on'})
+check("Formulaire -> colonnes du travailleur", (c['etat_civil'], c['nb_enfants_sans_handicap'], c['nb_enfants_avec_handicap'],
+      c['nb_personnes_charge_66'], c['nb_autres_personnes_charge'], c['parent_isole'], c['handicape'], c['conjoint_handicape']),
+      ('marie', 2, 1, 1, 0, False, True, True))
+check("Valeurs absentes ou invalides: valeurs neutres", charges_famille_du_formulaire({'etat_civil': 'xx', 'nb_enfants_sans_handicap': 'abc'})
+      ['etat_civil'] + str(charges_famille_du_formulaire({'nb_enfants_sans_handicap': '-3'})['nb_enfants_sans_handicap']), 'celibataire0')
+champs = ('parent_isole', 'handicape', 'conjoint_handicape', 'nb_autres_personnes_charge', 'nb_personnes_charge_66',
+          'nb_enfants_sans_handicap', 'nb_enfants_avec_handicap', 'etat_civil', 'partenaire_revenus_pro')
+t_complet = dict(travailleur, etat_civil='marie', parent_isole=False, handicape=True, conjoint_handicape=True,
+                 nb_autres_personnes_charge=2, nb_personnes_charge_66=1, date_naissance=None, date_sortie=None)
+h_mod = rendre('modifier_travailleur.html', '/travailleur/3/modifier', dossier=dossier, dossier_actif=dossier,
+               travailleur=t_complet, cp_keys=list(CP_DATABASE))
+h_new = rendre('nouveau_travailleur.html', '/dossier/7/travailleur/nouveau', dossier=dossier, dossier_actif=dossier,
+               cp_keys=list(CP_DATABASE))
+check("Modifier le travailleur: tous les champs presents", [c for c in champs if f'name="{c}"' not in h_mod], [])
+check("Nouveau travailleur: tous les champs presents", [c for c in champs if f'name="{c}"' not in h_new], [])
+check("Valeurs enregistrees reaffichees (cases cochees, nombres)",
+      'name="handicape" checked' in h_mod and 'name="conjoint_handicape" checked' in h_mod
+      and 'name="parent_isole" checked' not in h_mod and 'name="nb_autres_personnes_charge" min="0" class="form-control" value="2"' in h_mod)
+check("Anciens champs non enregistres retires (situation familiale, personnes a charge)",
+      'name="situation_familiale"' in h_mod + h_new or 'name="personnes_charge"' in h_mod + h_new, False)
+# Le moteur utilise bien ces charges: precompte plus bas avec un handicap et une autre personne a charge
+from moteur_paie import calculer_fiche_paie as _calc
+kw_c = dict(heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, type_contrat='CDI', jours_prestes=22, heures_prestees=167.2,
+            rgpt_actif=False, cheques_repas=False, salaire_mensuel_fixe=3000.0, periode_debut=date(2026, 10, 1), periode_fin=date(2026, 10, 31))
+sans = _calc('A', 'B', 'n', 'a', 'BE', date(1990, 1, 1), date(2020, 1, 1), 'X', 'a', 'b', 'r', 'CP 200', 'E', 18.0, **kw_c)
+avec = _calc('A', 'B', 'n', 'a', 'BE', date(1990, 1, 1), date(2020, 1, 1), 'X', 'a', 'b', 'r', 'CP 200', 'E', 18.0,
+             charges_famille={'handicape': True, 'nb_autres_personnes_charge': 1}, **kw_c)
+check("Precompte reduit de 2 x 624 / 12 = 104 EUR par mois", round(abs(sans['precompte']) - abs(avec['precompte']), 2), 104.0)
 s = suivi_contingent_etudiant(100, 76, date(2026, 10, 1), heures_autres_employeurs=500)
 check("Heures chez d'autres employeurs comptees dans le contingent (100 + 500 + 76 = 676)", (s['depassement'], s['restant']), (26.0, 50.0))
 check("L'alerte detaille les heures chez d'autres employeurs", "500 h chez d'autres employeurs" in (s['alerte'] or ''))

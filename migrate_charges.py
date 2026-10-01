@@ -43,6 +43,14 @@ COLONNES = {
     ],
     'travailleurs': [
         ('sexe', 'VARCHAR(1)'), ('date_sortie', 'DATE'), ('caisse_allocations_familiales', 'VARCHAR(200)'),
+        # Charges de famille (precompte): deja creees sur le serveur par d'anciens patchs,
+        # rappelees ici pour qu'une base neuve soit complete
+        ('etat_civil', "VARCHAR(30) DEFAULT 'celibataire'"), ('partenaire_revenus_pro', "VARCHAR(20) DEFAULT 'non'"),
+        ('partenaire_pensions', "VARCHAR(20) DEFAULT 'non'"),
+        ('nb_enfants_sans_handicap', 'INTEGER DEFAULT 0'), ('nb_enfants_avec_handicap', 'INTEGER DEFAULT 0'),
+        ('nb_personnes_charge_66', 'INTEGER DEFAULT 0'), ('nb_autres_personnes_charge', 'INTEGER DEFAULT 0'),
+        ('parent_isole', 'BOOLEAN DEFAULT FALSE'), ('handicape', 'BOOLEAN DEFAULT FALSE'),
+        ('conjoint_handicape', 'BOOLEAN DEFAULT FALSE'),
     ],
     'dossiers': [
         ('caisse_vacances', 'VARCHAR(200)'), ('service_medical', 'VARCHAR(200)'), ('assurance_groupe', 'VARCHAR(200)'),

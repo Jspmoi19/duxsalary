@@ -61,19 +61,6 @@
         <label class="form-label">Caisse d'allocations familiales</label>
         <input type="text" name="caisse_allocations_familiales" class="form-control">
       </div>
-      <div class="form-group">
-        <label class="form-label">Situation familiale</label>
-        <select name="situation_familiale" class="form-control">
-          <option value="isole">Isolé(e)</option>
-          <option value="marie">Marié(e) / Cohabitant légal</option>
-          <option value="chef_famille">Chef de famille</option>
-          <option value="autres">Autres</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Personnes à charge</label>
-        <input type="number" name="personnes_charge" class="form-control" value="0" min="0">
-      </div>
     </div>
   </div>
 
@@ -135,6 +122,8 @@
   </div>
 
 </div>
+
+{% include "_charges_famille.html" %}
 
 <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
   <a href="/dossier/{{ dossier.id }}" class="btn btn-secondary">Annuler</a>

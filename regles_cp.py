@@ -332,21 +332,73 @@ MESSAGE_CP_NON_GEREE = ("Cette commission paritaire n'est pas encore gérée par
                         "ses règles ne sont pas enregistrées, le contrat ne peut pas être généré.")
 
 
-def resume_regles_cp(cp_key: str, etudiant: bool = False) -> list:
-    """Regles de la CP en phrases simples, pour les formulaires de contrat.
-    Construit a partir de REGLES_CP (aucune regle ecrite ailleurs). CP absente:
-    un seul message expliquant qu'elle n'est pas geree par le moteur de paie."""
+def resume_regles_cp(cp_key: str, etudiant: bool = False, reference_date=None) -> list:
+    """Regles de la CP en phrases simples, pour les formulaires de contrat:
+    primes (REGLES_CP), cheques-repas et ecocheques (cheques_regles.py, en vigueur
+    a reference_date), RGPT, indexation. Aucune regle n'est ecrite ailleurs. CP
+    absente: un seul message expliquant qu'elle n'est pas geree."""
     r = REGLES_CP.get(cp_key)
     if not r:
         return [f"⚠ {cp_key} — non gérée. {MESSAGE_CP_NON_GEREE}"]
-    lignes = [f"{r['nom']} — {r['heures_semaine_defaut']:g} h/semaine à temps plein"]
-    cr = r.get('cheques_repas', {})
-    if cr.get('obligatoire'):
-        valeur = cr.get('valeur_totale_jour')
-        lignes.append("Chèques-repas obligatoires" + (f" : {valeur:.2f} € par jour".replace('.', ',') if valeur else '')
-                      + (f" (depuis le {cr['depuis']})" if cr.get('depuis') else ''))
+    euro = lambda x: f"{x:,.2f}".replace(',', ' ').replace('.', ',') + ' €'
+    mois = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre',
+            'octobre', 'novembre', 'décembre']
+    lignes = [f"{r['nom']} — {r['heures_semaine_defaut']:g}".replace('.', ',') + " h/semaine à temps plein"]
+
+    # Primes: regles_cp.py (prime_fin_annee, prime_annuelle_sectorielle)
+    pfa = r.get('prime_fin_annee')
+    if pfa and pfa.get('applicable'):
+        if pfa.get('mode') == 'mois_salaire':
+            texte = "Prime de fin d'année (13e mois) : " + ("1 mois de salaire" if pfa.get('coefficient', 1.0) == 1.0
+                                                           else f"{pfa['coefficient']:g} mois de salaire")
+            if pfa.get('anciennete_minimale_mois'):
+                texte += f", après {pfa['anciennete_minimale_mois']} mois d'ancienneté"
+            if pfa.get('proratise_selon_mois_prestes'):
+                texte += ", au prorata des mois prestés"
+        else:
+            texte = f"Prime de fin d'année : entre {euro(pfa['montant_min'])} et {euro(pfa['montant_max'])}"
+        lignes.append(texte + (" — montant à vérifier selon la CCT applicable" if pfa.get('a_verifier') else ''))
+    pan = r.get('prime_annuelle_sectorielle')
+    if pan and pan.get('applicable'):
+        lignes.append(f"Prime annuelle : {euro(pan['montant_brut_annuel'])} brut, payée en {mois[pan['mois_paiement']]}"
+                      + (", au prorata des mois prestés" if pan.get('proratise_selon_mois_prestes') else ''))
+    if not pfa and not pan:
+        lignes.append("Primes (fin d'année, prime annuelle) : non enregistrées dans l'outil pour cette CP")
+
+    # Cheques-repas et ecocheques: cheques_regles.py (regles datees et sourcees)
+    from datetime import date as _date
+    from cheques_regles import regles_pour
+    ch = regles_pour(cp_key, reference_date or _date.today())
+    rep = ch['repas']
+    if rep:
+        texte = (f"Chèques-repas obligatoires depuis le {rep['du']:%d/%m/%Y} : {euro(rep['valeur_introduction'])} par jour "
+                 f"({euro(rep['part_patronale_introduction'])} employeur + {euro(rep['part_travailleur'])} travailleur)")
+        if rep.get('anciennete_min_mois'):
+            texte += f", après {rep['anciennete_min_mois']} mois d'ancienneté"
+        texte += f" — {' et '.join({'ouvrier': 'ouvriers', 'employe': 'employés'}.get(s, s) for s in rep['statuts'])}"
+        if rep.get('augmentation_si_existant'):
+            texte += f" ; si des chèques existaient déjà : part employeur + {euro(rep['augmentation_si_existant'])}"
+        lignes.append(texte)
+    elif ch['connue']:
+        lignes.append("Chèques-repas : aucune obligation sectorielle (possibles par accord d'entreprise)")
     else:
-        lignes.append("Chèques-repas non obligatoires (accord d'entreprise)")
+        lignes.append("Chèques-repas : règle non enregistrée dans l'outil pour cette CP")
+    eco = ch['eco']
+    if eco:
+        if 'montants_par_regime' in eco:
+            texte = (f"Écochèques : {euro(eco['montants_par_regime'][0][1])} par an à temps plein "
+                     f"(montant réduit à temps partiel)")
+        else:
+            texte = (f"Écochèques : {euro(eco['montant_temps_plein'])} par an à temps plein, "
+                     f"personnel {' et '.join(p.replace('_', ' ') for p in eco['personnel'])} uniquement, sous condition")
+        lignes.append(texte + f", payés en {mois[eco['mois_paiement']]}")
+    elif ch['connue']:
+        lignes.append("Écochèques : aucune obligation sectorielle")
+    else:
+        lignes.append("Écochèques : règle non enregistrée dans l'outil pour cette CP")
+    if etudiant and (rep or eco):
+        lignes.append("Étudiant : non visé par les chèques-repas et écochèques sectoriels")
+
     rg = r.get('rgpt', {})
     if rg.get('applicable'):
         if rg.get('montant_jour'):

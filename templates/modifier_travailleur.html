@@ -64,19 +64,6 @@
         <label class="form-label">Caisse d'allocations familiales</label>
         <input type="text" name="caisse_allocations_familiales" class="form-control" value="{{ travailleur.caisse_allocations_familiales or '' }}">
       </div>
-      <div class="form-group">
-        <label class="form-label">Situation familiale</label>
-        <select name="situation_familiale" class="form-control">
-          <option value="isole" {% if travailleur.situation_familiale == 'isole' %}selected{% endif %}>Isolé(e)</option>
-          <option value="marie" {% if travailleur.situation_familiale == 'marie' %}selected{% endif %}>Marié(e) / Cohabitant légal</option>
-          <option value="chef_famille" {% if travailleur.situation_familiale == 'chef_famille' %}selected{% endif %}>Chef de famille</option>
-          <option value="autres" {% if travailleur.situation_familiale == 'autres' %}selected{% endif %}>Autres</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Personnes à charge</label>
-        <input type="number" name="personnes_charge" class="form-control" value="{{ travailleur.personnes_charge or 0 }}" min="0">
-      </div>
     </div>
   </div>
 
@@ -149,51 +136,7 @@
 
 </div>
 
-<div class="form-group">
-  <label class="form-label">État civil</label>
-  <select name="etat_civil" class="form-control">
-    <option value="celibataire" {% if not travailleur.etat_civil or travailleur.etat_civil == 'celibataire' %}selected{% endif %}>Célibataire</option>
-    <option value="cohabitation_legale" {% if travailleur.etat_civil == 'cohabitation_legale' %}selected{% endif %}>Cohabitation légale</option>
-    <option value="marie" {% if travailleur.etat_civil == 'marie' %}selected{% endif %}>Marié(e)</option>
-    <option value="separe_fait" {% if travailleur.etat_civil == 'separe_fait' %}selected{% endif %}>Séparé(e) de fait</option>
-    <option value="separe_corps" {% if travailleur.etat_civil == 'separe_corps' %}selected{% endif %}>Séparé(e) de corps et de biens</option>
-    <option value="divorce" {% if travailleur.etat_civil == 'divorce' %}selected{% endif %}>Divorcé(e)</option>
-    <option value="veuf" {% if travailleur.etat_civil == 'veuf' %}selected{% endif %}>Veuf/Veuve</option>
-  </select>
-</div>
-
-<div id="bloc_partenaire" style="{% if travailleur.etat_civil in ['marie','cohabitation_legale','separe_fait','separe_corps'] %}display:block{% else %}display:none{% endif %}">
-  <div class="form-group">
-    <label class="form-label">Partenaire — Revenus professionnels</label>
-    <select name="partenaire_revenus_pro" class="form-control">
-      <option value="non" {% if travailleur.partenaire_revenus_pro == 'non' %}selected{% endif %}>Non</option>
-      <option value="oui" {% if travailleur.partenaire_revenus_pro == 'oui' %}selected{% endif %}>Oui</option>
-      <option value="oui_max290" {% if travailleur.partenaire_revenus_pro == 'oui_max290' %}selected{% endif %}>Oui — ≤ 290€/mois nets imposable</option>
-    </select>
-  </div>
-  <div class="form-group">
-    <label class="form-label">Partenaire — Pensions/rentes</label>
-    <select name="partenaire_pensions" class="form-control">
-      <option value="non" {% if travailleur.partenaire_pensions == 'non' %}selected{% endif %}>Non</option>
-      <option value="max174" {% if travailleur.partenaire_pensions == 'max174' %}selected{% endif %}>Oui — limité à 174€/mois</option>
-      <option value="174_579" {% if travailleur.partenaire_pensions == '174_579' %}selected{% endif %}>Oui — entre 174€ et 579€/mois</option>
-      <option value="plus579" {% if travailleur.partenaire_pensions == 'plus579' %}selected{% endif %}>Oui — > 579€/mois</option>
-    </select>
-  </div>
-</div>
-
-<div class="form-group">
-  <label class="form-label">Enfants à charge sans handicap</label>
-  <input type="number" name="nb_enfants_sans_handicap" min="0" class="form-control" value="{{ travailleur.nb_enfants_sans_handicap or 0 }}">
-</div>
-<div class="form-group">
-  <label class="form-label">Enfants à charge avec handicap</label>
-  <input type="number" name="nb_enfants_avec_handicap" min="0" class="form-control" value="{{ travailleur.nb_enfants_avec_handicap or 0 }}">
-</div>
-<div class="form-group">
-  <label class="form-label">Personnes à charge +66 ans</label>
-  <input type="number" name="nb_personnes_charge_66" min="0" class="form-control" value="{{ travailleur.nb_personnes_charge_66 or 0 }}">
-</div>
+{% include "_charges_famille.html" %}
 
 <div class="form-group">
   <label class="form-label">Langue du travailleur</label>

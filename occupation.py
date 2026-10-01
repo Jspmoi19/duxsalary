@@ -24,6 +24,33 @@ def libelle_etat_civil(code):
     return LIBELLES_ETAT_CIVIL.get(code, str(code).replace('_', ' ').capitalize())
 
 
+def charges_famille_du_formulaire(form):
+    """Situation familiale et charges de famille saisies dans les formulaires
+    travailleur (gabarit _charges_famille.html) -> colonnes de `travailleurs`.
+    Ce sont les donnees lues par le calcul du precompte (annexes 3 a 5 de la
+    formule-cle): rien n'est calcule ici."""
+    def entier(nom):
+        try:
+            return max(0, int(form.get(nom) or 0))
+        except (TypeError, ValueError):
+            return 0
+    etat_civil = form.get('etat_civil') or 'celibataire'
+    if etat_civil not in LIBELLES_ETAT_CIVIL:
+        etat_civil = 'celibataire'
+    return {
+        'etat_civil': etat_civil,
+        'partenaire_revenus_pro': form.get('partenaire_revenus_pro') or 'non',
+        'partenaire_pensions': form.get('partenaire_pensions') or 'non',
+        'nb_enfants_sans_handicap': entier('nb_enfants_sans_handicap'),
+        'nb_enfants_avec_handicap': entier('nb_enfants_avec_handicap'),
+        'nb_personnes_charge_66': entier('nb_personnes_charge_66'),
+        'nb_autres_personnes_charge': entier('nb_autres_personnes_charge'),
+        'parent_isole': form.get('parent_isole') == 'on',
+        'handicape': form.get('handicape') == 'on',
+        'conjoint_handicape': form.get('conjoint_handicape') == 'on',
+    }
+
+
 def commune_de_l_adresse(adresse):
     """Commune d'une adresse belge (« Rue X 2, 1853 Grimbergen » -> « Grimbergen »),
     pour le lieu de signature des contrats. Chaine vide si elle n'est pas reconnue."""

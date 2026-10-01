@@ -1,0 +1,73 @@
+{# Situation familiale et charges de famille (precompte professionnel) -- commun aux
+   formulaires « nouveau travailleur » et « modifier le travailleur ».
+   Champs lus par occupation.charges_famille_du_formulaire(). #}
+{% set t = travailleur if travailleur is defined and travailleur else {} %}
+<div class="card">
+  <div class="card-header"><h3>Situation familiale et charges de famille</h3></div>
+  <div class="card-body">
+    <div class="form-hint" style="margin-bottom:12px">Ces informations servent au calcul du précompte professionnel. Elles viennent de la déclaration du travailleur.</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">État civil</label>
+        <select name="etat_civil" class="form-control"
+                onchange="document.getElementById('bloc_partenaire').style.display = ['marie','cohabitation_legale','separe_fait','separe_corps'].includes(this.value) ? 'block' : 'none'">
+          {% for code, libelle in [('celibataire', 'Célibataire'), ('cohabitation_legale', 'Cohabitation légale'), ('marie', 'Marié(e)'),
+                                   ('separe_fait', 'Séparé(e) de fait'), ('separe_corps', 'Séparé(e) de corps et de biens'),
+                                   ('divorce', 'Divorcé(e)'), ('veuf', 'Veuf / veuve')] %}
+          <option value="{{ code }}" {% if (t.etat_civil or 'celibataire') == code %}selected{% endif %}>{{ libelle }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" id="bloc_partenaire" style="{% if t.etat_civil in ['marie','cohabitation_legale','separe_fait','separe_corps'] %}display:block{% else %}display:none{% endif %}">
+        <label class="form-label">Le partenaire a des revenus professionnels</label>
+        <select name="partenaire_revenus_pro" class="form-control">
+          <option value="non" {% if (t.partenaire_revenus_pro or 'non') == 'non' %}selected{% endif %}>Non</option>
+          <option value="oui" {% if t.partenaire_revenus_pro == 'oui' %}selected{% endif %}>Oui</option>
+          <option value="oui_max290" {% if t.partenaire_revenus_pro == 'oui_max290' %}selected{% endif %}>Oui — 290 € nets imposables par mois au maximum</option>
+        </select>
+        <label class="form-label" style="margin-top:10px">Le partenaire a des pensions ou rentes</label>
+        <select name="partenaire_pensions" class="form-control">
+          <option value="non" {% if (t.partenaire_pensions or 'non') == 'non' %}selected{% endif %}>Non</option>
+          <option value="max174" {% if t.partenaire_pensions == 'max174' %}selected{% endif %}>Oui — 174 € par mois au maximum</option>
+          <option value="174_579" {% if t.partenaire_pensions == '174_579' %}selected{% endif %}>Oui — entre 174 € et 579 € par mois</option>
+          <option value="plus579" {% if t.partenaire_pensions == 'plus579' %}selected{% endif %}>Oui — plus de 579 € par mois</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Enfants à charge sans handicap</label>
+        <input type="number" name="nb_enfants_sans_handicap" min="0" class="form-control" value="{{ t.nb_enfants_sans_handicap or 0 }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Enfants à charge avec handicap</label>
+        <input type="number" name="nb_enfants_avec_handicap" min="0" class="form-control" value="{{ t.nb_enfants_avec_handicap or 0 }}">
+        <div class="form-hint">Un enfant handicapé compte pour deux.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Personnes à charge de 65 ans et plus, dépendantes</label>
+        <input type="number" name="nb_personnes_charge_66" min="0" class="form-control" value="{{ t.nb_personnes_charge_66 or 0 }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Autres personnes à charge</label>
+        <input type="number" name="nb_autres_personnes_charge" min="0" class="form-control" value="{{ t.nb_autres_personnes_charge or 0 }}">
+      </div>
+
+      <div class="form-group full" style="display:grid;gap:8px">
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px">
+          <input type="checkbox" name="parent_isole" {% if t.parent_isole %}checked{% endif %} style="width:16px;height:16px">
+          Parent isolé avec enfant(s) à charge
+          <span class="form-hint" style="margin:0">— pris en compte seulement pour une personne isolée</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px">
+          <input type="checkbox" name="handicape" {% if t.handicape %}checked{% endif %} style="width:16px;height:16px">
+          Le travailleur est handicapé
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px">
+          <input type="checkbox" name="conjoint_handicape" {% if t.conjoint_handicape %}checked{% endif %} style="width:16px;height:16px">
+          Le conjoint est handicapé
+          <span class="form-hint" style="margin:0">— pris en compte seulement si le conjoint n'a pas de revenus professionnels</span>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
