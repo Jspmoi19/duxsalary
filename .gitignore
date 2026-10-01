@@ -1,3 +1,9 @@
 sauvegardes/
 *.sql
 .env
+sources/
+uploads/
+outputs/
+venv/
+__pycache__/
+CLAUDE.md
