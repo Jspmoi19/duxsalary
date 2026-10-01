@@ -23,7 +23,8 @@ print("=" * 70)
 print("TEST 1 — Bilal Akattof, 98'H BARBER, CP 140.03, ouvrier CDD, juillet 2026")
 print("=" * 70)
 p = construire_profil('CP 140.03', 'ouvrier', type_contrat='CDD', reference_date=date(2026, 7, 31))
-brut_onss = 778.87   # 48h prestées + 3h férié + avantage repas 16j, tel que fiche validée
+brut_onss = 778.87   # brut d'exemple pour tester les formules du profil (le moteur donne
+                     # 761,43 pour Bilal depuis le retrait de l'avantage repas automatique, voir test_moteur.py)
 onss_pers = p.onss_personnel(brut_onss)
 # CORRECTION 01/10/2026: ONSS personnel ouvrier sur 108% (Instructions ONSS
 # 2026/3 p.176 ; fiches reelles Interconsult et Liantis FDLR): 841,18 x 13,07%.

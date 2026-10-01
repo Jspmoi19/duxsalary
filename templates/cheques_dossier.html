@@ -91,6 +91,12 @@
     </label>
     {% if suggestion and config.valeur is none %}<div class="src" style="margin-top:4px">Valeurs pré-remplies avec la règle sectorielle d'introduction.</div>{% endif %}
     <hr style="border:none;border-top:1px solid #eef1f5;margin:14px 0">
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px">
+      <input type="checkbox" name="repas_fournis" {% if config.repas_fournis %}checked{% endif %}>
+      L'employeur fournit des repas (avantage de toute nature, 1,09 € par repas, soumis ONSS et précompte)
+    </label>
+    <div class="src" style="margin-top:4px">À cocher seulement si des repas sont réellement fournis par l'employeur. Sans rapport avec les chèques-repas : un chèque conforme est exonéré. L'avantage est ajouté au brut pour chaque jour presté et n'est pas versé au travailleur.</div>
+    <hr style="border:none;border-top:1px solid #eef1f5;margin:14px 0">
     <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px">
       <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="eco_actif" {% if config.eco_actif %}checked{% endif %}> <b>Écochèques activés</b></label>
       <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="eco_convertis" {% if config.eco_convertis %}checked{% endif %}> Convertis en avantage équivalent (accord conclu)</label>

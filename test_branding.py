@@ -155,6 +155,12 @@ check("CP sans prime enregistree: dit clairement, sans rien inventer", 'non enre
 check("CP 336: prime de fin d'annee signalee a verifier", 'à vérifier' in ' | '.join(resume_regles_cp('CP 336')))
 check("Etudiant: non vise par cheques et ecocheques", 'Étudiant : non visé' in ' | '.join(resume_regles_cp('CP 200', etudiant=True)))
 
+page_cheques = lire(os.path.join(GABARITS, 'cheques_dossier.html'))
+check("Page Cheques: option « l'employeur fournit des repas », decochee par defaut",
+      'name="repas_fournis" {% if config.repas_fournis %}checked{% endif %}' in page_cheques
+      and "L'employeur fournit des repas (avantage de toute nature, 1,09 € par repas, soumis ONSS et précompte)" in page_cheques)
+check("Plus d'avantage repas dans les regles de CP", any('Avantage repas' in l for cp in CP_DATABASE for l in resume_regles_cp(cp)), False)
+
 print(); print("=" * 70); print("TACHE 3 -- charges de famille dans les formulaires travailleur"); print("=" * 70)
 from occupation import charges_famille_du_formulaire
 c = charges_famille_du_formulaire({'etat_civil': 'marie', 'partenaire_revenus_pro': 'non', 'nb_enfants_sans_handicap': '2',

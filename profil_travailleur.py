@@ -143,12 +143,6 @@ class ProfilTravailleur:
         return not self.is_etudiant
 
     @property
-    def avantage_repas_soumis_onss(self) -> dict | None:
-        """Retourne le dict de règle avantage repas de la CP, ou None si non applicable."""
-        ar = self.regles_cp.get('avantage_repas', {})
-        return ar if ar.get('applicable') else None
-
-    @property
     def rgpt_regle(self) -> dict | None:
         r = self.regles_cp.get('rgpt', {})
         return r if r.get('applicable') else None

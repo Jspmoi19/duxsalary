@@ -182,11 +182,6 @@ REGLES_CP = {
         'type_travailleur_defaut': 'ouvrier',
         'heures_semaine_defaut': 38,
         'onss_patronal_taux_base': 0.27,   # validé contre fiche FDLR Liantis 2025 (taux facial CP140.03)
-        'avantage_repas': {
-            'applicable': True,
-            'montant_jour': 1.09,
-            'soumis_onss': True,     # OUI — c'est soumis, contrairement à CP 200/336
-        },
         'rgpt': {
             'applicable': True,
             'montant_heure': 1.8175,
@@ -208,9 +203,6 @@ REGLES_CP = {
         'type_travailleur_defaut': 'employe',
         'heures_semaine_defaut': 38,
         'onss_patronal_taux_base': 0.25,   # validé fiches Liantis employés CP200/336
-        'avantage_repas': {
-            'applicable': False,   # employés: pas d'avantage repas soumis ONSS de ce type
-        },
         'rgpt': {'applicable': False},
         'prime_fin_annee': {
             'applicable': True,
@@ -246,7 +238,6 @@ REGLES_CP = {
         'type_travailleur_defaut': 'employe',
         'heures_semaine_defaut': 38,
         'onss_patronal_taux_base': 0.25,   # aligné employés CP200 — à reconfirmer spécifiquement pour 336
-        'avantage_repas': {'applicable': False},
         'rgpt': {'applicable': False},
         'transport': {
             'train_remboursement_pct': 80,   # 80% du prix carte 2e classe
@@ -282,7 +273,6 @@ REGLES_CP = {
         'type_travailleur_defaut': 'ouvrier',
         'heures_semaine_defaut': 36.5,   # ATTENTION: différent des autres CP (pas 38h)
         'onss_patronal_taux_base': 0.27,   # ⚠️ NON VALIDÉ — taux ouvrier standard par défaut, à confirmer avant Yassin
-        'avantage_repas': {'applicable': False},   # à confirmer — pas d'avantage repas standard connu
         'rgpt': {
             'applicable': True,
             'montant_jour': 1.63,   # PAR JOUR (ACCG, primes CP 121 au 01/07/2026) - corrige le 30/09/2026
@@ -382,9 +372,6 @@ def resume_regles_cp(cp_key: str, etudiant: bool = False, reference_date=None) -
             lignes.append(f"Indemnité RGPT : {rg['montant_jour']:.2f} € par jour".replace('.', ','))
         elif rg.get('montant_heure'):
             lignes.append(f"Indemnité RGPT : {rg['montant_heure']:.4f} € par heure".replace('.', ','))
-    ar = r.get('avantage_repas', {})
-    if ar.get('applicable'):
-        lignes.append(f"Avantage repas {ar['montant_jour']:.2f} € par jour, soumis à l'ONSS".replace('.', ','))
     if r.get('indexation', {}).get('derniere'):
         lignes.append(f"Dernière indexation : {r['indexation']['derniere']}")
     if etudiant:

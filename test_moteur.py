@@ -35,25 +35,27 @@ r = calculer_fiche_paie('Bilal','Akattof','n','a','BE',date(2008,1,1),date(2026,
     'CP 140.03','Chauffeur',14.93, heures_semaine=38.0, heures_jour=3.0, jours_semaine=5, type_contrat='CDD',
     premier_engagement=True, jours_prestes=16, heures_prestees=48.0, jours_feries_payes=1, heures_feries=3.0,
     periode_debut=date(2026,7,1), periode_fin=date(2026,7,31))
-# 01/10/2026: ONSS personnel sur 108% + bonus emploi sur prestations reelles
-# (Instructions ONSS 2026/3 p.176 et p.449-453) -> net 801,38 (etait 848,67)
-check("ONSS personnel 13,07% x 108%", -r['onss_travailleur'], 109.94)
+# Valeurs au 01/10/2026 (sorties du moteur, non recoupees avec une fiche reelle de Bilal):
+#  - ONSS personnel sur 108% + bonus emploi sur prestations reelles (Instructions p.176, p.449-453)
+#  - plus d'avantage repas automatique (un cheque-repas conforme est exonere): le brut perd
+#    16 x 1,09 = 17,44 -> 761,43 (51 h x 14,93)
+#  - pas de cheques-repas sectoriels (moins de 6 mois d'anciennete)
+check("Brut = 51 h x 14,93, sans avantage repas automatique", r['brut_onss'], 761.43)
+check("ONSS personnel 13,07% x 108% (822,34)", -r['onss_travailleur'], 107.48)
 check("Bonus emploi A (H/U = 0,29)", r['bonus_emploi_a'], 39.94)
-check("Bonus emploi B (S = 2.669,20)", r['bonus_emploi_b'], 22.71)
-# 01/10/2026: plus de cheques-repas par defaut pour Bilal (entre le 09/07/2026: moins de
-# 6 mois d'anciennete, regle sectorielle CP 140.03) -> la retenue de 17,44 disparait
-check("Net", r['salaire_net'], 818.82)
-check("Part reductible 25% x 108%", r['onss_patronal_reductible'], 210.30)
-check("Vacances 5,57% non reductible", r['onss_vacances_trimestrielle'], 46.85)
-check("Reduction structurelle (temps partiel)", r['reduction_structurelle'], 113.42)
-check("Premier engagement", r['reduction_premier_engagement'], 96.88)
-# 01/10/2026: + cotisations 255 (0,02%), 256 (0,01%, T3 2026) et 859 (0,10%) sur 841,18
-# (Instructions ONSS 2026/3 p.340-341 et p.346) -> 48,78 (etait 47,69)
+check("Bonus emploi B (S = 14,93 x 174,8 = 2.609,76)", r['bonus_emploi_b'], 27.74)
+check("Net", r['salaire_net'], 808.87)
+check("Part reductible 25% x 108%", r['onss_patronal_reductible'], 205.59)
+check("Vacances 5,57% non reductible", r['onss_vacances_trimestrielle'], 45.80)
+check("Reduction structurelle (temps partiel)", r['reduction_structurelle'], 119.61)
+check("Premier engagement", r['reduction_premier_engagement'], 85.98)
+# Cotisations 255 (0,02%), 256 (0,01%, T3 2026) et 859 (0,10%) sur 822,34
+# (Instructions ONSS 2026/3 p.340-341 et p.346)
 codes_b = {c['code']: c['montant'] for c in r['cotisations_complementaires']}
-check("255 accidents du travail 0,02% sur 108%", codes_b.get('255', 0), 0.17)
+check("255 accidents du travail 0,02% sur 108%", codes_b.get('255', 0), 0.16)
 check("256 Fonds amiante 0,01% sur 108% (du au T3 2026)", codes_b.get('256', 0), 0.08)
-check("859 chomage temporaire 0,10% sur 108%", codes_b.get('859', 0), 0.84)
-check("ONSS patronal net = vacances + cotisations non reductibles", r['onss_patronal'], 48.78)
+check("859 chomage temporaire 0,10% sur 108%", codes_b.get('859', 0), 0.82)
+check("ONSS patronal net = vacances + cotisations non reductibles", r['onss_patronal'], 47.68)
 check("Bilal: moins de 6 mois d'anciennete -> aucun cheque-repas sectoriel", r['cr_empl_total'], 0.0)
 check("Bilal: alerte expliquant pourquoi", 1.0 if any('Anciennete 0 mois' in a for a in r['alertes_calcul']) else 0.0, 1.0)
 
@@ -254,6 +256,26 @@ en_dur = [f for f in ('moteur_paie.py', 'regles_cp.py', 'profil_travailleur.py',
           if any(m in io.open(os.path.join(racine, f), encoding='utf-8').read() for m in ('6.91', '5.82', '3,09', '3.09', 'cr_part_empl_jour'))]
 check("Aucun montant de cheque-repas ecrit hors de cheques_regles.py", 1.0 if not en_dur else 0.0, 1.0)
 if en_dur: print("   fichiers concernes:", en_dur)
+
+print(); print("=" * 70); print("REPAS FOURNIS PAR L'EMPLOYEUR -- avantage de toute nature, option du dossier"); print("=" * 70)
+kw_r = dict(heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, type_contrat='CDI', jours_prestes=22, heures_prestees=167.2,
+            rgpt_actif=False, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
+base_r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2025,1,1),'X','a','b','r','CP 140.03','Chauffeur',15.50,
+    cheques_repas=True, **kw_r)
+check("Cheques-repas coches, option desactivee: aucun avantage repas dans le brut", base_r['brut_onss'], round(15.50 * 167.2, 2))
+check("Aucune ligne d'avantage repas", len([l for l in base_r['lignes_salaire'] if 'repas' in l['libelle'].lower()]), 0)
+avec_r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2025,1,1),'X','a','b','r','CP 140.03','Chauffeur',15.50,
+    cheques_repas=True, repas_fournis=True, **kw_r)
+check("Option activee: 22 repas x 1,09 ajoutes au brut (Instructions ONSS p.76)", round(avec_r['brut_onss'] - base_r['brut_onss'], 2), 23.98)
+check("Soumis ONSS: cotisation personnelle plus elevee", 1.0 if -avec_r['onss_travailleur'] > -base_r['onss_travailleur'] else 0.0, 1.0)
+check("Avantage recu en nature: retire du net a payer", next(l['montant'] for l in avec_r['lignes_indemn'] if 'reçu en nature' in l['libelle']), -23.98)
+check("Net plus bas qu'avant (cotisations sur l'avantage, rien de verse en plus)", 1.0 if avec_r['salaire_net'] < base_r['salaire_net'] else 0.0, 1.0)
+check("Meme option dans toutes les CP (CP 200)", round(
+    calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2020,1,1),'X','a','b','r','CP 200','E',13.71, salaire_mensuel_fixe=2257.0,
+        cheques_repas=False, repas_fournis=True, **kw_r)['brut_onss'], 2), 2280.98)
+avant = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2020,1,1),'X','a','b','r','CP 200','E',13.71, salaire_mensuel_fixe=2257.0,
+    cheques_repas=False, repas_fournis=True, **dict(kw_r, periode_debut=date(2026,6,1), periode_fin=date(2026,6,30)))
+check("Montant charge pour 2026 seulement: toujours applique en juin 2026", round(avant['brut_onss'], 2), 2280.98)
 
 print(); print("=" * 70); print("ALERTE -- salaire sous le minimum de la CP a la date de la periode"); print("=" * 70)
 kw_m = dict(heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, jours_prestes=22, heures_prestees=167.2,

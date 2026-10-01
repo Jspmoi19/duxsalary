@@ -7,7 +7,7 @@ from datetime import date
 import math
 import sys as _sys; _sys.path.insert(0, '/var/www/duxsalary')
 from profil_travailleur import construire_profil
-from parametres_dates import get_precompte_params, get_bonus_emploi_plafond_annuel
+from parametres_dates import get_precompte_params, get_bonus_emploi_plafond_annuel, get_avantage_repas
 
 # ── TAUX ONSS 2026 ────────────────────────────────────────────────────
 ONSS_PERSONNEL = 0.1307
@@ -29,7 +29,6 @@ RED_STRUCT_BAS_PLAFOND = 4000.0
 # ── INDEMNITÉS PAR CP ─────────────────────────────────────────────────
 CP_INDEMNITES = {
     'CP 140.03': {
-        'avantage_repas_jour': 1.09,       # soumis ONSS
         'rgpt_heure': 1.8175,
         'indem_vetements_jour': 0.0,
         'indem_deplacement_jour': 0.0,
@@ -38,7 +37,6 @@ CP_INDEMNITES = {
         'sal_bareme_mensuel_etp': 2457.73,  # référence bonus emploi
     },
     'CP 302': {
-        'avantage_repas_jour': 1.09,
         'indem_vetements_jour': 4.40,
         'indem_deplacement_jour': 1.98,
         'onss_patronal': 0.2700,
@@ -46,14 +44,12 @@ CP_INDEMNITES = {
         'sal_bareme_mensuel_etp': 2504.53,
     },
     'CP 200': {
-        'avantage_repas_jour': 0.0,
         'onss_patronal': 0.2500,
         'type_travailleur': 'employe',
         'sal_bareme_mensuel_etp': 2242.81,
         'prime_annuelle': 330.84,
     },
     'CP 336': {
-        'avantage_repas_jour': 0.0,
         'onss_patronal': 0.2500,
         'type_travailleur': 'employe',
         'sal_bareme_mensuel_etp': 2254.30,    # minimum sectoriel 01/09/2026
@@ -61,14 +57,12 @@ CP_INDEMNITES = {
         'sal_bareme_etudiant': 2141.59,       # étudiant 95%
     },
     'CP 121': {
-        'avantage_repas_jour': 0.0,
         'rgpt_jour': 1.63,   # PAR JOUR (ACCG, primes CP 121 au 01/07/2026) - corrige le 30/09/2026
         'onss_patronal': 0.2700,
         'type_travailleur': 'ouvrier',
         'sal_bareme_mensuel_etp': 2696.49,  # indexé 01/07/2026
     },
     'CP 124': {
-        'avantage_repas_jour': 0.0,
         'onss_patronal': 0.2700,
         'type_travailleur': 'ouvrier',
         'sal_bareme_mensuel_etp': 2500.0,
@@ -200,6 +194,7 @@ def calculer_fiche_paie(
     taux_km=0.4444,
     periode_debut=None, periode_fin=None,
     bonus_emploi_cumul_annee=0.0,
+    repas_fournis=False,
 ):
     cp = CP_INDEMNITES.get(cp_key, {})
     # Override avec barèmes BDD si disponibles
@@ -259,13 +254,22 @@ def calculer_fiche_paie(
             'jours': jours_feries_payes, 'heures': heures_feries,
             'montant': round(salaire_horaire * heures_feries, 2), 'soumis_onss': True})
 
-    # Avantage repas soumis ONSS
-    avantage_repas_j = cp.get('avantage_repas_jour', 0.0)
+    # Avantage de toute nature « repas »: UNIQUEMENT si l'employeur fournit des repas
+    # (option du dossier, page « Chèques », desactivee par defaut). Ce n'est PAS une
+    # consequence des cheques-repas: un cheque conforme est exonere. Corrige le
+    # 01/10/2026 (l'avantage etait ajoute d'office en CP 140.03 des que la case
+    # cheques-repas etait cochee). Montant: parametres_dates (Instructions ONSS).
     montant_avantage = 0.0
-    if avantage_repas_j > 0 and jours_prestes > 0 and cheques_repas:
-        montant_avantage = round(avantage_repas_j * jours_prestes, 2)
-        lignes_salaire.append({'libelle': 'Avantages en nature Repas', 'base': avantage_repas_j,
-            'jours': jours_prestes, 'heures': 0, 'montant': montant_avantage, 'soumis_onss': True})
+    alerte_repas_fournis = None
+    if repas_fournis and jours_prestes > 0 and not is_etudiant:
+        atn = get_avantage_repas(periode_fin if periode_fin else date.today())
+        if atn is None:
+            alerte_repas_fournis = ("Repas fournis par l'employeur : montant de l'avantage de toute nature non chargé "
+                                    "pour cette période, avantage non calculé.")
+        else:
+            montant_avantage = round(atn['montant_par_repas'] * jours_prestes, 2)
+            lignes_salaire.append({'libelle': 'Avantage de toute nature – repas fournis', 'base': atn['montant_par_repas'],
+                'base_decimales': 2, 'jours': jours_prestes, 'heures': 0, 'montant': montant_avantage, 'soumis_onss': True})
 
     brut_onss = round(sum(l['montant'] for l in lignes_salaire if l['soumis_onss']), 2)
 
@@ -424,6 +428,12 @@ def calculer_fiche_paie(
                 'jours': 0, 'montant': montant_cr_ded})
         alertes_cheques += [f"Chèques-repas : {a}" for a in cr_calc.get('alertes') or []]
 
+    # Repas fournis: l'avantage est recu EN NATURE. Il entre dans le brut (ONSS,
+    # precompte) mais n'est pas verse: il est retire du net a payer.
+    if montant_avantage > 0:
+        lignes_indemn.append({'libelle': 'Avantage repas reçu en nature (non versé)',
+            'detail': 'déjà compris dans le brut', 'jours': jours_prestes, 'montant': -montant_avantage})
+
     # Frais nets forfaitaires
     montant_frais_nets = 0.0
     if frais_nets > 0:
@@ -479,7 +489,8 @@ def calculer_fiche_paie(
     lignes_indemn.extend(lignes_exc)
     net_exceptionnel = round(net_exceptionnel, 2)
 
-    total_indemn = montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + montant_cr_ded + montant_frais_nets - css + net_exceptionnel
+    total_indemn = (montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + montant_cr_ded
+                    + montant_frais_nets - montant_avantage - css + net_exceptionnel)
     salaire_net = round(brut_imposable - precompte + total_indemn, 2)
 
     # ── CHARGES PATRONALES ────────────────────────────────────────────
@@ -548,7 +559,8 @@ def calculer_fiche_paie(
     # au travailleur dans le net mais absents du cout). Controle permanent dans
     # test_moteur.py: cout >= net + ONSS travailleur + precompte + CSS.
     cout_empl = round(brut_onss + onss_pat_net + montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + cr_empl_total
-                      + montant_frais_nets + provision_vacances_annuelles + (prime_exceptionnelle or 0) + (double_pecule or 0), 2)
+                      + montant_frais_nets + provision_vacances_annuelles + (prime_exceptionnelle or 0) + (double_pecule or 0)
+                      - montant_avantage, 2)   # avantage repas: compris dans le brut mais non verse
 
     # ── DETAIL COMPLET DU CALCUL (page "Calculer la paie") ─────────────
     onss_info = profil.onss_officiel
@@ -609,6 +621,8 @@ def calculer_fiche_paie(
     if alerte_plafond_bonus:
         alertes_calcul.append(alerte_plafond_bonus)
     alertes_calcul += alertes_cheques
+    if alerte_repas_fournis:
+        alertes_calcul.append(alerte_repas_fournis)
     # Salaire sous le minimum de la CP a la date de la periode (etudiants compris):
     # simple alerte, les montants restent ceux saisis (minimums_cp.py)
     from minimums_cp import alerte_minimum
@@ -691,7 +705,8 @@ def calculer_fiche_paie(
             ('Indemnité RGPT', montant_rgpt), ('Indemnité ARAB', montant_arab),
             ('Vêtements de travail', montant_vet),
             ('Déplacement domicile-travail', round(montant_dep + montant_km, 2)),
-            ("Frais propres à l'employeur", montant_frais_nets)) if mt],
+            ("Frais propres à l'employeur", montant_frais_nets),
+            ('Avantage repas reçu en nature (non versé)', -montant_avantage)) if mt],
     }
 
 

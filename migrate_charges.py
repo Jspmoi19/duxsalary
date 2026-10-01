@@ -52,6 +52,10 @@ COLONNES = {
         ('parent_isole', 'BOOLEAN DEFAULT FALSE'), ('handicape', 'BOOLEAN DEFAULT FALSE'),
         ('conjoint_handicape', 'BOOLEAN DEFAULT FALSE'),
     ],
+    # Option « l'employeur fournit des repas » (avantage de toute nature), page « Chèques »
+    'cheques_config': [
+        ('repas_fournis', 'BOOLEAN DEFAULT FALSE'),
+    ],
     'dossiers': [
         ('caisse_vacances', 'VARCHAR(200)'), ('service_medical', 'VARCHAR(200)'), ('assurance_groupe', 'VARCHAR(200)'),
         # Provision ESTIMEE du pecule de vacances des employes (convention comptable,
@@ -66,7 +70,8 @@ def migrate():
     cur = conn.cursor()
     for table, colonnes in COLONNES.items():
         for nom, type_sql in colonnes:
-            cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {nom} {type_sql}")
+            # IF EXISTS: une table creee par un autre script (ex. cheques_config) peut manquer sur une base neuve
+            cur.execute(f"ALTER TABLE IF EXISTS {table} ADD COLUMN IF NOT EXISTS {nom} {type_sql}")
     conn.commit()
     cur.close()
     conn.close()

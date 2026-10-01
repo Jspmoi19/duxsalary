@@ -174,6 +174,23 @@ def get_contingent_etudiant(reference_date):
     return max(applicables, key=lambda v: v['date_debut']) if applicables else None
 
 
+# Avantage de toute nature REPAS -- uniquement quand l'employeur FOURNIT des repas
+# (option du dossier). Estimation forfaitaire ONSS: Instructions administratives
+# ONSS 2026/3, p.76: "2eme repas (repas principal): 1,09 EUR/jour". Sans rapport
+# avec les cheques-repas (un cheque conforme est exonere). Periodes anterieures:
+# non chargees.
+AVANTAGE_REPAS_VERSIONS = [
+    {'date_debut': date(2026, 1, 1), 'montant_par_repas': 1.09,
+     'source': 'Instructions administratives ONSS 2026/3, p.76 (repas principal)'},
+]
+
+
+def get_avantage_repas(reference_date):
+    """Forfait de l'avantage repas en vigueur, ou None si aucune version ne couvre la date."""
+    applicables = [v for v in AVANTAGE_REPAS_VERSIONS if v['date_debut'] <= reference_date]
+    return max(applicables, key=lambda v: v['date_debut']) if applicables else None
+
+
 def get_reduction_structurelle_params(reference_date):
     return _get_version(REDUCTION_STRUCTURELLE_VERSIONS, reference_date)
 

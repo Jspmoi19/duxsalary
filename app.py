@@ -1549,8 +1549,10 @@ def generer_fiche_depuis_calendrier(dimona_id):
         # Cheques-repas: nombre et montants issus du SUIVI DES CHEQUES du dossier
         # (applique si le dossier les a actives ou si la CP les rend obligatoires)
         cr_calc = None
+        repas_fournis = False   # option du dossier (page « Chèques »): l'employeur fournit des repas
         try:
             cfg_cr = _config_cheques(cur, dimona['dossier_id'])
+            repas_fournis = cfg_cr['repas_fournis']
             cur.execute("SELECT * FROM travailleurs WHERE id=%s", (dimona['travailleur_id'],))
             calc_cr = _calcul_cheques_travailleur(cur, dict(cur.fetchone()), annee, mois, cfg_cr)
             if calc_cr and (cfg_cr['actif'] or calc_cr['repas']['obligatoire']) and calc_cr['repas']['nombre']:
@@ -1581,6 +1583,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
 
         data = calculer_fiche_paie(
             bonus_emploi_cumul_annee=bonus_cumul_annee,
+            repas_fournis=repas_fournis,
             cheques_repas_calc=cr_calc,
             prime_exceptionnelle=prime_fa + prime_an,
             libelle_prime=' + '.join(libelles_prime) or "Prime de fin d'année",
@@ -2608,6 +2611,7 @@ def _config_cheques(cur, dossier_id):
     return {'actif': bool(r.get('repas_actif')), 'valeur': r.get('repas_valeur'),
             'part_patronale': r.get('repas_part_patronale'), 'part_travailleur': r.get('repas_part_travailleur'),
             'octroi_avant_2025': bool(r.get('repas_octroi_avant_2025')),
+            'repas_fournis': bool(r.get('repas_fournis')),
             'eco_actif': bool(r.get('eco_actif')), 'eco_convertis': bool(r.get('eco_convertis')),
             'emetteur': r.get('emetteur') or '', 'notes': r.get('notes') or ''}
 
@@ -2688,15 +2692,18 @@ def suivi_cheques(dossier_id):
             try: return float((f.get(k) or '').replace(',', '.')) if f.get(k) else None
             except ValueError: return None
         cur.execute("""INSERT INTO cheques_config (dossier_id, repas_actif, repas_valeur, repas_part_patronale,
-                repas_part_travailleur, repas_octroi_avant_2025, eco_actif, eco_convertis, emetteur, notes, updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                repas_part_travailleur, repas_octroi_avant_2025, eco_actif, eco_convertis, emetteur, notes,
+                repas_fournis, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
             ON CONFLICT (dossier_id) DO UPDATE SET repas_actif=EXCLUDED.repas_actif, repas_valeur=EXCLUDED.repas_valeur,
                 repas_part_patronale=EXCLUDED.repas_part_patronale, repas_part_travailleur=EXCLUDED.repas_part_travailleur,
                 repas_octroi_avant_2025=EXCLUDED.repas_octroi_avant_2025, eco_actif=EXCLUDED.eco_actif,
-                eco_convertis=EXCLUDED.eco_convertis, emetteur=EXCLUDED.emetteur, notes=EXCLUDED.notes, updated_at=NOW()""",
+                eco_convertis=EXCLUDED.eco_convertis, emetteur=EXCLUDED.emetteur, notes=EXCLUDED.notes,
+                repas_fournis=EXCLUDED.repas_fournis, updated_at=NOW()""",
             (dossier_id, f.get('repas_actif') == 'on', num('repas_valeur'), num('repas_part_patronale'),
              num('repas_part_travailleur'), f.get('repas_octroi_avant_2025') == 'on', f.get('eco_actif') == 'on',
-             f.get('eco_convertis') == 'on', f.get('emetteur', '')[:100], f.get('notes', '')))
+             f.get('eco_convertis') == 'on', f.get('emetteur', '')[:100], f.get('notes', ''),
+             f.get('repas_fournis') == 'on'))
         for k, v in f.items():
             if k.startswith('categorie_personnel_') and k[20:].isdigit():
                 cur.execute("UPDATE travailleurs SET categorie_personnel=%s WHERE id=%s AND dossier_id=%s",
