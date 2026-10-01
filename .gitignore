@@ -7,3 +7,6 @@ outputs/
 venv/
 __pycache__/
 CLAUDE.md
+alertes_cp.log
+alertes_cp_cache.json
+backup.log
