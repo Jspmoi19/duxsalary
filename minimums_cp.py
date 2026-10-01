@@ -46,11 +46,20 @@ def _date(valeur):
     return None
 
 
-def minimum_cp(cp_key, reference_date, categorie=None, is_etudiant=False, lignes_db=None):
+def minimum_cp(cp_key, reference_date, categorie=None, is_etudiant=False, lignes_db=None,
+               annees_experience=None, anciennete_mois=None, age=None):
     """Minimum applicable. Retourne (minimum, raison):
     minimum = {'horaire', 'mensuel', 'categorie', 'depuis', 'source', 'note'} ou None,
     raison = explication quand le minimum n'est pas disponible.
-    lignes_db: lignes de la table baremes_cp pour cette CP (prioritaires)."""
+    1) CP avec grille par classe et annees d'experience (baremes_experience.py): la
+       grille s'applique -- annees_experience, anciennete_mois dans l'entreprise
+       (bareme I / II) et age (bareme des etudiants) ;
+    2) sinon minimum par categorie: lignes_db (table baremes_cp) puis cp_data.py."""
+    from baremes_experience import minimum_experience
+    minimum, raison = minimum_experience(cp_key, reference_date, categorie, annees_experience,
+                                         anciennete_mois, is_etudiant, age)
+    if minimum is not None or raison is not None:
+        return minimum, raison
     baremes, depuis, source = {}, None, None
     if lignes_db:
         for r in lignes_db:
@@ -86,11 +95,13 @@ def minimum_cp(cp_key, reference_date, categorie=None, is_etudiant=False, lignes
 
 
 def alerte_minimum(cp_key, reference_date, salaire_horaire=0.0, salaire_mensuel_etp=None, paye_au_mois=False,
-                   categorie=None, is_etudiant=False, lignes_db=None):
+                   categorie=None, is_etudiant=False, lignes_db=None,
+                   annees_experience=None, anciennete_mois=None, age=None):
     """Texte de l'alerte si le salaire est sous le minimum (ou si le minimum n'est
     pas disponible pour la periode) ; None si tout est en ordre.
     salaire_mensuel_etp: salaire mensuel ramene au temps plein (travailleur paye au mois)."""
-    minimum, raison = minimum_cp(cp_key, reference_date, categorie, is_etudiant, lignes_db)
+    minimum, raison = minimum_cp(cp_key, reference_date, categorie, is_etudiant, lignes_db,
+                                 annees_experience, anciennete_mois, age)
     if minimum is None:
         return raison
     fr = lambda x, d: f"{x:,.{d}f}".replace(',', ' ').replace('.', ',')

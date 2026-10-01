@@ -179,10 +179,16 @@
                  placeholder="Ex: Chauffeur poids lourd, Aide-cuisine...">
         </div>
         <div class="form-group">
-          <label class="form-label">Catégorie</label>
-          <input type="text" name="categorie" id="categorie_input" class="form-control"
-                 value="{{ prefill_contrat.categorie if prefill_contrat else '' }}"
-                 placeholder="Ex: Personnel roulant niveau 1">
+          <label class="form-label">Catégorie / classe du barème</label>
+          <select name="categorie" id="categorie_input" class="form-control" onchange="majMinimum()"
+                  data-valeur="{{ prefill_contrat.categorie if prefill_contrat and prefill_contrat.categorie else '' }}"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Années d'expérience professionnelle</label>
+          <input type="number" name="annees_experience" id="annees_experience" class="form-control" min="0" max="60" step="1"
+                 value="{{ prefill_contrat.annees_experience if prefill_contrat and prefill_contrat.annees_experience is not none else '' }}"
+                 placeholder="0" oninput="majMinimum()">
+          <div class="form-hint" id="experience_hint"></div>
         </div>
         <div class="form-group">
           <label class="form-label">Horaire journalier</label>
@@ -274,6 +280,8 @@ function prefillTravailleur(id) {
 // Règles de chaque CP: source unique regles_cp.py (resume_regles_cp)
 const CP_REGLES = {{ regles_json | safe }};
 const CP_GEREES = {{ cp_gerees | tojson }};
+// Grilles par classe et annees d'experience: baremes_experience.py (source unique)
+const GRILLES = {{ grilles_json | safe }};
 
 function updateCP() {
   const cp = document.getElementById('cp_select').value;
@@ -315,6 +323,57 @@ function updateCP() {
   if (rows) {
     document.getElementById('bareme_rows').innerHTML = rows;
     document.getElementById('bareme_table').style.display = 'block';
+  }
+  remplirCategories(cp, info);
+  majMinimum();
+}
+
+// Liste des categories du bareme de la CP (plus de saisie libre)
+function remplirCategories(cp, info) {
+  const liste = document.getElementById('categorie_input');
+  const voulue = liste.value || liste.dataset.valeur || '';
+  const categories = Object.keys(info.baremes || {}).filter(c => !c.toLowerCase().includes('tudiant'));
+  liste.innerHTML = '<option value="">— Non précisée —</option>' +
+    categories.map(c => '<option' + (c === voulue ? ' selected' : '') + '>' + c + '</option>').join('') +
+    (voulue && !categories.includes(voulue) ? '<option selected>' + voulue + '</option>' : '');
+}
+
+// Minimum applicable: grille par classe et experience si la CP en a une (bareme I:
+// premiere annee dans l'entreprise), sinon minimum de la categorie choisie
+function majMinimum() {
+  const cp = document.getElementById('cp_select').value, info = CP_INFO[cp];
+  const minEl = document.getElementById('min_hint'), aide = document.getElementById('experience_hint');
+  if (!info || !minEl) return;
+  const categorie = document.getElementById('categorie_input').value;
+  const g = GRILLES[cp];
+  let minH = 0, libelle = '';
+  if (g) {
+    const m = /classe\s+([A-Z])/i.exec(categorie);
+    const classe = m && g.classes.includes(m[1].toUpperCase()) ? m[1].toUpperCase() : g.classes[0];
+    const saisie = parseInt(document.getElementById('annees_experience').value, 10);
+    const annees = Math.max(0, Math.min(isNaN(saisie) ? 0 : saisie, g.max_annees));
+    const mensuel = g.bareme_I[annees][g.classes.indexOf(classe)];
+    minH = mensuel * 12 / 52 / g.heures_semaine;
+    libelle = 'classe ' + classe + ', ' + annees + ' an' + (annees > 1 ? 's' : '') + " d'expérience : " +
+      mensuel.toFixed(2).replace('.', ',') + ' €/mois';
+    aide.textContent = 'Barème par expérience en vigueur depuis le ' + g.depuis_fr + ' (barème I, première année dans l’entreprise).' +
+      (m ? '' : ' Classe non précisée : classe ' + classe + '.');
+  } else {
+    const b = info.baremes || {};
+    if (b[categorie] && b[categorie].horaire) { minH = b[categorie].horaire; libelle = categorie; }
+    else {
+      for (const [cat, val] of Object.entries(b)) {
+        if (val && val.horaire && !cat.toLowerCase().includes('tudiant') && (!minH || val.horaire < minH)) { minH = val.horaire; libelle = cat + ' (catégorie la plus basse)'; }
+      }
+    }
+    aide.textContent = "Cette CP n'a pas de barème par années d'expérience enregistré : le minimum dépend de la catégorie.";
+  }
+  if (minH) {
+    minEl.textContent = 'Minimum : ' + minH.toFixed(4).replace('.', ',') + ' €/h — ' + libelle;
+    minEl.dataset.min = minH;
+  } else {
+    minEl.textContent = 'Aucun barème enregistré pour cette CP';
+    minEl.dataset.min = 0;
   }
   calcSalaire();
 }

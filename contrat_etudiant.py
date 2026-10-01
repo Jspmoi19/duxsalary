@@ -20,20 +20,32 @@ STUDENT_AT_WORK = 'https://www.studentatwork.be'
 def contexte_regles(dossier, etudiant=False):
     """Commun aux deux formulaires: regles de chaque CP (regles_cp.py), liste des
     CP gerees par le moteur de paie, lieu de signature (commune du dossier)."""
+    from datetime import date
+    from baremes_experience import grille_en_vigueur
+    grilles = {}
+    for cp in CP_DATABASE:
+        g = grille_en_vigueur(cp, date.today())
+        if g:   # grille par classe et annees d'experience (bareme I: premiere annee dans l'entreprise)
+            grilles[cp] = {'classes': list(g['classes']), 'heures_semaine': g['heures_semaine'],
+                           'bareme_I': {str(a): list(v) for a, v in g['bareme_I'].items()},
+                           'max_annees': max(g['bareme_I']), 'depuis_fr': f"{g['date_debut']:%d/%m/%Y}"}
     return {
+        'grilles_json': json.dumps(grilles),
         'regles_json': json.dumps({cp: resume_regles_cp(cp, etudiant=etudiant) for cp in CP_DATABASE}, ensure_ascii=False),
         'cp_gerees': [cp for cp in CP_DATABASE if cp_geree(cp)],
         'lieu_signature': commune_de_l_adresse((dossier or {}).get('adresse')),
     }
 
 
-def contexte_formulaire(dossier, heures_deja, aujourd_hui, baremes_db=None):
+def contexte_formulaire(dossier, heures_deja, aujourd_hui, baremes_db=None, age=None):
     """Variables du gabarit contrat_etudiant.html.
     heures_deja: heures etudiant deja prestees cette annee chez cet employeur.
-    baremes_db: {cp_key: [lignes de baremes_cp]} quand la base en contient."""
+    baremes_db: {cp_key: [lignes de baremes_cp]} quand la base en contient.
+    age: age de l'etudiant (bareme des etudiants par age, quand la CP en a un)."""
     minimums = {}
     for cp_key in CP_DATABASE:
-        minimum, raison = minimum_cp(cp_key, aujourd_hui, is_etudiant=True, lignes_db=(baremes_db or {}).get(cp_key))
+        minimum, raison = minimum_cp(cp_key, aujourd_hui, is_etudiant=True, lignes_db=(baremes_db or {}).get(cp_key),
+                                     anciennete_mois=0, age=age)
         if minimum:
             minimums[cp_key] = {'horaire': minimum['horaire'], 'categorie': minimum['categorie'], 'note': minimum['note'],
                                 'depuis': minimum['depuis'].isoformat(), 'depuis_fr': f"{minimum['depuis']:%d/%m/%Y}",

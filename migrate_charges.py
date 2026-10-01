@@ -56,6 +56,10 @@ COLONNES = {
     'cheques_config': [
         ('repas_fournis', 'BOOLEAN DEFAULT FALSE'),
     ],
+    # Annees d'experience professionnelle a la date du contrat (bareme par experience, tache 4)
+    'contrats': [
+        ('annees_experience', 'INTEGER'),
+    ],
     'dossiers': [
         ('caisse_vacances', 'VARCHAR(200)'), ('service_medical', 'VARCHAR(200)'), ('assurance_groupe', 'VARCHAR(200)'),
         # Provision ESTIMEE du pecule de vacances des employes (convention comptable,

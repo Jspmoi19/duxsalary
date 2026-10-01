@@ -312,6 +312,41 @@ r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2026,1,1),'X','
     type_contrat='CDI', periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), **kw_m)
 check("Ouvrier CP 140.03 niveau 2 a 15,00 < 15,4490 (categorie du contrat): alerte", 1.0 if '15,4490' in alerte_min(r) else 0.0, 1.0)
 
+print(); print("=" * 70); print("TACHE 4 -- CP 200: bareme par classe et annees d'experience (01/01/2026)"); print("=" * 70)
+from baremes_experience import grille_en_vigueur, minimum_experience
+g200 = grille_en_vigueur('CP 200', date(2026,10,1))
+check("Grille CP 200: 27 lignes (0 a 26 ans) en bareme I, 26 en bareme II", (len(g200['bareme_I']), len(g200['bareme_II'])), (27, 26))
+check("Bareme I, 0 an, classes A a D", g200['bareme_I'][0], (2242.81, 2336.25, 2369.31, 2555.73))
+check("Bareme II, 26 ans, classes A a D", g200['bareme_II'][26], (2526.16, 2897.83, 3262.72, 3722.55))
+check("Pas de grille avant le 01/01/2026 (rien de devine)", grille_en_vigueur('CP 200', date(2025,12,31)), None)
+check("Au-dela de 26 ans d'experience: plafonne a 26 ans", minimum_experience('CP 200', date(2026,10,1), 'Classe D', 40, 0)[0]['mensuel'], 3622.42)
+def fiche200(mensuel, categorie, experience, entree, debut_contrat=None, fin=date(2026,10,31), **kw):
+    r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),entree,'X','a','b','r','CP 200',categorie,13.71,
+        salaire_mensuel_fixe=mensuel, annees_experience=experience, date_debut_contrat=debut_contrat or entree,
+        **dict(dict(heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, type_contrat='CDI', jours_prestes=22, heures_prestees=167.2,
+                    rgpt_actif=False, cheques_repas=False, periode_debut=date(fin.year, fin.month, 1), periode_fin=fin), **kw))
+    return alerte_min(r)
+ENTREE = date(2026,9,1)   # premiere annee dans l'entreprise -> bareme I
+check("Classe C, 5 ans, bareme I: 2.563,76 -- salaire 2.500: alerte",
+      1.0 if '2 563,76' in fiche200(2500.0, 'Classe C — Spécialisé', 5, ENTREE) else 0.0, 1.0)
+check("Classe C, 5 ans: salaire 2.563,76: pas d'alerte", 0.0 if fiche200(2563.76, 'Classe C — Spécialisé', 5, ENTREE) else 1.0, 1.0)
+check("Meme salaire, classe A 5 ans (2.276,51): pas d'alerte", 0.0 if fiche200(2300.0, 'Classe A — Sans qualification', 5, ENTREE) else 1.0, 1.0)
+check("Apres un an dans l'entreprise: bareme II (classe A, 1 an: 2.310,30)",
+      1.0 if '2 310,30' in fiche200(2300.0, 'Classe A — Sans qualification', 0, date(2025,9,1)) and 'barème II' in
+      fiche200(2300.0, 'Classe A — Sans qualification', 0, date(2025,9,1)) else 0.0, 1.0)
+check("L'experience progresse avec le contrat: 5 ans a la signature le 01/09/2025 -> 6 ans en octobre 2026 (bareme II: 2.681,47)",
+      1.0 if '2 681,47' in fiche200(2600.0, 'Classe C — Spécialisé', 5, date(2025,9,1)) else 0.0, 1.0)
+check("Experience non renseignee: 0 an, signale dans l'alerte",
+      1.0 if "années d'expérience non renseignées" in fiche200(2000.0, 'Classe A — Sans qualification', None, ENTREE) else 0.0, 1.0)
+check("Classe non precisee: classe A, signale", 1.0 if 'classe non précisée' in fiche200(2000.0, 'Employe', 0, ENTREE) else 0.0, 1.0)
+r = calculer_fiche_paie('A','B','n','a','BE',date(2007,6,1),date(2026,10,1),'X','a','b','r','CP 200','Etudiant',11.50,
+    type_contrat='STU', is_etudiant=True, **kw_m, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
+check("Etudiant CP 200 de 19 ans a 11,50 < 11,9988 (bareme des etudiants: 1.975,80 / mois): alerte",
+      1.0 if 'Barème des étudiants, 19 ans' in alerte_min(r) and '11,9988' in alerte_min(r) else 0.0, 1.0)
+r = calculer_fiche_paie('A','B','n','a','BE',date(2007,6,1),date(2026,10,1),'X','a','b','r','CP 200','Etudiant',12.00,
+    type_contrat='STU', is_etudiant=True, **kw_m, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
+check("Etudiant CP 200 de 19 ans a 12,00: pas d'alerte", 0.0 if alerte_min(r) else 1.0, 1.0)
+
 print(); print("=" * 70); print("CONTROLE PERMANENT -- cout employeur >= net + ONSS travailleur + precompte + CSS"); print("=" * 70)
 check("Controle applique a tous les calculs de ce fichier", 1.0 if NB_CONTROLES_COUT[0] >= 20 else 0.0, 1.0)
 print(f"  ({NB_CONTROLES_COUT[0]} fiches controlees)")

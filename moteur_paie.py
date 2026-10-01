@@ -195,6 +195,7 @@ def calculer_fiche_paie(
     periode_debut=None, periode_fin=None,
     bonus_emploi_cumul_annee=0.0,
     repas_fournis=False,
+    annees_experience=None, date_debut_contrat=None,
 ):
     cp = CP_INDEMNITES.get(cp_key, {})
     # Override avec barèmes BDD si disponibles
@@ -626,11 +627,24 @@ def calculer_fiche_paie(
     # Salaire sous le minimum de la CP a la date de la periode (etudiants compris):
     # simple alerte, les montants restent ceux saisis (minimums_cp.py)
     from minimums_cp import alerte_minimum
+    ref_min = periode_fin if periode_fin else date.today()
+    def _annees_entre(debut, fin):
+        return fin.year - debut.year - ((fin.month, fin.day) < (debut.month, debut.day)) if debut else None
+    # Experience a la date de la periode = experience saisie dans le contrat + annees
+    # completes ecoulees depuis le debut de ce contrat
+    debut_contrat = date_debut_contrat or date_entree
+    experience_periode = None
+    if annees_experience is not None:
+        experience_periode = int(annees_experience) + max(0, _annees_entre(debut_contrat, ref_min) or 0)
+    anciennete_mois_min = ((ref_min.year - date_entree.year) * 12 + ref_min.month - date_entree.month
+                           - (1 if ref_min.day < date_entree.day else 0)) if date_entree else None
     alerte_min = alerte_minimum(
-        cp_key, periode_fin if periode_fin else date.today(), salaire_horaire=salaire_horaire,
+        cp_key, ref_min, salaire_horaire=salaire_horaire,
         salaire_mensuel_etp=(round(sal_mensuel_brut / ratio_tp, 2) if is_employe_fixe and ratio_tp else None),
         paye_au_mois=is_employe_fixe, categorie=categorie, is_etudiant=is_etudiant,
-        lignes_db=(cp_db or {}).get('lignes'))
+        lignes_db=(cp_db or {}).get('lignes'),
+        annees_experience=experience_periode, anciennete_mois=anciennete_mois_min,
+        age=_annees_entre(date_naissance, ref_min))
     if alerte_min:
         alertes_calcul.append(alerte_min)
     if onss_info['parametres_reportes']:

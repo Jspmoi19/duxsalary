@@ -136,7 +136,8 @@ dossier_e = dict(dossier, adresse='Rue Exemple 1, 1853 Grimbergen', cp_principal
 ctx_e = contexte_formulaire(dossier_e, 120.0, date(2026, 10, 1))
 minimums = json.loads(ctx_e['minimums_json'])
 check("Bareme etudiant de la CP 336 (95 %)", (minimums['CP 336']['horaire'], minimums['CP 336']['categorie']), (13.021, 'Étudiant (95%)'))
-check("CP sans bareme etudiant: minimum ordinaire, signale", 'pas de barème étudiant' in minimums['CP 200']['note'])
+check("CP sans bareme etudiant: minimum ordinaire, signale", 'pas de barème étudiant' in minimums['CP 140.03']['note'])
+check("CP 200 sans age connu: bareme ordinaire, signale", "âge de l'étudiant inconnu" in minimums['CP 200']['note'])
 check("CP sans bareme date: raison affichee, pas de minimum", 'raison' in minimums['CP 302'] and 'horaire' not in minimums['CP 302'])
 check("Regles de la CP issues de regles_cp.py", any('Chèques-repas' in l for l in json.loads(ctx_e['regles_json'])['CP 140.03']))
 from regles_cp import resume_regles_cp
@@ -225,6 +226,15 @@ check("Lieu de signature = commune du dossier", 'name="lieu_signature" class="fo
 check("CP non geree marquee et bouton bloque", '— non gérée' in h and 'bouton.disabled = !geree' in h)
 from regles_cp import cp_geree
 check("Refus cote serveur: cp_geree()", (cp_geree('CP 302'), cp_geree('CP 124'), cp_geree('CP 200')), (False, False, True))
+check("Tache 4: categorie choisie dans une liste (plus de saisie libre) et annees d'experience",
+      '<select name="categorie" id="categorie_input"' in h and 'name="annees_experience"' in h and 'type="text" name="categorie"' not in h)
+grilles = json.loads(contexte_regles(dossier_e)['grilles_json'])
+check("Tache 4: grille CP 200 transmise au formulaire (27 lignes d'experience, 4 classes)",
+      (sorted(grilles), len(grilles['CP 200']['bareme_I']), grilles['CP 200']['classes'], grilles['CP 200']['bareme_I']['5'][2]),
+      (['CP 200'], 27, ['A', 'B', 'C', 'D'], 2563.76))
+ctx_19 = json.loads(contexte_formulaire(dossier_e, 0, date(2026, 10, 1), age=19)['minimums_json'])
+check("Contrat etudiant CP 200: bareme des etudiants selon l'age (19 ans, classe A: 1.975,80 EUR/mois)",
+      (ctx_19['CP 200']['horaire'], 'Barème des étudiants, 19 ans' in ctx_19['CP 200']['categorie']), (11.9988, True))
 
 print(); print("=" * 70); print("PDF -- logo et mentions sur les documents"); print("=" * 70)
 import tempfile

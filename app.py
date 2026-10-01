@@ -646,6 +646,7 @@ def nouveau_contrat_dossier(dossier_id):
             'lieu_travail': form.get('lieu_travail'),
             'date_debut': pd(form['date_debut']), 'date_fin': pd(form.get('date_fin')),
             'motif_cdd': form.get('motif_cdd'), 'temps_plein': form.get('temps_plein','1')=='1',
+            'annees_experience': int(form['annees_experience']) if (form.get('annees_experience') or '').isdigit() else None,
             'pdf_path': os.path.join(OUTPUT_DIR, filename)})
 
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id, tab='contrats'))
@@ -1213,12 +1214,15 @@ def nouveau_contrat_etudiant():
                 (travailleur_id, dossier_id, date.today().year))
     heures_deja = float(cur.fetchone()['heures'] or 0)
     cur.close(); conn.close()
+    # Age de l'etudiant: certaines CP ont un bareme des etudiants par age
+    ddn, auj = travailleur.get('date_naissance'), date.today()
+    age_etudiant = (auj.year - ddn.year - ((auj.month, auj.day) < (ddn.month, ddn.day))) if ddn else None
 
     return render_template('contrat_etudiant.html',
                            dossier=dossier, travailleur=travailleur,
                            dossier_actif=dossier,
                            cp_data=CP_DATABASE,
-                           **contexte_formulaire(dossier, heures_deja, date.today(), baremes_db),
+                           **contexte_formulaire(dossier, heures_deja, date.today(), baremes_db, age=age_etudiant),
                            **ctx)
 
 
@@ -1584,6 +1588,9 @@ def generer_fiche_depuis_calendrier(dimona_id):
         data = calculer_fiche_paie(
             bonus_emploi_cumul_annee=bonus_cumul_annee,
             repas_fournis=repas_fournis,
+            # Bareme par annees d'experience (alerte de salaire minimum)
+            annees_experience=contrat.get('annees_experience') if contrat else None,
+            date_debut_contrat=contrat['date_debut'] if contrat else None,
             cheques_repas_calc=cr_calc,
             prime_exceptionnelle=prime_fa + prime_an,
             libelle_prime=' + '.join(libelles_prime) or "Prime de fin d'année",
