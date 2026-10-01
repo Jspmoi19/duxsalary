@@ -251,7 +251,8 @@ def modifier_travailleur(travailleur_id):
         cur.execute("""UPDATE travailleurs SET prenom=%s, nom=%s, niss=%s, date_naissance=%s,
             adresse=%s, iban=%s, email=%s, telephone=%s, langue=%s,
             etat_civil=%s, partenaire_revenus_pro=%s, partenaire_pensions=%s,
-            nb_enfants_sans_handicap=%s, nb_enfants_avec_handicap=%s, nb_personnes_charge_66=%s
+            nb_enfants_sans_handicap=%s, nb_enfants_avec_handicap=%s, nb_personnes_charge_66=%s,
+            sexe=%s, date_sortie=%s, caisse_allocations_familiales=%s
             WHERE id=%s""",
             (request.form['prenom'], request.form['nom'], request.form.get('niss'),
              ddn_db, request.form.get('adresse'), request.form.get('iban'),
@@ -263,6 +264,8 @@ def modifier_travailleur(travailleur_id):
              int(request.form.get('nb_enfants_sans_handicap', 0) or 0),
              int(request.form.get('nb_enfants_avec_handicap', 0) or 0),
              int(request.form.get('nb_personnes_charge_66', 0) or 0),
+             request.form.get('sexe') or None, request.form.get('date_sortie') or None,
+             request.form.get('caisse_allocations_familiales') or None,
              travailleur_id))
         conn.commit(); cur.close(); conn.close()
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id))
@@ -1723,43 +1726,18 @@ def generer_fiche_depuis_calendrier(dimona_id):
         generer_fiche_paie_pdf(data, filepath)
 
         # Sauvegarder en BDD
-        cur.execute("""
-            INSERT INTO fiches_paie (
-                dossier_id, travailleur_id, contrat_id,
-                periode_debut, periode_fin,
-                salaire_brut, onss_personnel, precompte,
-                salaire_net, total_onss, onss_patronal,
-                cout_employeur, pdf_path, statut_paiement,
-                bonus_emploi_a, bonus_emploi_b,
-                precompte_avant_reduction, reduction_precompte_bonus,
-                reduction_structurelle, reduction_premier_engagement,
-                frais_nets_montant, jours_prestes, heures_prestees,
-                is_ouvrier, is_etudiant, cp_key, type_contrat,
-                prime_brut, pecule_brut, onss_exceptionnel, precompte_exceptionnel
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'genere',
-                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            RETURNING id
-        """, (
-            dimona['dossier_id'], dimona['travailleur_id'],
-            contrat['id'] if contrat else None,
-            periode_debut, periode_fin,
-            data['brut_onss'] + data.get('prime_exceptionnelle', 0),
-            abs(data['onss_net']) + data.get('prime_onss', 0) + data.get('pecule_retenue', 0),
-            abs(data['precompte']) + data.get('prime_precompte', 0) + data.get('pecule_precompte', 0),
-            data['salaire_net'],
-            abs(data['onss_net']) + data.get('prime_onss', 0) + data.get('pecule_retenue', 0) + data['onss_patronal'],
-            data['onss_patronal'],
-            data['cout_employeur'], filepath,
-            data.get('bonus_emploi_a', 0), data.get('bonus_emploi_b', 0),
-            abs(data.get('precompte_brut', 0)), data.get('red_precompte_bonus', 0),
-            data.get('reduction_structurelle', 0), data.get('reduction_premier_engagement', 0),
-            data.get('frais_nets', 0), jours_prestes, heures_prestees,
-            data.get('is_ouvrier'), data.get('is_etudiant'),
-            data.get('cp_key'), data.get('type_contrat'),
-            data.get('prime_exceptionnelle', 0), data.get('double_pecule', 0),
-            round(data.get('prime_onss', 0) + data.get('pecule_retenue', 0), 2),
-            round(data.get('prime_precompte', 0) + data.get('pecule_precompte', 0), 2)
-        ))
+        # Colonnes de la fiche: source unique documents_charges.valeurs_fiche
+        # (totaux + detail pour le compte individuel, l'attestation, la ventilation)
+        from documents_charges import valeurs_fiche
+        valeurs = dict(valeurs_fiche(data),
+                       dossier_id=dimona['dossier_id'], travailleur_id=dimona['travailleur_id'],
+                       contrat_id=contrat['id'] if contrat else None,
+                       periode_debut=periode_debut, periode_fin=periode_fin,
+                       pdf_path=filepath, statut_paiement='genere')
+        colonnes = list(valeurs)
+        cur.execute(f"INSERT INTO fiches_paie ({', '.join(colonnes)}) "
+                    f"VALUES ({', '.join(['%s'] * len(colonnes))}) RETURNING id",
+                    [valeurs[c] for c in colonnes])
         fiche_id = cur.fetchone()['id']
         conn.commit()
         cur.close(); conn.close()
@@ -2598,113 +2576,87 @@ def conges_travailleur(travailleur_id):
         is_etudiant_contrat=is_etudiant_contrat, calcul_auto=calcul_auto,
         estimation=estimation, annee_courante=annee_courante, **ctx)
 
-# ── RESUME DE CHARGE SALARIALE ──────────────────────────────────────────
+# ── DOCUMENTS DE CHARGES SALARIALES ─────────────────────────────────────
+# Compte individuel, attestation salariale, liste de ventilation: calculs dans
+# documents_charges.py, PDF dans pdf_charges.py, identite visuelle dans branding.py
+def _periode_demandee():
+    """Periode choisie (parametres date_debut / date_fin, ou annee) -- par defaut l'annee en cours."""
+    annee = request.args.get('annee', type=int) or date.today().year
+    def lire(nom, defaut):
+        try:
+            return date.fromisoformat(request.args.get(nom) or '')
+        except ValueError:
+            return defaut
+    debut, fin = lire('date_debut', date(annee, 1, 1)), lire('date_fin', date(annee, 12, 31))
+    return (debut, fin) if debut <= fin else (fin, debut)
+
+
+def _fiches_periode(condition, parametre, debut, fin):
+    from psycopg2.extras import RealDictCursor
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(f"""SELECT * FROM fiches_paie WHERE {condition} = %s
+                    AND periode_debut >= %s AND periode_debut <= %s ORDER BY periode_debut""",
+                (parametre, debut, fin))
+    fiches = [dict(r) for r in cur.fetchall()]
+    cur.close(); conn.close()
+    return fiches
+
+
+def _rendre_document(document, debut, fin, nom_fichier, retour_url, retour_libelle, onglets, **contexte):
+    from documents_charges import formater
+    tenant = get_tenant()
+    if request.args.get('format') == 'pdf':
+        from io import BytesIO
+        from pdf_charges import generer_pdf_charges
+        return send_file(BytesIO(generer_pdf_charges(document, tenant)), mimetype='application/pdf',
+                         as_attachment=False, download_name=f"{nom_fichier}_{debut:%Y%m%d}_{fin:%Y%m%d}.pdf")
+    ctx = get_context_base(); ctx['tenant'] = tenant
+    return render_template('document_charges.html', document=document, formater=formater,
+                           date_debut=debut.isoformat(), date_fin=fin.isoformat(),
+                           retour_url=retour_url, retour_libelle=retour_libelle, onglets=onglets,
+                           **contexte, **ctx)
+
+
+def _document_dossier(dossier_id, type_document):
+    from documents_charges import attestation_salariale, liste_ventilation
+    dossier = get_dossier(dossier_id)
+    debut, fin = _periode_demandee()
+    fiches = _fiches_periode('dossier_id', dossier_id, debut, fin)
+    construire = liste_ventilation if type_document == 'ventilation' else attestation_salariale
+    onglets = [{'libelle': 'Attestation salariale', 'url': f'/dossier/{dossier_id}/resume-charge',
+                'actif': type_document == 'attestation'},
+               {'libelle': 'Liste de ventilation', 'url': f'/dossier/{dossier_id}/ventilation',
+                'actif': type_document == 'ventilation'}]
+    return _rendre_document(construire(fiches, dossier, debut, fin), debut, fin, type_document,
+                            f'/dossier/{dossier_id}', dossier['nom'], onglets,
+                            dossier=dossier, dossier_actif=dossier)
+
+
 @app.route('/dossier/<int:dossier_id>/resume-charge')
 @login_required
 def resume_charge(dossier_id):
-    from psycopg2.extras import RealDictCursor
-    dossier = get_dossier(dossier_id)
-    ctx = get_context_base(); ctx['tenant'] = get_tenant()
-
-    date_debut = request.args.get('date_debut') or f"{date.today().year}-01-01"
-    date_fin = request.args.get('date_fin') or date.today().isoformat()
-
-    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
-
-    # Detail par travailleur
-    cur.execute("""
-        SELECT t.id as travailleur_id, t.prenom, t.nom,
-               COUNT(f.id) as nb_fiches,
-               COALESCE(SUM(f.salaire_brut), 0) as total_brut,
-               COALESCE(SUM(f.onss_personnel), 0) as total_onss_pers,
-               COALESCE(SUM(f.onss_patronal), 0) as total_onss_pat,
-               COALESCE(SUM(f.precompte), 0) as total_precompte,
-               COALESCE(SUM(f.salaire_net), 0) as total_net,
-               COALESCE(SUM(f.cout_employeur), 0) as total_cout_employeur,
-               COALESCE(SUM(f.bonus_emploi_a + f.bonus_emploi_b), 0) as total_bonus_emploi,
-               COALESCE(SUM(f.reduction_structurelle), 0) as total_red_structurelle,
-               COALESCE(SUM(f.reduction_premier_engagement), 0) as total_red_1er_eng,
-               COALESCE(SUM(f.frais_nets_montant), 0) as total_frais_nets
-        FROM travailleurs t
-        LEFT JOIN fiches_paie f ON f.travailleur_id = t.id
-            AND f.periode_debut >= %s AND f.periode_fin <= %s
-        WHERE t.dossier_id = %s
-        GROUP BY t.id, t.prenom, t.nom
-        ORDER BY t.nom
-    """, (date_debut, date_fin, dossier_id))
-    par_travailleur = [dict(r) for r in cur.fetchall()]
-
-    # Totaux generaux
-    cur.execute("""
-        SELECT
-            COUNT(f.id) as nb_fiches_total,
-            COUNT(DISTINCT f.travailleur_id) as nb_travailleurs,
-            COALESCE(SUM(f.salaire_brut), 0) as total_brut,
-            COALESCE(SUM(f.onss_personnel), 0) as total_onss_pers,
-            COALESCE(SUM(f.onss_patronal), 0) as total_onss_pat,
-            COALESCE(SUM(f.precompte), 0) as total_precompte,
-            COALESCE(SUM(f.salaire_net), 0) as total_net,
-            COALESCE(SUM(f.cout_employeur), 0) as total_cout_employeur,
-            COALESCE(SUM(f.bonus_emploi_a + f.bonus_emploi_b), 0) as total_bonus_emploi
-        FROM fiches_paie f
-        JOIN travailleurs t ON t.id = f.travailleur_id
-        WHERE t.dossier_id = %s
-            AND f.periode_debut >= %s AND f.periode_fin <= %s
-    """, (dossier_id, date_debut, date_fin))
-    totaux = dict(cur.fetchone())
-
-    cur.close(); conn.close()
-
-    return render_template('resume_charge.html',
-        dossier=dossier, dossier_actif=dossier,
-        par_travailleur=par_travailleur, totaux=totaux,
-        date_debut=date_debut, date_fin=date_fin, **ctx)
+    return _document_dossier(dossier_id, 'attestation')
 
 
-# ── COMPTE INDIVIDUEL ───────────────────────────────────────────────────
+@app.route('/dossier/<int:dossier_id>/ventilation')
+@login_required
+def liste_ventilation_dossier(dossier_id):
+    return _document_dossier(dossier_id, 'ventilation')
+
+
 @app.route('/travailleur/<int:travailleur_id>/compte-individuel')
 @login_required
 def compte_individuel(travailleur_id):
-    from psycopg2.extras import RealDictCursor
+    from documents_charges import compte_individuel as construire
     travailleur = get_travailleur(travailleur_id)
     dossier = get_dossier(travailleur['dossier_id'])
-    ctx = get_context_base(); ctx['tenant'] = get_tenant()
-
-    annee = request.args.get('annee', date.today().year, type=int)
-
-    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("""
-        SELECT f.*, c.type_contrat as contrat_type, c.cp_key as contrat_cp
-        FROM fiches_paie f
-        LEFT JOIN contrats c ON c.id = f.contrat_id
-        WHERE f.travailleur_id = %s
-            AND EXTRACT(YEAR FROM f.periode_debut) = %s
-        ORDER BY f.periode_debut
-    """, (travailleur_id, annee))
-    fiches = [dict(r) for r in cur.fetchall()]
-
-    # Totaux annuels
-    totaux = {
-        'brut': sum(float(f['salaire_brut'] or 0) for f in fiches),
-        'onss_pers': sum(float(f['onss_personnel'] or 0) for f in fiches),
-        'onss_pat': sum(float(f['onss_patronal'] or 0) for f in fiches),
-        'precompte': sum(float(f['precompte'] or 0) for f in fiches),
-        'net': sum(float(f['salaire_net'] or 0) for f in fiches),
-        'bonus_emploi': sum(float((f['bonus_emploi_a'] or 0) + (f['bonus_emploi_b'] or 0)) for f in fiches),
-        'frais_nets': sum(float(f['frais_nets_montant'] or 0) for f in fiches),
-        'jours_prestes': sum(int(f['jours_prestes'] or 0) for f in fiches),
-    }
-
-    # Annees disponibles
-    cur.execute("""SELECT DISTINCT EXTRACT(YEAR FROM periode_debut)::int as annee
-        FROM fiches_paie WHERE travailleur_id=%s ORDER BY annee DESC""", (travailleur_id,))
-    annees_dispo = [r['annee'] for r in cur.fetchall()]
-
-    cur.close(); conn.close()
-
-    return render_template('compte_individuel.html',
-        travailleur=travailleur, dossier=dossier, dossier_actif=dossier,
-        fiches=fiches, totaux=totaux, annee=annee, annees_dispo=annees_dispo, **ctx)
+    debut, fin = _periode_demandee()
+    fiches = _fiches_periode('travailleur_id', travailleur_id, debut, fin)
+    contrats = get_contrats(travailleur_id=travailleur_id)
+    document = construire(fiches, travailleur, dossier, debut, fin, contrat=contrats[0] if contrats else None)
+    return _rendre_document(document, debut, fin, 'compte_individuel',
+                            f'/travailleur/{travailleur_id}', f"{travailleur['prenom']} {travailleur['nom']}", [],
+                            travailleur=travailleur, dossier=dossier, dossier_actif=dossier)
 
 
 # ── SUIVI DES CHEQUES (cheques-repas + ecocheques) ────────────────────

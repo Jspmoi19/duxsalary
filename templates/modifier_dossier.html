@@ -79,6 +79,24 @@
             <input type="text" name="assurance_at" class="form-control" value="{{ dossier.assurance_at or '' }}">
           </div>
           <div class="form-group">
+            <label class="form-label">Caisse de vacances</label>
+            <input type="text" name="caisse_vacances" class="form-control" value="{{ dossier.caisse_vacances or '' }}" placeholder="Ex: ONVA">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Service médical (prévention)</label>
+            <input type="text" name="service_medical" class="form-control" value="{{ dossier.service_medical or '' }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Assurance-groupe</label>
+            <input type="text" name="assurance_groupe" class="form-control" value="{{ dossier.assurance_groupe or '' }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Provision estimée du pécule de vacances des employés (%)</label>
+            <input type="number" name="taux_provision_pecule_employes" class="form-control" step="0.01" min="0" max="100"
+                   value="{{ '%.2f'|format(dossier.taux_provision_pecule_employes) if dossier.taux_provision_pecule_employes is not none else '18.80' }}">
+            <div class="form-hint">Utilisé dans l'attestation salariale et la liste de ventilation. 18,80 % par défaut ; estimation comptable, pas un taux légal.</div>
+          </div>
+          <div class="form-group">
             <label class="form-label">Région linguistique</label>
             <select name="region_linguistique" class="form-control">
               <option value="bruxelles_fr" {% if not dossier.region_linguistique or dossier.region_linguistique == 'bruxelles_fr' %}selected{% endif %}>Bruxelles — Français</option>

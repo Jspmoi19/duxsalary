@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ document.titre }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="{{ retour_url }}" class="btn-back">← {{ retour_libelle }}</a>
+    <h2>{{ document.titre }}</h2>
+  </div>
+  <div>
+    {% for lien in onglets %}
+      <a href="{{ lien.url }}?date_debut={{ date_debut }}&date_fin={{ date_fin }}"
+         class="btn {% if lien.actif %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">{{ lien.libelle }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <div class="card-body" style="padding:16px">
+    <form method="GET" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Du</label>
+        <input type="date" name="date_debut" value="{{ date_debut }}" class="form-control">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Au</label>
+        <input type="date" name="date_fin" value="{{ date_fin }}" class="form-control">
+      </div>
+      <button type="submit" class="btn btn-primary">Actualiser</button>
+      <button type="submit" name="format" value="pdf" class="btn btn-secondary">⬇ Exporter en PDF</button>
+    </form>
+  </div>
+</div>
+
+{% for a in document.avertissements %}
+<div style="background:#fff8e1;border:1px solid #f0d58c;border-radius:6px;padding:10px 14px;font-size:12px;margin-bottom:12px">⚠️ {{ a }}</div>
+{% endfor %}
+
+{% if document.entete %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-body" style="padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:4px 18px;font-size:12px">
+    {% for libelle, valeur in document.entete %}{% if valeur %}
+      <div><span style="color:#888">{{ libelle }} :</span> <strong>{{ valeur }}</strong></div>
+    {% endif %}{% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card" style="overflow-x:auto">
+  <table class="data-table" style="font-size:12px;white-space:nowrap">
+    <thead>
+      <tr>
+        <th></th>
+        {% for c in document.colonnes %}<th style="text-align:right">{{ c }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for section in document.sections %}
+      <tr><td colspan="{{ document.colonnes|length + 1 }}"
+              style="background:#f5f7fa;font-weight:700;color:{{ tenant.couleur_primaire or '#1F4E79' }};text-transform:uppercase;font-size:11px">{{ section.titre }}</td></tr>
+      {% for l in section.lignes %}
+      <tr style="{% if l.style == 'total' %}font-weight:700;border-top:1px solid #333{% elif l.style == 'info' %}color:#888{% endif %}">
+        <td style="white-space:normal">{{ l.libelle }}</td>
+        {% for v in l['valeurs'] %}
+          {% set txt = formater(v, l.fmt) %}
+          <td style="text-align:right{% if v is none %};color:#aaa{% endif %}">{{ txt or ('0,00' if l.style == 'total' and l.fmt == 'montant' else '') }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

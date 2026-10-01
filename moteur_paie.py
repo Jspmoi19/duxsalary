@@ -662,8 +662,21 @@ def calculer_fiche_paie(
         'cout_employeur': cout_empl,
         'cr_empl_total': cr_empl_total,
         'frais_nets': montant_frais_nets,
-        'frais_nets': montant_frais_nets,
         'premier_engagement': premier_engagement,
+        # Detail conserve dans fiches_paie pour les documents de charges
+        # (compte individuel, attestation salariale, ventilation)
+        'jours_prestes': jours_prestes, 'heures_prestees': heures_prestees,
+        'jours_feries_payes': jours_feries_payes, 'heures_feries': heures_feries,
+        'jours_conge': jours_conge, 'jours_maladie': jours_maladie, 'jours_chomage': jours_chomage,
+        'brut_majore': base_onss_pat,
+        'css': css,
+        'libelle_prime': libelle_prime,
+        'cr_part_travailleur': round(-montant_cr_ded, 2),
+        'indemnites_detail': [{'libelle': lib, 'montant': mt} for lib, mt in (
+            ('Indemnité RGPT', montant_rgpt), ('Indemnité ARAB', montant_arab),
+            ('Vêtements de travail', montant_vet),
+            ('Déplacement domicile-travail', round(montant_dep + montant_km, 2)),
+            ("Frais propres à l'employeur", montant_frais_nets)) if mt],
     }
 
 

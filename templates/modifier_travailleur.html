@@ -49,6 +49,23 @@
         <input type="text" name="iban" class="form-control" value="{{ travailleur.iban or '' }}">
       </div>
       <div class="form-group">
+        <label class="form-label">Sexe</label>
+        <select name="sexe" class="form-control">
+          <option value="" {% if not travailleur.sexe %}selected{% endif %}>— Non renseigné —</option>
+          <option value="M" {% if travailleur.sexe == 'M' %}selected{% endif %}>Masculin</option>
+          <option value="F" {% if travailleur.sexe == 'F' %}selected{% endif %}>Féminin</option>
+          <option value="X" {% if travailleur.sexe == 'X' %}selected{% endif %}>Autre</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date de sortie</label>
+        <input type="date" name="date_sortie" class="form-control" value="{{ travailleur.date_sortie.strftime('%Y-%m-%d') if travailleur.date_sortie else '' }}">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Caisse d'allocations familiales</label>
+        <input type="text" name="caisse_allocations_familiales" class="form-control" value="{{ travailleur.caisse_allocations_familiales or '' }}">
+      </div>
+      <div class="form-group">
         <label class="form-label">Situation familiale</label>
         <select name="situation_familiale" class="form-control">
           <option value="isole" {% if travailleur.situation_familiale == 'isole' %}selected{% endif %}>Isolé(e)</option>

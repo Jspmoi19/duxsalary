@@ -200,15 +200,25 @@ def get_dossier(dossier_id):
     conn.close()
     return dict(d) if d else None
 
+def _taux_provision(data):
+    """Taux (%) de la provision estimee du pecule de vacances des employes: 18,80 par defaut."""
+    try:
+        return float(str(data.get('taux_provision_pecule_employes') or '18.80').replace(',', '.'))
+    except ValueError:
+        return 18.80
+
 def create_dossier(data):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO dossiers (nom, bce, rsz, adresse, email, telephone, cp_principale, representant, assurance_at)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        INSERT INTO dossiers (nom, bce, rsz, adresse, email, telephone, cp_principale, representant, assurance_at,
+                              caisse_vacances, service_medical, assurance_groupe, taux_provision_pecule_employes)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
     """, (data['nom'], data.get('bce'), data.get('rsz'), data.get('adresse'),
           data.get('email'), data.get('telephone'), data.get('cp_principale'),
-          data.get('representant'), data.get('assurance_at')))
+          data.get('representant'), data.get('assurance_at'),
+          data.get('caisse_vacances') or None, data.get('service_medical') or None,
+          data.get('assurance_groupe') or None, _taux_provision(data)))
     did = cur.fetchone()[0]
     conn.commit()
     cur.close()
@@ -223,6 +233,7 @@ def update_dossier(dossier_id, data):
         UPDATE dossiers SET nom=%s, bce=%s, rsz=%s, adresse=%s, email=%s,
         telephone=%s, cp_principale=%s, representant=%s, assurance_at=%s,
         date_activation_rsz=%s, premier_engagement=%s, premier_engagement_depuis=%s,
+        caisse_vacances=%s, service_medical=%s, assurance_groupe=%s, taux_provision_pecule_employes=%s,
         updated_at=NOW()
         WHERE id=%s
     """, (data['nom'], data.get('bce'), data.get('rsz'), data.get('adresse'),
@@ -231,6 +242,8 @@ def update_dossier(dossier_id, data):
           date_rsz,
           data.get('premier_engagement') == 'on',
           data.get('premier_engagement_depuis') or None,
+          data.get('caisse_vacances') or None, data.get('service_medical') or None,
+          data.get('assurance_groupe') or None, _taux_provision(data),
           dossier_id))
     conn.commit()
     cur.close()
@@ -268,11 +281,13 @@ def create_travailleur(data):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO travailleurs (dossier_id, nom, prenom, niss, adresse, date_naissance, iban, email, telephone)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        INSERT INTO travailleurs (dossier_id, nom, prenom, niss, adresse, date_naissance, iban, email, telephone,
+                                  sexe, caisse_allocations_familiales)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
     """, (data['dossier_id'], data['nom'], data['prenom'], data.get('niss'),
           data.get('adresse'), data.get('date_naissance') or None,
-          data.get('iban'), data.get('email'), data.get('telephone')))
+          data.get('iban'), data.get('email'), data.get('telephone'),
+          data.get('sexe') or None, data.get('caisse_allocations_familiales') or None))
     tid = cur.fetchone()[0]
     conn.commit()
     cur.close()

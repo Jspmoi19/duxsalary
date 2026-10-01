@@ -113,7 +113,7 @@ def _disponibles():
 
 def _charger(cle):
     if cle not in _CACHE:
-        _CACHE[cle] = json.load(open(os.path.join(DOSSIER, f"{cle}.json")))
+        _CACHE[cle] = json.load(open(os.path.join(DOSSIER, f"{cle}.json"), encoding='utf-8'))
     return _CACHE[cle]
 
 def _precedent(cle):
@@ -198,13 +198,35 @@ def categorie_existe(categorie, reference_date=None):
 #                        de plus de 18 ans" -- ex. 831 Fonds social CP 200 (cat. 010)
 # La reduction structurelle et le premier engagement NE s'appliquent PAS a ces
 # cotisations (Instructions p.376: pas sur le FFE ni sur la moderation du 1,60%).
+#   255 accidents du travail (cot. speciale) 0,02% : employeurs soumis a la loi
+#                        du 10/04/1971 - p.340
+#   256 Fonds amiante 0,01% : tous les employeurs, certains trimestres - p.340-341
+#   859 chomage temporaire et chomeurs ages 0,10% : tous les employeurs sauf
+#                        secteur public / enseignement / dispenses - p.346
+#   Ces trois cotisations se calculent sur le brut porte a 108% pour les ouvriers,
+#   sont declarees par ligne travailleur (hors taux de base depuis 2024/1 pour
+#   255 et 256) et n'entrent pas dans le plafond des reductions.
+# Fonds amiante: "a partir de 2017 la cotisation est uniquement percue pour le
+# 1er et le 2eme trimestre, excepte si determine autrement par le Roi" ;
+# "pour 2026 la cotisation est percue pour le 1er, le 2eme et le 3eme trimestre"
+# (Instructions ONSS 2026/3 p.340-341). Ajouter ici chaque annee derogatoire.
+FONDS_AMIANTE_TRIMESTRES_DEFAUT = (1, 2)
+FONDS_AMIANTE_TRIMESTRES = {2026: (1, 2, 3)}
+
+def fonds_amiante_du(reference_date):
+    """La cotisation Fonds amiante (256) est-elle percue pour ce trimestre ?
+    Decide sur le trimestre de la PERIODE, pas sur le fichier de taux utilise
+    (un trimestre non publie reprend le fichier precedent)."""
+    trimestre = (reference_date.month - 1) // 3 + 1
+    return trimestre in FONDS_AMIANTE_TRIMESTRES.get(reference_date.year, FONDS_AMIANTE_TRIMESTRES_DEFAUT)
+
 _LIBELLES = None
 
 def libelle_code(code):
     global _LIBELLES
     if _LIBELLES is None:
         p = os.path.join(DOSSIER, 'libelles_codes.json')
-        _LIBELLES = json.load(open(p)) if os.path.exists(p) else {'cotisations': {}, 'reductions': {}}
+        _LIBELLES = json.load(open(p, encoding='utf-8')) if os.path.exists(p) else {'cotisations': {}, 'reductions': {}}
     return _LIBELLES['cotisations'].get(str(code), f"Cotisation code {code}")
 
 
@@ -249,6 +271,23 @@ def cotisations_complementaires(statut, reference_date, categorie=CATEGORIE_DEFA
     # 810 FFE speciale -- tous les employeurs
     if code_ffe != 'O' and '810' in comb:
         ajouter('810', '0', "Instructions ONSS 2026/3 p.343: due par tous les employeurs")
+
+    # 255 cotisation speciale accidents du travail -- employeurs soumis a la loi
+    # du 10/04/1971 (secteur prive), 0,02% du brut (108% ouvriers)
+    if '255' in comb:
+        ajouter('255', '0', "Instructions ONSS 2026/3 p.340: employeurs soumis à la loi sur les accidents du travail ; "
+                            "hors taux de base depuis 2024/1")
+    # 256 Fonds amiante -- tous les employeurs, 0,01% du brut (108% ouvriers),
+    # mais seulement certains trimestres (voir FONDS_AMIANTE_TRIMESTRES)
+    if '256' in comb and fonds_amiante_du(reference_date):
+        ajouter('256', '0', "Instructions ONSS 2026/3 p.340-341: tous les employeurs ; "
+                            "perçue aux trimestres 1 à 3 en 2026")
+    # 859 chomage temporaire et chomeurs ages -- tous les employeurs du secteur
+    # prive, 0,10% du brut (108% ouvriers). Les employeurs dispenses par le
+    # Ministre de l'Emploi (type 8, taux 0%) ne sont pas geres: cas a signaler.
+    if '859' in comb:
+        ajouter('859', '0', "Instructions ONSS 2026/3 p.346: tous les employeurs, sauf secteur public, "
+                            "enseignement et employeurs dispensés")
 
     # 809 / 811 FFE de base selon le code FFE du dossier
     imp = int(code_importance) if str(code_importance or '').isdigit() else None

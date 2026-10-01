@@ -29,7 +29,13 @@ check("Part reductible 25% x 108%", r['onss_patronal_reductible'], 210.30)
 check("Vacances 5,57% non reductible", r['onss_vacances_trimestrielle'], 46.85)
 check("Reduction structurelle (temps partiel)", r['reduction_structurelle'], 113.42)
 check("Premier engagement", r['reduction_premier_engagement'], 96.88)
-check("ONSS patronal net = vacances + FFE speciale", r['onss_patronal'], 47.69)
+# 01/10/2026: + cotisations 255 (0,02%), 256 (0,01%, T3 2026) et 859 (0,10%) sur 841,18
+# (Instructions ONSS 2026/3 p.340-341 et p.346) -> 48,78 (etait 47,69)
+codes_b = {c['code']: c['montant'] for c in r['cotisations_complementaires']}
+check("255 accidents du travail 0,02% sur 108%", codes_b.get('255', 0), 0.17)
+check("256 Fonds amiante 0,01% sur 108% (du au T3 2026)", codes_b.get('256', 0), 0.08)
+check("859 chomage temporaire 0,10% sur 108%", codes_b.get('859', 0), 0.84)
+check("ONSS patronal net = vacances + cotisations non reductibles", r['onss_patronal'], 48.78)
 
 print(); print("=" * 70); print("FICHE REELLE Interconsult -- ouvrier 10/38, 15,2097 EUR/h (socle commun, CP 302 non geree)"); print("=" * 70)
 # Fiches de sources/fiches_reference (CP 302): seul le socle ONSS personnel /
@@ -90,7 +96,11 @@ codes = {c['code']: c['montant'] for c in r['cotisations_complementaires']}
 check("810 FFE speciale 0,10%", codes.get('810', 0), 2.26)
 check("809 FFE base commercial 0,34%", codes.get('809', 0), 7.67)
 check("831 Fonds social CP 200 0,23%", codes.get('831', 0), 5.19)
-check("ONSS patronal net", r['onss_patronal'], 15.12)
+check("255 accidents du travail 0,02%", codes.get('255', 0), 0.45)
+check("859 chomage temporaire 0,10%", codes.get('859', 0), 2.26)
+check("256 Fonds amiante NON du au T4 2026 (malgre le fichier T3 reporte)", codes.get('256', 0), 0.0)
+# 2,26 + 7,67 + 5,19 + 0,45 + 2,26 = 17,83 (etait 15,12 sans les codes 255 et 859)
+check("ONSS patronal net", r['onss_patronal'], 17.83)
 check("Alerte T4 non publie presente", 1.0 if any('2026Q4' in a for a in r['alertes_calcul']) else 0.0, 1.0)
 
 print(); print("=" * 70); print("CIWAN -- mois en cours, seulement 15 jours encodes (employe au mois)"); print("=" * 70)
