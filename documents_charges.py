@@ -23,9 +23,12 @@ import json
 import re
 from datetime import date
 
+from occupation import libelle_etat_civil
+
 MOIS = ['', 'Janv.', 'Févr.', 'Mars', 'Avril', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.']
 TAUX_PROVISION_EMPLOYES_DEFAUT = 18.80   # % -- provision ESTIMEE, modifiable par dossier
 ND = 'n.d.'
+SANS_FICHE = '—'   # mois sans fiche de paie
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -106,7 +109,11 @@ def _libelle_remu(lib):
 
 
 def _groupe(f):
-    return 'Étudiants' if f.get('is_etudiant') else ('Ouvriers' if f.get('is_ouvrier') else 'Employés')
+    """Statut de la fiche. Un mois sous contrat etudiant (indicateur etudiant OU
+    type de contrat STU) est toujours « Étudiants »: jamais dans les employes."""
+    if f.get('is_etudiant') or f.get('type_contrat') == 'STU':
+        return 'Étudiants'
+    return 'Ouvriers' if f.get('is_ouvrier') else 'Employés'
 
 
 def _somme(fiches, valeur, detail=False):
@@ -148,7 +155,7 @@ def _epurer(sections):
     lignes d'information et les lignes « n.d. » restent toujours affiches."""
     for s in sections:
         s['lignes'] = [l for l in s['lignes']
-                       if l['style'] != 'normal' or any(v is None or v not in (0, '') for v in l['valeurs'])]
+                       if l['style'] != 'normal' or any(v is None or v not in (0, '', SANS_FICHE) for v in l['valeurs'])]
     return [s for s in sections if s['lignes']]
 
 
@@ -161,16 +168,22 @@ def _avertissements(fiches):
 
 
 def formater(valeur, fmt='montant'):
-    """Affichage commun ecran / PDF. None -> n.d. ; zero -> vide (sauf totaux, geres par l'appelant)."""
+    """Affichage commun ecran / PDF. None -> n.d. ; zero -> vide (sauf totaux, geres
+    par l'appelant) ; texte (dont « — » = mois sans fiche) -> tel quel. Les
+    milliers sont separes par une espace INSECABLE: un montant ne se coupe jamais."""
     if valeur is None:
         return ND
-    if fmt == 'texte':
+    if isinstance(valeur, str) or fmt == 'texte':
         return str(valeur)
     if fmt == 'nombre':
         return f"{valeur:g}".replace('.', ',') if valeur else ''
     if not valeur:
         return ''
-    return f"{valeur:,.2f}".replace(',', ' ').replace('.', ',')
+    return montant_fr(valeur)
+
+
+def montant_fr(valeur, decimales=2):
+    return f"{valeur:,.{decimales}f}".replace(',', ' ').replace('.', ',')
 
 
 def mois_de_la_periode(date_debut, date_fin):
@@ -193,23 +206,27 @@ _brut_regulier = lambda f: _n(f.get('salaire_brut')) - _n(f.get('prime_brut'))
 # ─────────────────────────────────────────────────────────────────
 # COMPTE INDIVIDUEL
 # ─────────────────────────────────────────────────────────────────
-def compte_individuel(fiches, travailleur, dossier, date_debut, date_fin, contrat=None):
-    """fiches: lignes de fiches_paie du travailleur dans la periode."""
+def compte_individuel(fiches, travailleur, dossier, date_debut, date_fin, contrat=None, date_entree=None):
+    """fiches: lignes de fiches_paie du travailleur dans la periode.
+    date_entree: date de la PREMIERE occupation chez l'employeur (premier contrat,
+    etudiant compris) ; a defaut, debut du contrat transmis."""
     mois = mois_de_la_periode(date_debut, date_fin)
     par_mois = [[f for f in fiches if (f['periode_debut'].year, f['periode_debut'].month) == am] for am in mois]
     groupes = par_mois + [fiches]   # derniere colonne = total
 
     def ligne(libelle, valeur, detail=False, style='normal', fmt='montant'):
-        return _ligne(libelle, [_somme(g, valeur, detail) if g else 0 for g in groupes], style, fmt)
+        mois_ = [_somme(g, valeur, detail) if g else SANS_FICHE for g in par_mois]
+        return _ligne(libelle, mois_ + [_somme(fiches, valeur, detail) if fiches else 0], style, fmt)
 
     def base(g):
         if not g:
-            return ''
+            return SANS_FICHE
         f = g[-1]
         if not f.get('detail_complet') or f.get('salaire_base') is None:
             return None
-        unite = '/mois' if f.get('salaire_base_periodicite') == 'mois' else '/h'
-        return f"{_n(f['salaire_base']):.4f}".replace('.', ',') + unite
+        if f.get('salaire_base_periodicite') == 'mois':
+            return montant_fr(_n(f['salaire_base'])) + ' €/mois'      # 2 257,00 €/mois
+        return montant_fr(_n(f['salaire_base']), 4) + ' €/h'           # 15,2097 €/h
 
     prestations = [
         _ligne('Salaire de base', [base(g) for g in par_mois] + [''], fmt='texte'),
@@ -253,9 +270,9 @@ def compte_individuel(fiches, travailleur, dossier, date_debut, date_fin, contra
         ('Travailleur', f"{t.get('nom') or ''} {t.get('prenom') or ''}".strip()), ('Adresse du travailleur', t.get('adresse') or ''),
         ('N° registre national', t.get('niss') or ''), ('Date de naissance', jj(t.get('date_naissance'))),
         ('Sexe', sexe), ('Nationalité', t.get('nationalite') or ''),
-        ('État civil', (t.get('etat_civil') or '').replace('_', ' ')),
+        ('État civil', libelle_etat_civil(t.get('etat_civil'))),
         ('Caisse d\'alloc. familiales', t.get('caisse_allocations_familiales') or ''),
-        ('Date d\'entrée', jj(c.get('date_debut'))), ('Date de sortie', jj(t.get('date_sortie'))),
+        ('Date d\'entrée', jj(date_entree or c.get('date_debut'))), ('Date de sortie', jj(t.get('date_sortie'))),
         ('Commission paritaire', c.get('cp_key') or ''), ('Fonction', c.get('fonction') or ''),
         ('Type de contrat', c.get('type_contrat') or ''),
         ('Régime de travail', f"{_n(c.get('heures_semaine')):g} h/sem." if c.get('heures_semaine') else ''),
@@ -278,7 +295,7 @@ def compte_individuel(fiches, travailleur, dossier, date_debut, date_fin, contra
 # ─────────────────────────────────────────────────────────────────
 def _document_employeur(fiches, dossier, date_debut, date_fin):
     d = dossier or {}
-    noms = [g for g in ('Ouvriers', 'Employés', 'Étudiants') if any(_groupe(f) == g for f in fiches)] or ['Employés']
+    noms = ['Ouvriers', 'Employés', 'Étudiants']   # toujours les trois statuts, puis le total
     groupes = [[f for f in fiches if _groupe(f) == g] for g in noms] + [fiches]
     colonnes = noms + ['Total']
 

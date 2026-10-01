@@ -7,8 +7,23 @@ Lancer: python3 test_moteur.py   -- doit afficher TOUS LES TESTS PASSENT
 """
 import sys
 from datetime import date
-from moteur_paie import calculer_fiche_paie
+from moteur_paie import calculer_fiche_paie as _calculer_fiche_paie
 ECHECS = []
+NB_CONTROLES_COUT = [0]
+
+def calculer_fiche_paie(*args, **kwargs):
+    """CONTROLE PERMANENT sur TOUS les cas de ce fichier: le cout employeur couvre
+    au moins tout ce qui est verse ou retenu pour le travailleur --
+    cout >= net + ONSS travailleur + precompte + cotisation speciale."""
+    r = _calculer_fiche_paie(*args, **kwargs)
+    css = -sum(l['montant'] for l in r['lignes_indemn'] if 'Cotisation spéciale' in l['libelle'])
+    minimum = round(r['salaire_net'] + abs(r['onss_net']) + r['prime_onss'] + r['pecule_retenue']
+                    + abs(r['precompte']) + r['prime_precompte'] + r['pecule_precompte'] + css, 2)
+    NB_CONTROLES_COUT[0] += 1
+    if r['cout_employeur'] + 0.005 < minimum:
+        label = f"Cout employeur {r['cout_employeur']} < net + ONSS + precompte + CSS = {minimum} (cas n° {NB_CONTROLES_COUT[0]})"
+        print(f"❌ {label}"); ECHECS.append(label)
+    return r
 def check(label, obtenu, attendu, tol=0.01):
     ok = abs(obtenu - attendu) <= tol
     print(f"{'✅' if ok else '❌'} {label}: obtenu={obtenu} attendu={attendu}")
@@ -101,6 +116,11 @@ check("859 chomage temporaire 0,10%", codes.get('859', 0), 2.26)
 check("256 Fonds amiante NON du au T4 2026 (malgre le fichier T3 reporte)", codes.get('256', 0), 0.0)
 # 2,26 + 7,67 + 5,19 + 0,45 + 2,26 = 17,83 (etait 15,12 sans les codes 255 et 859)
 check("ONSS patronal net", r['onss_patronal'], 17.83)
+# 01/10/2026: les frais propres a l'employeur (200) font partie du cout:
+# 2257 + 17,83 + km 42,24 + 200 = 2.517,07 (etait 2.317,07)
+check("Cout employeur, frais propres inclus", r['cout_employeur'], 2517.07)
+ligne_sal = next(l for b in r['detail_calcul'] if b['titre'] == 'Rémunération brute' for l in b['lignes'] if l['libelle'] == 'Salaire mensuel')
+check("Detail du calcul: base de « Salaire mensuel » = salaire mensuel (pas le taux horaire)", ligne_sal['base'], 2257.00)
 check("Alerte T4 non publie presente", 1.0 if any('2026Q4' in a for a in r['alertes_calcul']) else 0.0, 1.0)
 
 print(); print("=" * 70); print("CIWAN -- mois en cours, seulement 15 jours encodes (employe au mois)"); print("=" * 70)
@@ -180,6 +200,10 @@ r = calculer_fiche_paie('N','T','n','a','BE',date(1990,1,1),date(2026,3,1),'X','
     rgpt_actif=True, cheques_repas=False, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
 rg = next((l['montant'] for l in r['lignes_indemn'] if 'RGPT' in l['libelle']), 0)
 check("RGPT = 16 jours x 1,63 (et non 64 h x 1,63)", rg, 26.08)
+
+print(); print("=" * 70); print("CONTROLE PERMANENT -- cout employeur >= net + ONSS travailleur + precompte + CSS"); print("=" * 70)
+check("Controle applique a tous les calculs de ce fichier", 1.0 if NB_CONTROLES_COUT[0] >= 20 else 0.0, 1.0)
+print(f"  ({NB_CONTROLES_COUT[0]} fiches controlees)")
 
 print(); print("=" * 70)
 if ECHECS:

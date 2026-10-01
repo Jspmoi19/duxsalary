@@ -105,7 +105,7 @@ check("Affichage 'n.d.'", formater(None), 'n.d.')
 print(); print("=" * 70); print("ATTESTATION SALARIALE -- juillet et aout 2026"); print("=" * 70)
 fiches = [o7, e7, e8]
 at = attestation_salariale(fiches, dossier, date(2026, 7, 1), date(2026, 8, 31))
-check("Colonnes par statut", at['colonnes'], ['Ouvriers', 'Employés', 'Total'])
+check("Colonnes par statut, etudiants a part", at['colonnes'], ['Ouvriers', 'Employés', 'Étudiants', 'Total'])
 check("Total brut = somme des fiches", val(at, 'Rémunérations', 'TOTAL BRUT', 'Total'), sum(f['salaire_brut'] for f in fiches))
 check("Net employes", val(at, 'Travailleur', 'NET', 'Employés'), e7['salaire_net'] + e8['salaire_net'])
 for colonne in at['colonnes']:
@@ -126,6 +126,55 @@ check("Taux de provision modifiable par dossier (15%)", val(at15, 'Provisions p�
       round(2 * 2257.0 * 0.15, 2))
 check("Provision ouvriers = cotisation annuelle 10,27% sur 108%", val(at, 'Provisions pécule de vacances', 'Ouvriers – cotisation', 'Ouvriers'),
       round(o7['brut_majore'] * 0.1027, 2))
+
+print(); print("=" * 70); print("FRAIS PROPRES A L'EMPLOYEUR -- dans le cout et dans le total des frais salariaux"); print("=" * 70)
+check("Cout employeur d'une fiche = brut + patronal + frais propres (200)", e7['cout_employeur'],
+      round(e7['salaire_brut'] + e7['onss_patronal'] + 200.0, 2))
+check("Total frais salariaux (employes) = brut + patronal net + frais propres",
+      val(at, 'Total', 'TOTAL FRAIS SALARIAUX', 'Employés'),
+      round(sum(f['salaire_brut'] + f['onss_patronal'] for f in (e7, e8)) + 400.0, 2))
+check("Total frais salariaux = somme des couts employeur (hors provision vacances ouvriers)",
+      val(at, 'Total', 'TOTAL FRAIS SALARIAUX', 'Total'),
+      round(sum(f['cout_employeur'] - f['provision_vacances_ouvrier'] for f in fiches), 2))
+
+print(); print("=" * 70); print("ETUDIANT PUIS CDI -- colonne Etudiants, provision, date d'entree (cas type Ciwan)"); print("=" * 70)
+from occupation import contrat_de_la_periode, date_premiere_occupation, libelle_etat_civil
+def etudiant(debut, fin):
+    return fiche(calculer_fiche_paie('E', 'M', 'n', 'a', 'BE', date(2004, 1, 1), date(2026, 7, 1), 'S', 'a', 'b', 'r',
+        'CP 200', 'Etudiant', 13.71, heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, type_contrat='STU',
+        is_etudiant=True, jours_prestes=15, heures_prestees=114.0, rgpt_actif=False, cheques_repas=False,
+        categorie_employeur='010', periode_debut=debut, periode_fin=fin), debut, 2)
+s7, s9 = etudiant(date(2026, 7, 1), date(2026, 7, 31)), etudiant(date(2026, 9, 1), date(2026, 9, 30))
+cdi10 = employe(date(2026, 10, 1), date(2026, 10, 31))
+parcours = [s7, s9, cdi10]
+at_c = attestation_salariale(parcours, dossier, date(2026, 1, 1), date(2026, 12, 31))
+check("Brut des mois etudiants dans la colonne Etudiants", val(at_c, 'Rémunérations', 'TOTAL BRUT', 'Étudiants'),
+      s7['salaire_brut'] + s9['salaire_brut'])
+check("Colonne Employes = le mois de CDI uniquement", val(at_c, 'Rémunérations', 'TOTAL BRUT', 'Employés'), 2257.0)
+check("Provision de pecule: 18,80 % sur 2.257 seulement (mois etudiants exclus)",
+      val(at_c, 'Provisions pécule de vacances', 'Employés – provision', 'Total'), round(2257.0 * 0.188, 2))
+check("Aucune provision dans la colonne Etudiants", val(at_c, 'Provisions pécule de vacances', 'Employés – provision', 'Étudiants'), 0.0)
+mal_marquee = dict(s7, is_etudiant=False)     # type de contrat STU sans l'indicateur etudiant
+check("Fiche de contrat STU sans indicateur etudiant: toujours hors provision",
+      val(attestation_salariale([mal_marquee, cdi10], dossier, date(2026, 1, 1), date(2026, 12, 31)),
+          'Provisions pécule de vacances', 'Employés – provision', 'Total'), round(2257.0 * 0.188, 2))
+
+contrats_c = [{'id': 1, 'type_contrat': 'STU', 'date_debut': date(2026, 7, 1), 'date_fin': date(2026, 7, 31), 'statut': 'archive'},
+              {'id': 2, 'type_contrat': 'STU', 'date_debut': date(2026, 9, 14), 'date_fin': date(2026, 9, 30), 'statut': 'archive'},
+              {'id': 3, 'type_contrat': 'CDI', 'date_debut': date(2026, 10, 1), 'date_fin': None, 'statut': 'actif',
+               'cp_key': 'CP 200', 'fonction': 'Comptable', 'heures_semaine': 38}]
+check("Premiere occupation = premier contrat, etudiant compris", date_premiere_occupation(contrats_c), date(2026, 7, 1))
+check("Contrat de juillet = le contrat etudiant, meme archive", contrat_de_la_periode(contrats_c, date(2026, 7, 1), date(2026, 7, 31))['id'], 1)
+check("Contrat d'octobre = le CDI", contrat_de_la_periode(contrats_c, date(2026, 10, 1), date(2026, 10, 31))['id'], 3)
+check("Contrat lie a la dimona prioritaire", contrat_de_la_periode(contrats_c, date(2026, 10, 1), date(2026, 10, 31), contrat_id=2)['id'], 2)
+ci_c = compte_individuel(parcours, dict(travailleur, etat_civil='celibataire'), dossier, date(2026, 7, 1), date(2026, 10, 31),
+                         contrat=contrats_c[2], date_entree=date_premiere_occupation(contrats_c))
+entete_c = dict(ci_c['entete'])
+check("Compte individuel: date d'entree = premiere occupation", entete_c["Date d'entrée"], '01/07/2026')
+check("Etat civil avec accent et majuscule", (entete_c['État civil'], libelle_etat_civil('marie')), ('Célibataire', 'Marié(e)'))
+check("Salaire de base « 2 257,00 €/mois », insecable", val(ci_c, 'Prestations', 'Salaire de base', 'Oct. 2026'), '2 257,00 €/mois')
+check("Mois sans fiche: « — »", val(ci_c, 'Rémunérations', 'BRUT', 'Août 2026'), '—')
+check("Total de la periode inchange par les mois sans fiche", val(ci_c, 'Rémunérations', 'BRUT', 'Total'), sum(f['salaire_brut'] for f in parcours))
 
 print(); print("=" * 70); print("LISTE DE VENTILATION"); print("=" * 70)
 ve = liste_ventilation(fiches, dossier, date(2026, 7, 1), date(2026, 8, 31))

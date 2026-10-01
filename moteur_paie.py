@@ -252,7 +252,8 @@ def calculer_fiche_paie(
                 jours_ouv_mois = round(jours_semaine * 52 / 12)
             deduction_cnp = round(sal_mensuel_brut / jours_ouv_mois * jours_chomage, 2)
         sal_mensuel = round(sal_mensuel_brut - deduction_cnp, 2)
-        lignes_salaire.append({'libelle': 'Salaire mensuel', 'base': salaire_horaire,
+        # Base affichee = salaire MENSUEL (pas le taux horaire) pour un employe au mois
+        lignes_salaire.append({'libelle': 'Salaire mensuel', 'base': sal_mensuel_brut, 'base_decimales': 2,
             'jours': jours_prestes, 'heures': heures_prestees,
             'montant': sal_mensuel, 'soumis_onss': True})
         if deduction_cnp > 0:
@@ -543,8 +544,11 @@ def calculer_fiche_paie(
         onss_pat_prime = _r2(prime_exceptionnelle * profil.coeff_base_onss_patronal *
                              (profil.onss_patronal_taux_base + sum(cc['taux'] for cc in cotis_compl)))
     onss_pat_net = round(onss_pat_net + onss_pat_prime, 2)
+    # Frais propres a l'employeur inclus (corrige le 01/10/2026: ils etaient payes
+    # au travailleur dans le net mais absents du cout). Controle permanent dans
+    # test_moteur.py: cout >= net + ONSS travailleur + precompte + CSS.
     cout_empl = round(brut_onss + onss_pat_net + montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + cr_empl_total
-                      + provision_vacances_annuelles + (prime_exceptionnelle or 0) + (double_pecule or 0), 2)
+                      + montant_frais_nets + provision_vacances_annuelles + (prime_exceptionnelle or 0) + (double_pecule or 0), 2)
 
     # ── DETAIL COMPLET DU CALCUL (page "Calculer la paie") ─────────────
     onss_info = profil.onss_officiel

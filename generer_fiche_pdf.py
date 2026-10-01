@@ -14,6 +14,7 @@ from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from branding import couleur, pdf_decor, get_branding
+from occupation import libelle_etat_civil
 
 try:
     pdfmetrics.registerFont(TTFont('DVSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
@@ -90,7 +91,7 @@ def generer_fiche_paie_pdf(data, filepath):
         ['Catégorie prof. :', data.get('categorie', '—')[:20]],
         ['Date d\'entrée :', f"{date_entree_fmt}  Anc.: {data.get('anciennete', '0a')}"],
         ['', ''],
-        ['Etat civil :', data.get('etat_civil', 'Célibataire').capitalize()],
+        ['Etat civil :', libelle_etat_civil(data.get('etat_civil'))],
         ['No.Rég.Nat. :', data.get('niss', '—')],
         ['A charge :', f"Enf.:{data.get('nb_enfants', 0)}"],
     ]
@@ -148,7 +149,7 @@ def generer_fiche_paie_pdf(data, filepath):
     for ligne in data.get('lignes_salaire', []):
         sal_rows.append(row_sal(
             ligne['libelle'],
-            f"{ligne['base']:.4f}" if ligne.get('base') else '',
+            f"{ligne['base']:.{ligne.get('base_decimales', 4)}f}" if ligne.get('base') else '',
             '',
             '',
             ligne.get('jours', '') if ligne.get('jours') else '',

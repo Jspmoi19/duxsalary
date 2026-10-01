@@ -1414,11 +1414,21 @@ def generer_fiche_depuis_calendrier(dimona_id):
     if not dimona:
         return "Dimona introuvable", 404
 
-    # Récupérer le contrat lié à la dimona en priorité, sinon le contrat actif
-    if dimona.get('contrat_id'):
-        cur.execute('SELECT * FROM contrats WHERE id = %s', (dimona['contrat_id'],))
-        contrat = cur.fetchone()
-    else:
+    annee = request.args.get('annee', date.today().year, type=int)
+    mois = request.args.get('mois', date.today().month, type=int)
+
+    # Contrat applicable a la PERIODE de la fiche: le contrat lie a la dimona en
+    # priorite, sinon celui qui couvre le mois -- meme termine ou archive (un mois
+    # sous contrat etudiant reste etudiant quand un CDI est actif depuis).
+    # A defaut seulement: le contrat actif, comme avant.
+    from occupation import contrat_de_la_periode
+    from calendar import monthrange as _jours_du_mois   # (calendar est reimporte plus bas dans la fonction)
+    cur.execute('SELECT * FROM contrats WHERE travailleur_id = %s', (dimona['travailleur_id'],))
+    contrat = contrat_de_la_periode(
+        [dict(c) for c in cur.fetchall()],
+        date(annee, mois, 1), date(annee, mois, _jours_du_mois(annee, mois)[1]),
+        contrat_id=dimona.get('contrat_id'), type_contrat=dimona.get('type_dimona'))
+    if not contrat:
         cur.execute("""SELECT * FROM contrats WHERE travailleur_id = %s AND statut = 'actif'
             AND type_contrat = %s ORDER BY date_debut DESC LIMIT 1""",
             (dimona['travailleur_id'], dimona['type_dimona']))
@@ -1427,8 +1437,6 @@ def generer_fiche_depuis_calendrier(dimona_id):
             cur.execute("""SELECT * FROM contrats WHERE travailleur_id = %s AND statut = 'actif'
                 ORDER BY created_at DESC LIMIT 1""", (dimona['travailleur_id'],))
             contrat = cur.fetchone()
-    annee = request.args.get('annee', date.today().year, type=int)
-    mois = request.args.get('mois', date.today().month, type=int)
 
     if request.method == 'POST':
         form = request.form
@@ -2532,8 +2540,17 @@ def compte_individuel(travailleur_id):
     dossier = get_dossier(travailleur['dossier_id'])
     debut, fin = _periode_demandee()
     fiches = _fiches_periode('travailleur_id', travailleur_id, debut, fin)
-    contrats = get_contrats(travailleur_id=travailleur_id)
-    document = construire(fiches, travailleur, dossier, debut, fin, contrat=contrats[0] if contrats else None)
+    # Tous les contrats du travailleur (meme termines): la date d'entree est celle
+    # de la premiere occupation, contrat etudiant compris
+    from psycopg2.extras import RealDictCursor
+    from occupation import contrat_de_la_periode, date_premiere_occupation
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute('SELECT * FROM contrats WHERE travailleur_id = %s ORDER BY date_debut', (travailleur_id,))
+    contrats = [dict(c) for c in cur.fetchall()]
+    cur.close(); conn.close()
+    contrat = contrat_de_la_periode(contrats, debut, fin) or (contrats[-1] if contrats else None)
+    document = construire(fiches, travailleur, dossier, debut, fin, contrat=contrat,
+                          date_entree=date_premiere_occupation(contrats))
     return _rendre_document(document, debut, fin, 'compte_individuel',
                             f'/travailleur/{travailleur_id}', f"{travailleur['prenom']} {travailleur['nom']}", [],
                             travailleur=travailleur, dossier=dossier, dossier_actif=dossier)
