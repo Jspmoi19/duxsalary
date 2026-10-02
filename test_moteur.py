@@ -201,6 +201,20 @@ e2 = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2020,1,1),'X',
 check("2 enfants (dont 1 handicape transmis comme 2 = 3): reduction annexe 3", round(abs(base['precompte']) - abs(
       calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2020,1,1),'X','a','b','r','CP 200','E',18.0, nb_enfants=3, **kw_f)['precompte']), 2), 367.0)
 
+# Tache 3: les autres charges de famille des formulaires travailleur (annexes 4 et 5 de la formule-cle)
+def pp(etat_civil='celibataire', partenaire='non', **charges):
+    return abs(calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2020,1,1),'X','a','b','r','CP 200','E',18.0,
+        etat_civil=etat_civil, partenaire_revenus_pro=partenaire, charges_famille=charges or None, **kw_f)['precompte'])
+check("Parent isole avec enfant a charge: -52 EUR/mois (624/12)", round(pp() - pp(parent_isole=True), 2), 52.0)
+check("Parent isole: sans effet pour une personne mariee", round(pp('marie', 'oui') - pp('marie', 'oui', parent_isole=True), 2), 0.0)
+check("Travailleur handicape: -52 EUR/mois", round(pp() - pp(handicape=True), 2), 52.0)
+check("Conjoint handicape (conjoint sans revenus): -52 EUR/mois", round(pp('marie', 'non') - pp('marie', 'non', conjoint_handicape=True), 2), 52.0)
+check("Conjoint handicape: sans effet si le conjoint a des revenus", round(pp('marie', 'oui') - pp('marie', 'oui', conjoint_handicape=True), 2), 0.0)
+check("Autres personnes a charge: -52 EUR/mois chacune (2 personnes)", round(pp() - pp(nb_autres_personnes_charge=2), 2), 104.0)
+check("Personnes de 65 ans et plus dependantes: -166 EUR/mois chacune (2 personnes)", round(pp() - pp(nb_personnes_charge_dependance=2), 2), 332.0)
+check("Cumul: parent isole + handicap + 1 autre personne + 1 personne 65+ = -322 EUR/mois",
+      round(pp() - pp(parent_isole=True, handicape=True, nb_autres_personnes_charge=1, nb_personnes_charge_dependance=1), 2), 322.0)
+
 print(); print("=" * 70); print("RGPT CP 121 -- par JOUR (1,63 EUR)"); print("=" * 70)
 r = calculer_fiche_paie('N','T','n','a','BE',date(1990,1,1),date(2026,3,1),'X','a','b','r','CP 121','Nettoyeuse',17.17,
     heures_semaine=37.0, heures_jour=4.0, jours_semaine=5, type_contrat='CDI', jours_prestes=16, heures_prestees=64.0,
