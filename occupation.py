@@ -51,6 +51,32 @@ def charges_famille_du_formulaire(form):
     }
 
 
+def contrat_actif(contrat, aujourd_hui=None):
+    """Un contrat compte comme ACTIF quand son statut est « actif » ET que sa date de fin
+    est vide ou n'est pas encore depassee (un contrat qui se termine aujourd'hui est encore
+    actif aujourd'hui). Rien n'est modifie en base: un contrat echu garde son statut."""
+    from datetime import date as _date
+    jour = aujourd_hui or _date.today()
+    return contrat.get('statut', 'actif') == 'actif' and (not contrat.get('date_fin') or contrat['date_fin'] >= jour)
+
+
+def contrats_actifs(contrats, aujourd_hui=None):
+    return [c for c in contrats or [] if contrat_actif(c, aujourd_hui)]
+
+
+def km_a_proposer(derniere_fiche, km_travailleur=None, taux_defaut=0.4444):
+    """Km domicile-travail, taux et moyen de transport proposes dans le formulaire de
+    generation: ceux de la DERNIERE fiche du travailleur (pour ne pas les oublier), a
+    defaut les km de la fiche du travailleur et le taux maximal. Simple proposition:
+    Leo peut les modifier. Retourne {'km', 'taux', 'moyen_transport', 'origine'}."""
+    f = derniere_fiche or {}
+    if f.get('km_domicile') is not None:
+        return {'km': int(f['km_domicile']), 'taux': float(f['taux_km'] if f.get('taux_km') is not None else taux_defaut),
+                'moyen_transport': f.get('moyen_transport') or 'voiture',
+                'origine': f"repris de la fiche de {f['periode_debut']:%m/%Y}" if f.get('periode_debut') else 'repris de la dernière fiche'}
+    return {'km': int(km_travailleur or 0), 'taux': float(taux_defaut), 'moyen_transport': 'voiture', 'origine': None}
+
+
 def libelle_statut_profession(is_ouvrier, is_etudiant, fonction=None):
     """« Statut/Profession » de la fiche de paie: statut du travailleur et fonction du
     contrat (« Employé — Comptable »), jamais la categorie du bareme."""

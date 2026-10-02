@@ -781,6 +781,8 @@ def calculer_fiche_paie(
         'cout_employeur': cout_empl,
         'cr_empl_total': cr_empl_total,
         'frais_nets': montant_frais_nets,
+        # Saisie conservee avec la fiche pour etre reproposee le mois suivant
+        'km_domicile': km_domicile, 'taux_km': taux_km, 'moyen_transport': moyen_transport,
         'premier_engagement': premier_engagement,
         # Detail conserve dans fiches_paie pour les documents de charges
         # (compte individuel, attestation salariale, ventilation)

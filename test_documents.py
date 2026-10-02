@@ -197,6 +197,54 @@ for nom, doc in (('compte individuel', ci_a), ('attestation', at), ('ventilation
     if len(sys.argv) > 1:   # python test_documents.py <dossier> : conserve les PDF pour relecture
         open(os.path.join(sys.argv[1], f"exemple_{nom.replace(' ', '_')}.pdf"), 'wb').write(pdf)
 
+print(); print("=" * 70); print("CONTRATS ACTIFS ; KM DE LA DERNIERE FICHE"); print("=" * 70)
+from occupation import contrat_actif, contrats_actifs, km_a_proposer
+JOUR = date(2026, 10, 2)
+cs = [{'id': 1, 'statut': 'actif', 'date_fin': None}, {'id': 2, 'statut': 'actif', 'date_fin': date(2026, 12, 31)},
+      {'id': 3, 'statut': 'actif', 'date_fin': date(2026, 10, 2)}, {'id': 4, 'statut': 'actif', 'date_fin': date(2026, 8, 31)},
+      {'id': 5, 'statut': 'archive', 'date_fin': None}]
+check("Contrats actifs: statut actif ET date de fin vide ou non depassee -> 3 sur 4 contrats au statut actif",
+      [c['id'] for c in contrats_actifs(cs, JOUR)], [1, 2, 3])
+check("Contrat dont la date de fin est passee (31/08): plus compte, sans etre modifie", (contrat_actif(cs[3], JOUR), cs[3]['statut']), (False, 'actif'))
+check("Contrat qui se termine aujourd'hui: encore actif aujourd'hui", contrat_actif(cs[2], JOUR), True)
+check("Contrat archive: jamais actif", contrat_actif(cs[4], JOUR), False)
+_racine = os.path.dirname(os.path.abspath(__file__))
+_lire = lambda n: open(os.path.join(_racine, n), encoding='utf-8').read()
+check("Tableau de bord: le compteur vient de la regle commune, plus du nombre de lignes",
+      ('{{ nb_contrats_actifs }}' in _lire('templates/dashboard.html'), 'contrats|length' in _lire('templates/dashboard.html'),
+       'nb_contrats_actifs=len(contrats_actifs(' in _lire('app.py')), (True, False, True))
+check("Liste des dossiers: meme regle dans la requete", 'c.date_fin IS NULL OR c.date_fin >= CURRENT_DATE' in _lire('database.py'))
+k = km_a_proposer({'km_domicile': 12, 'taux_km': 0.08, 'moyen_transport': 'voiture', 'periode_debut': date(2026, 9, 1)}, 30)
+check("Km de la derniere fiche: 12 km a 0,08 EUR/km, avec l'origine affichee",
+      (k['km'], k['taux'], k['moyen_transport'], k['origine']), (12, 0.08, 'voiture', 'repris de la fiche de 09/2026'))
+k = km_a_proposer(None, 30)
+check("Aucune fiche avec des km: km de la fiche du travailleur et taux maximal, sans mention", (k['km'], k['taux'], k['origine']), (30, 0.4444, None))
+check("Derniere fiche a 0 km: 0 est repris (pas les km du travailleur)", km_a_proposer({'km_domicile': 0, 'taux_km': 0.4444}, 30)['km'], 0)
+r_km = calculer_fiche_paie('E', 'M', 'n', 'a', 'BE', date(1990, 1, 1), date(2026, 1, 1), 'S', 'a', 'b', 'r', 'CP 200', 'Classe A', 13.71,
+    salaire_mensuel_fixe=2257.0, type_contrat='CDI', jours_prestes=22, heures_prestees=167.2, cheques_repas=False,
+    km_domicile=12, taux_km=0.08, moyen_transport='voiture', periode_debut=date(2026, 9, 1), periode_fin=date(2026, 9, 30))
+v_km = valeurs_fiche(r_km)
+check("La fiche enregistre les km, le taux et le moyen de transport saisis", (v_km['km_domicile'], v_km['taux_km'], v_km['moyen_transport']), (12, 0.08, 'voiture'))
+check("... indemnite km de la fiche: 12 x 2 x 22 x 0,08 = 42,24",
+      next(i['montant'] for i in json.loads(v_km['indemnites']) if 'placement' in i['libelle']), 42.24)
+from jinja2 import Environment as _E2, FileSystemLoader as _F2
+import branding as _b2
+_e2 = _E2(loader=_F2(os.path.join(_racine, 'templates')))
+class _R2:
+    path = '/dimona/5/generer-paie'; form = {}; args = {}
+_d2 = {'id': 7, 'nom': 'Société Fictive SRL'}
+h_km = _e2.get_template('generer_fiche_form.html').render(
+    request=_R2(), marque=_b2.get_branding(), statique=_b2.url_statique, session={'user_id': 1, 'user_nom': 'U'}, tenant={},
+    tous_les_dossiers=[_d2], dossiers_archives=[], dossier_actif=_d2, dimona={'id': 5, 'prenom': 'C', 'nom': 'E', 'travailleur_id': 3},
+    contrat={'salaire_horaire': 13.71, 'cp_key': 'CP 200', 'type_contrat': 'CDI'}, prime_suggestion=None,
+    prime_annuelle_suggestion=None, pecule_suggestion=None, annee=2026, mois=10, mois_nom='Octobre', cp_key='CP 200',
+    vehicule_societe=False, maladie_infos=[], maladie_alertes=[],
+    km_propose=km_a_proposer({'km_domicile': 12, 'taux_km': 0.08, 'moyen_transport': 'train', 'periode_debut': date(2026, 9, 1)}),
+    km_domicile=12)
+check("Formulaire de generation: km, taux et moyen de transport pre-remplis",
+      ('name="km_domicile" value="12"' in h_km, 'name="taux_km" value="0.0800"' in h_km,
+       'value="train" selected' in h_km, 'repris de la fiche de 09/2026' in h_km), (True, True, True, True))
+
 print(); print("=" * 70); print("FICHES REMPLACEES -- une seule fiche active par travailleur, contrat et periode"); print("=" * 70)
 import io as _io, re as _re
 from datetime import datetime
@@ -263,7 +311,7 @@ h = _env.get_template('fiche_travailleur.html').render(
     request=_Req(), marque=_branding.get_branding(), statique=_branding.url_statique, session={'user_id': 1, 'user_nom': 'U'},
     tenant={}, tous_les_dossiers=[_dos], dossiers_archives=[], dossier=_dos, dossier_actif=_dos,
     travailleur={'id': 3, 'prenom': 'Camille', 'nom': 'Exemple', 'dossier_id': 7, 'niss': None, 'date_naissance': None},
-    tab='fiches', contrats=[{'id': 10}], fiches=_fiches, documents=[])
+    tab='fiches', contrats=[{'id': 10, 'en_cours': True}], fiches=_fiches, documents=[])
 check("Fiche du travailleur: « Remplacée par la fiche du 02/10/2026 » affiche, PDF de l'ancienne toujours accessible",
       'Remplacée par la fiche du 02/10/2026' in h and '/download/fiche.pdf' in h and '/download/fiche_v2.pdf' in h)
 check("... l'onglet ne compte que la fiche active", 'Fiches de paie (1)' in h)

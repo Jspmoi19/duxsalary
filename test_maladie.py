@@ -366,7 +366,12 @@ h = rendre('fiche_travailleur.html', '/travailleur/3', contrats=[], **ctx_ft)
 check("Fiche du travailleur sans contrat actif: alerte avec les liens pour en creer un",
       'Aucun contrat actif pour ce travailleur' in h and '/dossier/7/contrat/nouveau?travailleur_id=3' in h)
 check("Fiche du travailleur avec un contrat actif: pas d'alerte", 'Aucun contrat actif' in
-      rendre('fiche_travailleur.html', '/travailleur/3', contrats=[contrat], **ctx_ft), False)
+      rendre('fiche_travailleur.html', '/travailleur/3', contrats=[dict(contrat, en_cours=True)], **ctx_ft), False)
+h = rendre('fiche_travailleur.html', '/travailleur/3', contrats=[dict(contrat, date_fin=date(2026,8,31), en_cours=False)], **ctx_ft)
+check("Fiche du travailleur dont le seul contrat est termine: alerte, et le contrat est marque « terminé »",
+      'Aucun contrat actif pour ce travailleur' in h and
+      'terminé' in rendre('fiche_travailleur.html', '/travailleur/3', contrats=[dict(contrat, date_fin=date(2026,8,31), en_cours=False)],
+                          **dict(ctx_ft, tab='contrats')))
 if SORTIE:
     from generer_fiche_pdf import generer_fiche_paie_pdf
     r.update(periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))

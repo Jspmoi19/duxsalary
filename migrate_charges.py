@@ -45,6 +45,9 @@ COLONNES = {
         # Fiche remplacee par une fiche plus recente (meme travailleur, contrat et periode):
         # NULL = fiche active. Voir fiches_remplacees.py.
         ('remplacee_par', 'INTEGER'), ('remplacee_le', 'TIMESTAMP'),
+        # Km domicile-travail, taux et moyen de transport saisis a la generation: reproposes
+        # dans le formulaire de la fiche suivante (occupation.km_a_proposer)
+        ('km_domicile', 'INTEGER'), ('taux_km', 'DECIMAL(6,4)'), ('moyen_transport', 'VARCHAR(20)'),
     ],
     'travailleurs': [
         ('sexe', 'VARCHAR(1)'), ('date_sortie', 'DATE'), ('caisse_allocations_familiales', 'VARCHAR(200)'),

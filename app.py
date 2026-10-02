@@ -19,6 +19,7 @@ from database import (init_db, get_all_dossiers, get_dossier, create_dossier,
                       create_travailleur, get_contrats, create_contrat,
                       get_fiches_paie, create_fiche_paie, get_conn)
 from auth import login_required, authenticate
+from occupation import contrats_actifs
 from social_belgique import (CODES_JOURNALIERS, get_jours_feries,
                               calcul_paie_complet, calcul_onss)
 
@@ -152,6 +153,7 @@ def dossier_dashboard(dossier_id):
                            echeances=get_echeances_dossier(dossier_id),
                            travailleurs=get_travailleurs(dossier_id),
                            contrats=get_contrats(dossier_id=dossier_id),
+                           nb_contrats_actifs=len(contrats_actifs(get_contrats(dossier_id=dossier_id))),
                            fiches=get_fiches_paie(dossier_id=dossier_id, actives_seulement=True), **ctx)
 
 @app.route('/dossier/<int:dossier_id>/modifier', methods=['GET', 'POST'])
@@ -269,6 +271,7 @@ def nouveau_travailleur(dossier_id):
 @login_required
 def fiche_travailleur(travailleur_id):
     from fiches_remplacees import libelle_remplacement
+    from occupation import contrat_actif
     travailleur = get_travailleur(travailleur_id)
     dossier = get_dossier(travailleur['dossier_id'])
     ctx = get_context_base()
@@ -277,7 +280,7 @@ def fiche_travailleur(travailleur_id):
     documents = get_documents_travailleur(travailleur_id)
     return render_template('fiche_travailleur.html',
                            travailleur=travailleur, dossier=dossier, dossier_actif=dossier,
-                           tab=tab, contrats=get_contrats(travailleur_id=travailleur_id),
+                           tab=tab, contrats=[dict(c, en_cours=contrat_actif(c)) for c in get_contrats(travailleur_id=travailleur_id)],
                            fiches=[dict(f, remplacement=libelle_remplacement(f))
                                    for f in get_fiches_paie(travailleur_id=travailleur_id)],
                            documents=documents, **ctx)
@@ -1736,6 +1739,20 @@ def generer_fiche_depuis_calendrier(dimona_id):
         maladie_alertes = [f"Incapacités non lues ({ex_inc}) : le salaire garanti n'est pas calculé. "
                            f"Lancez python3 migrate_charges.py si la table n'existe pas."]
 
+    # Km domicile-travail, taux et moyen de transport de la derniere fiche du travailleur:
+    # proposes dans le formulaire pour ne pas les oublier
+    from occupation import km_a_proposer
+    derniere_fiche_km = None
+    try:
+        cur.execute("""SELECT km_domicile, taux_km, moyen_transport, periode_debut FROM fiches_paie
+                       WHERE travailleur_id = %s AND remplacee_par IS NULL AND km_domicile IS NOT NULL
+                       ORDER BY periode_debut DESC, id DESC LIMIT 1""", (dimona['travailleur_id'],))
+        derniere_fiche_km = cur.fetchone()
+    except Exception as ex_km:
+        conn.rollback()
+        app.logger.warning(f"Km de la derniere fiche non lus: {ex_km}")
+    km_propose = km_a_proposer(derniere_fiche_km, dimona.get('km_domicile_travail'))
+
     if request.method == 'POST':
         form = request.form
 
@@ -2079,7 +2096,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
         annee=annee, mois=mois, mois_nom=mois_nom,
         cp_key=cp_key,
         vehicule_societe=dimona.get('vehicule_societe', False),
-        km_domicile=dimona.get('km_domicile_travail', 0),
+        km_domicile=km_propose['km'], km_propose=km_propose,
         maladie_infos=maladie_infos, maladie_alertes=maladie_alertes,
         **ctx)
 

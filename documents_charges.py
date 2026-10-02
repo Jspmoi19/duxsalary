@@ -90,6 +90,8 @@ def valeurs_fiche(data):
         # Jours et heures par code prestation ONSS (aide a la DmfA), calcules a la generation
         # par dmfa.prestations_occupation ; None pour un calcul hors calendrier
         'prestations_dmfa': data.get('prestations_dmfa'),
+        # Km domicile-travail saisis: reproposes dans le formulaire de la fiche suivante
+        'km_domicile': data.get('km_domicile'), 'taux_km': data.get('taux_km'), 'moyen_transport': data.get('moyen_transport'),
     }
 
 

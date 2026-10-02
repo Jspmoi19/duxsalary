@@ -182,6 +182,7 @@ def get_all_dossiers():
         FROM dossiers d
         LEFT JOIN travailleurs t ON t.dossier_id = d.id AND t.actif = TRUE
         LEFT JOIN contrats c ON c.dossier_id = d.id AND c.statut = 'actif'
+                               AND (c.date_fin IS NULL OR c.date_fin >= CURRENT_DATE)   -- voir occupation.contrat_actif
         WHERE d.actif = TRUE
         GROUP BY d.id
         ORDER BY d.nom
