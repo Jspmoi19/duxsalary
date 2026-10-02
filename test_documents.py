@@ -17,7 +17,7 @@ from pdf_charges import generer_pdf_charges
 from branding import get_branding
 
 ECHECS = []
-def check(label, obtenu, attendu, tol=0.011):
+def check(label, obtenu, attendu=True, tol=0.011):
     if isinstance(attendu, (int, float)) and isinstance(obtenu, (int, float)):
         ok = abs(obtenu - attendu) <= tol
     else:
@@ -196,6 +196,77 @@ for nom, doc in (('compte individuel', ci_a), ('attestation', at), ('ventilation
     check(f"PDF {nom} genere", pdf[:5], b'%PDF-')
     if len(sys.argv) > 1:   # python test_documents.py <dossier> : conserve les PDF pour relecture
         open(os.path.join(sys.argv[1], f"exemple_{nom.replace(' ', '_')}.pdf"), 'wb').write(pdf)
+
+print(); print("=" * 70); print("FICHES REMPLACEES -- une seule fiche active par travailleur, contrat et periode"); print("=" * 70)
+import io as _io, re as _re
+from datetime import datetime
+from fiches_remplacees import (plan_doublons, memes_mois_autres_contrats, chemin_pdf_libre, libelle_remplacement,
+                               rapport, cle_fiche, FICHES_ACTIVES)
+def fp(id, travailleur=1, contrat=10, mois=7, cree=None, remplacee_par=None, **kw):
+    return dict({'id': id, 'travailleur_id': travailleur, 'contrat_id': contrat, 'periode_debut': date(2026, mois, 1),
+                 'periode_fin': date(2026, mois, 28), 'created_at': cree, 'remplacee_par': remplacee_par,
+                 'salaire_brut': 761.43, 'salaire_net': 808.87, 'pdf_path': '/x/fiche.pdf'}, **kw)
+base_fiches = [
+    fp(1, cree=datetime(2026, 8, 3, 10, 0)), fp(2, cree=datetime(2026, 10, 2, 9, 0)), fp(3, cree=datetime(2026, 9, 1, 8, 0)),
+    fp(4, mois=8, cree=datetime(2026, 9, 2, 8, 0)),                                # seule sur sa periode
+    fp(5, travailleur=2, contrat=20, cree=datetime(2026, 8, 3, 10, 0)),            # etudiant...
+    fp(6, travailleur=2, contrat=21, cree=datetime(2026, 8, 4, 10, 0)),            # ... puis CDI, meme mois
+    fp(7, travailleur=3, contrat=None, cree=None), fp(8, travailleur=3, contrat=None, cree=None),   # sans date ni contrat
+    fp(9, travailleur=4, cree=datetime(2026, 8, 1), remplacee_par=10), fp(10, travailleur=4, cree=datetime(2026, 9, 1)),
+]
+plan = plan_doublons(base_fiches)
+check("Doublons: 2 groupes a traiter (travailleur 1 en juillet, travailleur 3)", [x['cle'][0] for x in plan], [1, 3])
+check("Trois fiches du meme mois: la plus recente (creee le 02/10) est gardee, les deux autres remplacees",
+      (plan[0]['gardee']['id'], sorted(f['id'] for f in plan[0]['remplacees'])), (2, [1, 3]))
+check("Sans date de creation: l'identifiant le plus grand est garde", (plan[1]['gardee']['id'], [f['id'] for f in plan[1]['remplacees']]), (8, [7]))
+check("Une fiche seule sur sa periode, ou deja remplacee: jamais dans la liste",
+      any(f['id'] in (4, 9, 10) for x in plan for f in [x['gardee']] + x['remplacees']), False)
+check("Meme mois mais contrats differents (etudiant puis CDI): pas un doublon, liste a part pour controle",
+      ([f['id'] for _, _, g in memes_mois_autres_contrats(base_fiches) for f in g],
+       any(f['id'] in (5, 6) for x in plan for f in [x['gardee']] + x['remplacees'])), ([5, 6], False))
+check("La liste ne modifie aucune fiche", [f['remplacee_par'] for f in base_fiches], [None] * 8 + [10, None])
+texte = rapport(plan, memes_mois_autres_contrats(base_fiches), {1: 'Exemple Camille (Société Fictive)'})
+check("Script sans --appliquer: liste lisible, et « RIEN N'A ETE MODIFIE »",
+      all(x in texte for x in ('Exemple Camille (Société Fictive)', 'fiche n° 2', 'GARDÉE', '« remplacée » par la fiche n° 2',
+                               '3 fiche(s) seraient', "RIEN N'A ETE MODIFIE", 'A CONTROLER', '--appliquer')))
+check("... il signale un PDF partage (ancien PDF deja ecrase)", 'même fichier PDF' in texte)
+check("Aucun doublon: message clair", 'Aucun doublon' in rapport([], []))
+existants = {'/pdf/fiche.pdf', '/pdf/fiche_v2.pdf'}
+check("PDF d'une fiche regeneree: nouveau nom, l'ancien n'est jamais ecrase",
+      (chemin_pdf_libre('/pdf/fiche.pdf', existants.__contains__), chemin_pdf_libre('/pdf/autre.pdf', existants.__contains__)),
+      ('/pdf/fiche_v3.pdf', '/pdf/autre.pdf'))
+check("Libelle: « Remplacée par la fiche du 02/10/2026 »",
+      libelle_remplacement(fp(1, remplacee_par=2, remplacante_creee_le=datetime(2026, 10, 2, 9, 0))), 'Remplacée par la fiche du 02/10/2026')
+check("Fiche active: pas de libelle", libelle_remplacement(fp(2)), None)
+source_app = _io.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.py'), encoding='utf-8').read()
+lectures = [m.start() for m in _re.finditer(r'FROM fiches_paie', source_app)]
+sans_filtre = [source_app[i:i + 420].split('""")')[0].split('")')[0][:90] for i in lectures
+               if 'remplacee_par' not in source_app[i:i + 420].split('""")')[0].split('")')[0]
+               and 'WHERE id = %s' not in source_app[i:i + 120] and 'pdf_path = %s' not in source_app[i:i + 120]]
+check("app.py: toutes les lectures de fiches_paie qui additionnent des fiches excluent les fiches remplacees "
+      "(attestation, compte individuel, ventilation, aide DmfA, lettres ONSS, cumul du bonus)", sans_filtre, [])
+check("... au moins 6 lectures controlees", len(lectures) >= 6, True)
+check("Generation: l'ancienne fiche de la meme periode et du meme contrat passe a « remplacee »",
+      'SET remplacee_par = %s, remplacee_le = NOW()' in source_app and 'contrat_id IS NOT DISTINCT FROM %s' in source_app)
+check("Suppression de la fiche remplacante: l'ancienne redevient active",
+      'SET remplacee_par = NULL, remplacee_le = NULL WHERE remplacee_par = %s' in source_app)
+from jinja2 import Environment as _Env, FileSystemLoader as _FSL
+import branding as _branding
+_env = _Env(loader=_FSL(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')))
+_env.filters['basename'] = lambda x: os.path.basename(x) if x else ''
+class _Req:
+    path = '/travailleur/3'; form = {}; args = {}
+_dos = {'id': 7, 'nom': 'Société Fictive SRL'}
+_fiches = [dict(fp(2, cree=datetime(2026, 10, 2)), remplacement=None, total_onss=100.0, pdf_path='/x/fiche_v2.pdf'),
+           dict(fp(1, remplacee_par=2), remplacement='Remplacée par la fiche du 02/10/2026', total_onss=90.0)]
+h = _env.get_template('fiche_travailleur.html').render(
+    request=_Req(), marque=_branding.get_branding(), statique=_branding.url_statique, session={'user_id': 1, 'user_nom': 'U'},
+    tenant={}, tous_les_dossiers=[_dos], dossiers_archives=[], dossier=_dos, dossier_actif=_dos,
+    travailleur={'id': 3, 'prenom': 'Camille', 'nom': 'Exemple', 'dossier_id': 7, 'niss': None, 'date_naissance': None},
+    tab='fiches', contrats=[{'id': 10}], fiches=_fiches, documents=[])
+check("Fiche du travailleur: « Remplacée par la fiche du 02/10/2026 » affiche, PDF de l'ancienne toujours accessible",
+      'Remplacée par la fiche du 02/10/2026' in h and '/download/fiche.pdf' in h and '/download/fiche_v2.pdf' in h)
+check("... l'onglet ne compte que la fiche active", 'Fiches de paie (1)' in h)
 
 print(); print("=" * 70)
 if ECHECS:

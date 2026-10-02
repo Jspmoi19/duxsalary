@@ -53,7 +53,7 @@
   <div class="tabs" style="padding:0 18px;border-top:1px solid var(--border);">
     <a href="?tab=info" class="tab-link {% if tab == 'info' %}active{% endif %}">Informations</a>
     <a href="?tab=contrats" class="tab-link {% if tab == 'contrats' %}active{% endif %}">Contrats ({{ contrats|length }})</a>
-    <a href="?tab=fiches" class="tab-link {% if tab == 'fiches' %}active{% endif %}">Fiches de paie ({{ fiches|length }})</a>
+    <a href="?tab=fiches" class="tab-link {% if tab == 'fiches' %}active{% endif %}">Fiches de paie ({{ fiches|rejectattr('remplacement')|list|length }})</a>
     <a href="?tab=documents" class="tab-link {% if tab == 'documents' %}active{% endif %}">Documents ({{ documents|length }})</a>
   </div>
 
@@ -127,8 +127,9 @@
     <thead><tr><th>Période</th><th>Brut</th><th>Net</th><th>ONSS</th><th>PDF</th></tr></thead>
     <tbody>
     {% for f in fiches %}
-    <tr>
-      <td>{{ f.periode_debut }} → {{ f.periode_fin }}</td>
+    <tr {% if f.remplacement %}style="color:#999;background:#fafafa"{% endif %}>
+      <td>{{ f.periode_debut }} → {{ f.periode_fin }}
+        {% if f.remplacement %}<br><span class="badge badge-orange" title="Fiche conservée avec son PDF, exclue de l'attestation, du compte individuel, de la ventilation, de l'aide DmfA et des lettres ONSS">{{ f.remplacement }}</span>{% endif %}</td>
       <td>{{ f.salaire_brut }} €</td>
       <td>{{ f.salaire_net }} €</td>
       <td>{{ f.total_onss }} €</td>

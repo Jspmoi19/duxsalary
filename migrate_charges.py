@@ -42,6 +42,9 @@ COLONNES = {
         ('onss_trimestre', 'VARCHAR(8)'), ('categorie_employeur', 'VARCHAR(3)'),
         # Aide a la DmfA: {codes: {code prestation: {jours, heures}}, a_determiner: {code journalier: jours}}
         ('prestations_dmfa', 'JSONB'),
+        # Fiche remplacee par une fiche plus recente (meme travailleur, contrat et periode):
+        # NULL = fiche active. Voir fiches_remplacees.py.
+        ('remplacee_par', 'INTEGER'), ('remplacee_le', 'TIMESTAMP'),
     ],
     'travailleurs': [
         ('sexe', 'VARCHAR(1)'), ('date_sortie', 'DATE'), ('caisse_allocations_familiales', 'VARCHAR(200)'),

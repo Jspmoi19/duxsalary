@@ -346,23 +346,28 @@ def create_contrat(data):
 
 # ── FICHES DE PAIE ─────────────────────────────────────────────────────
 
-def get_fiches_paie(dossier_id=None, travailleur_id=None):
+def get_fiches_paie(dossier_id=None, travailleur_id=None, actives_seulement=False):
+    """Fiches de paie, remplacees comprises (avec la date de la fiche qui les remplace),
+    sauf actives_seulement=True. Voir fiches_remplacees.py."""
     conn = get_conn()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     query = """
-        SELECT f.*, t.nom || ' ' || t.prenom as travailleur_nom
+        SELECT f.*, t.nom || ' ' || t.prenom as travailleur_nom, r.created_at AS remplacante_creee_le
         FROM fiches_paie f
         JOIN travailleurs t ON t.id = f.travailleur_id
+        LEFT JOIN fiches_paie r ON r.id = f.remplacee_par
         WHERE 1=1
     """
     params = []
+    if actives_seulement:
+        query += " AND f.remplacee_par IS NULL"
     if dossier_id:
         query += " AND f.dossier_id = %s"
         params.append(dossier_id)
     if travailleur_id:
         query += " AND f.travailleur_id = %s"
         params.append(travailleur_id)
-    query += " ORDER BY f.periode_debut DESC"
+    query += " ORDER BY f.periode_debut DESC, f.id DESC"
     cur.execute(query, params)
     rows = [dict(r) for r in cur.fetchall()]
     cur.close()

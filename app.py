@@ -152,7 +152,7 @@ def dossier_dashboard(dossier_id):
                            echeances=get_echeances_dossier(dossier_id),
                            travailleurs=get_travailleurs(dossier_id),
                            contrats=get_contrats(dossier_id=dossier_id),
-                           fiches=get_fiches_paie(dossier_id=dossier_id), **ctx)
+                           fiches=get_fiches_paie(dossier_id=dossier_id, actives_seulement=True), **ctx)
 
 @app.route('/dossier/<int:dossier_id>/modifier', methods=['GET', 'POST'])
 @login_required
@@ -268,6 +268,7 @@ def nouveau_travailleur(dossier_id):
 @app.route('/travailleur/<int:travailleur_id>')
 @login_required
 def fiche_travailleur(travailleur_id):
+    from fiches_remplacees import libelle_remplacement
     travailleur = get_travailleur(travailleur_id)
     dossier = get_dossier(travailleur['dossier_id'])
     ctx = get_context_base()
@@ -277,7 +278,8 @@ def fiche_travailleur(travailleur_id):
     return render_template('fiche_travailleur.html',
                            travailleur=travailleur, dossier=dossier, dossier_actif=dossier,
                            tab=tab, contrats=get_contrats(travailleur_id=travailleur_id),
-                           fiches=get_fiches_paie(travailleur_id=travailleur_id),
+                           fiches=[dict(f, remplacement=libelle_remplacement(f))
+                                   for f in get_fiches_paie(travailleur_id=travailleur_id)],
                            documents=documents, **ctx)
 
 @app.route('/travailleur/<int:travailleur_id>/modifier', methods=['GET', 'POST'])
@@ -1864,7 +1866,8 @@ def generer_fiche_depuis_calendrier(dimona_id):
         # travailleur) -- fiches enregistrees des mois precedents uniquement
         cur.execute("""SELECT COALESCE(SUM(COALESCE(bonus_emploi_a, 0) + COALESCE(bonus_emploi_b, 0)), 0) AS cumul
                        FROM fiches_paie
-                       WHERE travailleur_id = %s AND EXTRACT(YEAR FROM periode_fin) = %s AND periode_fin < %s""",
+                       WHERE travailleur_id = %s AND EXTRACT(YEAR FROM periode_fin) = %s AND periode_fin < %s
+                         AND remplacee_par IS NULL""",
                     (dimona['travailleur_id'], annee, periode_debut))
         bonus_cumul_annee = float(cur.fetchone()['cumul'] or 0)
 
@@ -1962,8 +1965,12 @@ def generer_fiche_depuis_calendrier(dimona_id):
         # Générer le PDF
         mois_nom = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
                     'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][mois]
+        # Le PDF d'une fiche deja emise n'est jamais ecrase (c'est ce qui a ete envoye au
+        # client): une fiche regeneree recoit un nouveau nom de fichier (_v2, _v3...)
+        from fiches_remplacees import chemin_pdf_libre
         filename = f"fiche_paie_{dimona['nom']}_{dimona['prenom']}_{mois_nom}_{annee}.pdf"
-        filepath = os.path.join(OUTPUT_DIR, filename)
+        filepath = chemin_pdf_libre(os.path.join(OUTPUT_DIR, filename))
+        filename = os.path.basename(filepath)
         generer_fiche_paie_pdf(data, filepath)
 
         # Sauvegarder en BDD
@@ -1980,6 +1987,15 @@ def generer_fiche_depuis_calendrier(dimona_id):
                     f"VALUES ({', '.join(['%s'] * len(colonnes))}) RETURNING id",
                     [valeurs[c] for c in colonnes])
         fiche_id = cur.fetchone()['id']
+        # Une seule fiche active par travailleur, contrat et periode: les fiches precedentes
+        # passent au statut « remplacee » (elles restent consultables avec leur PDF, mais
+        # sortent de l'attestation, du compte individuel, de la ventilation, de l'aide DmfA
+        # et des lettres ONSS)
+        cur.execute("""UPDATE fiches_paie SET remplacee_par = %s, remplacee_le = NOW()
+                       WHERE travailleur_id = %s AND contrat_id IS NOT DISTINCT FROM %s
+                         AND periode_debut = %s AND periode_fin = %s AND id <> %s AND remplacee_par IS NULL""",
+                    (fiche_id, dimona['travailleur_id'], contrat['id'] if contrat else None,
+                     periode_debut, periode_fin, fiche_id))
         conn.commit()
         cur.close(); conn.close()
 
@@ -2080,8 +2096,12 @@ def supprimer_fiche_paie(fiche_id):
         cur.close(); conn.close()
         return "Introuvable", 404
     travailleur_id = fiche['travailleur_id']
-    # Supprimer le fichier PDF si existe
-    if fiche.get('pdf_path') and os.path.exists(fiche['pdf_path']):
+    # Les fiches que celle-ci remplacait redeviennent actives (sinon la periode n'aurait plus de fiche)
+    cur.execute("UPDATE fiches_paie SET remplacee_par = NULL, remplacee_le = NULL WHERE remplacee_par = %s", (fiche_id,))
+    # Supprimer le fichier PDF s'il existe et qu'aucune autre fiche ne l'utilise
+    cur.execute("SELECT COUNT(*) AS n FROM fiches_paie WHERE pdf_path = %s AND id <> %s", (fiche.get('pdf_path'), fiche_id))
+    pdf_partage = cur.fetchone()['n'] > 0
+    if fiche.get('pdf_path') and os.path.exists(fiche['pdf_path']) and not pdf_partage:
         try:
             os.remove(fiche['pdf_path'])
         except:
@@ -2122,6 +2142,7 @@ def lettre_onss(dossier_id):
         LEFT JOIN contrats c ON c.id = f.contrat_id
         WHERE f.dossier_id = %s
         AND f.periode_debut >= %s AND f.periode_fin <= %s
+        AND f.remplacee_par IS NULL
     """, (dossier_id, premier, dernier))
     fiches = [dict(r) for r in cur.fetchall()]
     cur.close(); conn.close()
@@ -2430,7 +2451,8 @@ def generer_c4(c, form):
         from psycopg2.extras import RealDictCursor as RDC2
         conn_ref = get_conn()
         cur_ref = conn_ref.cursor(cursor_factory=RDC2)
-        cur_ref.execute("SELECT AVG(salaire_brut) as moy FROM fiches_paie WHERE travailleur_id=%s", (c['travailleur_id'],))
+        cur_ref.execute("SELECT AVG(salaire_brut) as moy FROM fiches_paie WHERE travailleur_id=%s AND remplacee_par IS NULL",
+                        (c['travailleur_id'],))
         row_ref = cur_ref.fetchone()
         cur_ref.close(); conn_ref.close()
         if row_ref and row_ref['moy']:
@@ -2837,7 +2859,7 @@ def _fiches_periode(condition, parametre, debut, fin):
     from psycopg2.extras import RealDictCursor
     conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(f"""SELECT * FROM fiches_paie WHERE {condition} = %s
-                    AND periode_debut >= %s AND periode_debut <= %s ORDER BY periode_debut""",
+                    AND periode_debut >= %s AND periode_debut <= %s AND remplacee_par IS NULL ORDER BY periode_debut""",
                 (parametre, debut, fin))
     fiches = [dict(r) for r in cur.fetchall()]
     cur.close(); conn.close()
@@ -2907,7 +2929,7 @@ def aide_dmfa_dossier(dossier_id):
         cur.execute('SELECT * FROM contrats WHERE travailleur_id = %s', (trav['id'],))
         contrats = [dict(r) for r in cur.fetchall()]
         cur.execute("""SELECT * FROM fiches_paie WHERE travailleur_id = %s AND periode_debut >= %s AND periode_debut <= %s
-                       ORDER BY periode_debut""", (trav['id'], debut_t, fin_t))
+                       AND remplacee_par IS NULL ORDER BY periode_debut""", (trav['id'], debut_t, fin_t))
         fiches = [dict(r) for r in cur.fetchall()]
         cur.execute("""SELECT date_prestation, code_journee, heures FROM prestations
                        WHERE travailleur_id = %s AND date_prestation BETWEEN %s AND %s""", (trav['id'], debut_t, fin_t))
