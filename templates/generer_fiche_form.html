@@ -30,10 +30,16 @@
       {% if 'CP 140.03' in cp_key %}
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" name="rgpt_actif" {% if not vehicule_societe %}checked{% endif %} style="width:16px;height:16px">
-          Indemnité RGPT (1,8175 €/h) — personnel roulant
+          <input type="checkbox" name="rgpt_actif" {% if rgpt_defaut is not defined or rgpt_defaut %}checked{% endif %} style="width:16px;height:16px">
+          Indemnité RGPT{% if rgpt %} ({{ ('%.4f'|format(rgpt.montant_heure))|replace('.', ',') }} €/h depuis le {{ rgpt.date_debut.strftime('%d/%m/%Y') }}){% endif %} — personnel roulant
         </label>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Exonérée ONSS et IPP</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+          Exonérée ONSS et IPP. {% if rgpt and rgpt.obligatoire %}Obligatoire pour le personnel roulant.{% endif %}
+          Type de personnel du travailleur :
+          <b>{{ {'roulant': 'roulant', 'non_roulant': 'non roulant', 'garage': 'garage'}.get(categorie_personnel, 'non renseigné') }}</b>
+          {% if not categorie_personnel %}(à préciser dans la page « Chèques » du dossier){% endif %}.
+          {% if not rgpt %}<span style="color:#c0392b">Montant non chargé pour cette période : l'indemnité ne sera pas calculée.</span>{% endif %}
+        </div>
       </div>
 
       <div class="form-group">

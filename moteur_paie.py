@@ -7,7 +7,7 @@ from datetime import date
 import math
 import sys as _sys; _sys.path.insert(0, '/var/www/duxsalary')
 from profil_travailleur import construire_profil
-from parametres_dates import get_precompte_params, get_bonus_emploi_plafond_annuel, get_avantage_repas
+from parametres_dates import get_precompte_params, get_bonus_emploi_plafond_annuel, get_avantage_repas, get_rgpt, rgpt_prevu
 from salaire_garanti import LIBELLES_TRANCHES as LIBELLES_TRANCHES_SG
 
 # ── TAUX ONSS 2026 ────────────────────────────────────────────────────
@@ -30,7 +30,6 @@ RED_STRUCT_BAS_PLAFOND = 4000.0
 # ── INDEMNITÉS PAR CP ─────────────────────────────────────────────────
 CP_INDEMNITES = {
     'CP 140.03': {
-        'rgpt_heure': 1.8175,
         'indem_vetements_jour': 0.0,
         'indem_deplacement_jour': 0.0,
         'onss_patronal': 0.2700,
@@ -58,7 +57,6 @@ CP_INDEMNITES = {
         'sal_bareme_etudiant': 2141.59,       # étudiant 95%
     },
     'CP 121': {
-        'rgpt_jour': 1.63,   # PAR JOUR (ACCG, primes CP 121 au 01/07/2026) - corrige le 30/09/2026
         'onss_patronal': 0.2700,
         'type_travailleur': 'ouvrier',
         'sal_bareme_mensuel_etp': 2696.49,  # indexé 01/07/2026
@@ -199,6 +197,7 @@ def calculer_fiche_paie(
     annees_experience=None, date_debut_contrat=None,
     incapacite=None,
     fonction=None,
+    personnel_roulant=None,
 ):
     cp = CP_INDEMNITES.get(cp_key, {})
     # Override avec barèmes BDD si disponibles
@@ -391,17 +390,29 @@ def calculer_fiche_paie(
     lignes_indemn = []
 
     # RGPT
+    # Montant: parametres_dates.RGPT_VERSIONS, a la date de la periode (aucun montant ici)
     montant_rgpt = 0.0
-    rgpt_h = cp.get('rgpt_heure', 0.0)
-    rgpt_j = cp.get('rgpt_jour', 0.0)
+    alerte_rgpt = None
+    rgpt_v = get_rgpt(cp_key, periode_fin if periode_fin else date.today())
+    rgpt_h = (rgpt_v or {}).get('montant_heure', 0.0)
+    rgpt_j = (rgpt_v or {}).get('montant_jour', 0.0)
+    if rgpt_v is None and rgpt_prevu(cp_key) and rgpt_actif and (jours_prestes or heures_prestees):
+        alerte_rgpt = (f"Indemnité RGPT de la {cp_key} non chargée pour cette période : non calculée. "
+                       f"Ajoutez le montant daté dans parametres_dates.py (RGPT_VERSIONS).")
+    elif rgpt_v and rgpt_v.get('obligatoire') and not rgpt_actif and (heures_prestees or 0) > 0 \
+            and personnel_roulant is not False:   # pas d'alerte pour le personnel non roulant ou de garage
+        alerte_rgpt = (f"Indemnité RGPT non appliquée : elle est obligatoire pour le {rgpt_v['beneficiaires']} de la {cp_key} "
+                       + "(" + f"{rgpt_h:.4f}".replace('.', ',')
+                       + f" €/h depuis le {rgpt_v['date_debut']:%d/%m/%Y}). Cochez la case si ce travailleur en fait partie.")
     if rgpt_j > 0 and rgpt_actif and jours_prestes > 0:
         montant_rgpt = round(rgpt_j * jours_prestes, 2)
         lignes_indemn.append({'libelle': f'Indemnité RGPT ({jours_prestes} j)',
-            'detail': f'{rgpt_j:.4f} €/jour', 'jours': jours_prestes, 'montant': montant_rgpt})
+            'detail': f"{rgpt_j:.4f} €/jour — {rgpt_v['source']}", 'jours': jours_prestes, 'montant': montant_rgpt})
     elif rgpt_h > 0 and rgpt_actif and heures_prestees > 0:
         montant_rgpt = round(rgpt_h * heures_prestees, 2)
         lignes_indemn.append({'libelle': f'Indemnité RGPT ({heures_prestees:.0f}h)',
-            'detail': f'{rgpt_h:.4f} €/h', 'jours': 0, 'montant': montant_rgpt})
+            'detail': f"{rgpt_h:.4f} €/h depuis le {rgpt_v['date_debut']:%d/%m/%Y} — {rgpt_v['source']}",
+            'jours': 0, 'montant': montant_rgpt})
 
     # ARAB
     montant_arab = 0.0
@@ -694,6 +705,8 @@ def calculer_fiche_paie(
     alertes_calcul += alertes_cheques
     if alerte_repas_fournis:
         alertes_calcul.append(alerte_repas_fournis)
+    if alerte_rgpt:
+        alertes_calcul.append(alerte_rgpt)
     if mu_sous_plancher is not None:
         alertes_calcul.append(
             f"Réductions patronales à 0 : prestations du mois à {mu_sous_plancher * 100:.0f} % d'un temps plein, sous le "

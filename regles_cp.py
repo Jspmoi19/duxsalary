@@ -182,11 +182,7 @@ REGLES_CP = {
         'type_travailleur_defaut': 'ouvrier',
         'heures_semaine_defaut': 38,
         'onss_patronal_taux_base': 0.27,   # validé contre fiche FDLR Liantis 2025 (taux facial CP140.03)
-        'rgpt': {
-            'applicable': True,
-            'montant_heure': 1.8175,
-            'depuis': '01/01/2026',
-        },
+        'rgpt': {'applicable': True},   # montant date: parametres_dates.RGPT_VERSIONS
         'sectoriel_notes': [
             'Personnel roulant soumis au règlement CE n°561/2006 (temps de conduite/repos)',
             'Cotisations sectorielles FSE + formation dues via DmfA trimestrielle, '
@@ -277,10 +273,7 @@ REGLES_CP = {
         # Cohérent avec le calcul sectoriel des chèques-repas (heures / 7,4 = 37 / 5).
         'heures_semaine_defaut': 37,
         'onss_patronal_taux_base': 0.27,   # ⚠️ NON VALIDÉ — taux ouvrier standard par défaut, à confirmer avant Yassin
-        'rgpt': {
-            'applicable': True,
-            'montant_jour': 1.63,   # PAR JOUR (ACCG, primes CP 121 au 01/07/2026) - corrige le 30/09/2026
-        },
+        'rgpt': {'applicable': True},   # montant date (par JOUR en CP 121): parametres_dates.RGPT_VERSIONS
         'sectoriel_notes': [
             '⚠️ NON ENCORE VALIDÉ contre une fiche réelle — dossier Yassin est le premier '
             'cas d\'usage. Vérifier: part CR employeur/travailleur exactes, avantages '
@@ -370,12 +363,17 @@ def resume_regles_cp(cp_key: str, etudiant: bool = False, reference_date=None) -
     if etudiant and (rep or eco):
         lignes.append("Étudiant : non visé par les chèques-repas et écochèques sectoriels")
 
-    rg = r.get('rgpt', {})
-    if rg.get('applicable'):
-        if rg.get('montant_jour'):
-            lignes.append(f"Indemnité RGPT : {rg['montant_jour']:.2f} € par jour".replace('.', ','))
-        elif rg.get('montant_heure'):
-            lignes.append(f"Indemnité RGPT : {rg['montant_heure']:.4f} € par heure".replace('.', ','))
+    if r.get('rgpt', {}).get('applicable'):
+        from datetime import date as _date_rgpt
+        from parametres_dates import get_rgpt
+        rg = get_rgpt(cp_key, reference_date or _date_rgpt.today())
+        if rg is None:
+            lignes.append("Indemnité RGPT : montant non chargé pour cette date")
+        else:
+            montant = (f"{rg['montant_jour']:.2f} € par jour" if rg.get('montant_jour')
+                       else f"{rg['montant_heure']:.4f} € par heure").replace('.', ',')
+            lignes.append(f"Indemnité RGPT : {montant} depuis le {rg['date_debut']:%d/%m/%Y} ({rg['beneficiaires']}"
+                          + (", obligatoire" if rg.get('obligatoire') else '') + ")")
     if r.get('indexation', {}).get('derniere'):
         lignes.append(f"Dernière indexation : {r['indexation']['derniere']}")
     if etudiant:

@@ -62,6 +62,9 @@ COLONNES = {
         # Travailleur qui ouvre le droit a la reduction « premier engagement » (code 3315):
         # un seul par dossier ; le dossier garde la case generale et la date de debut du droit
         ('premier_engagement', 'BOOLEAN DEFAULT FALSE'),
+        # Type de personnel en CP 140.03 (roulant / non_roulant / garage): ecocheques et case RGPT.
+        # Colonne deja creee sur le serveur par le suivi des cheques, rappelee pour une base neuve
+        ('categorie_personnel', 'VARCHAR(20)'),
     ],
     # Option « l'employeur fournit des repas » (avantage de toute nature), page « Chèques »
     'cheques_config': [

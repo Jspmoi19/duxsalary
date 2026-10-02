@@ -1648,6 +1648,12 @@ def incapacites_travailleur(travailleur_id):
                            aujourd_hui=date.today(), **ctx)
 
 
+def _rgpt_du_mois(cp_key, annee, mois):
+    """Indemnite RGPT en vigueur le dernier jour du mois (parametres_dates.RGPT_VERSIONS), ou None."""
+    from parametres_dates import get_rgpt
+    return get_rgpt(cp_key, date(annee, mois, calendar.monthrange(annee, mois)[1]))
+
+
 # ── FICHE DE PAIE DEPUIS CALENDRIER ──────────────────────────────────
 
 @app.route('/dimona/<int:dimona_id>/generer-paie', methods=['GET', 'POST'])
@@ -1660,7 +1666,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
     # Récupérer dimona + travailleur + contrat + dossier
     cur.execute("""
         SELECT d.*, t.prenom, t.nom, t.niss, t.adresse, t.iban, t.statut_travailleur,
-               t.premier_engagement AS premier_engagement_travailleur,
+               t.premier_engagement AS premier_engagement_travailleur, t.categorie_personnel,
                t.date_naissance, t.etat_civil, t.nb_enfants_charge,
                t.km_domicile_travail, t.moyen_transport, t.vehicule_societe,
                dos.nom as dossier_nom, dos.adresse as dossier_adresse,
@@ -1741,7 +1747,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
 
     # Km domicile-travail, taux et moyen de transport de la derniere fiche du travailleur:
     # proposes dans le formulaire pour ne pas les oublier
-    from occupation import km_a_proposer
+    from occupation import km_a_proposer, personnel_roulant, rgpt_coche_par_defaut
     derniere_fiche_km = None
     try:
         cur.execute("""SELECT km_domicile, taux_km, moyen_transport, periode_debut FROM fiches_paie
@@ -1914,6 +1920,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
             rsz_societe=dimona['rsz'] or '—',
             cp_key=cp_key, categorie=contrat['categorie'] if contrat else '—',
             fonction=contrat.get('fonction') if contrat else None,
+            personnel_roulant=personnel_roulant(dimona.get('categorie_personnel')),
             salaire_horaire=salaire_h,
             salaire_mensuel_fixe=float(contrat.get('salaire_mensuel') or 0) if contrat else 0.0,
             etat_civil=dimona.get('etat_civil', 'celibataire') or 'celibataire',
@@ -2097,6 +2104,9 @@ def generer_fiche_depuis_calendrier(dimona_id):
         cp_key=cp_key,
         vehicule_societe=dimona.get('vehicule_societe', False),
         km_domicile=km_propose['km'], km_propose=km_propose,
+        rgpt=_rgpt_du_mois(cp_key, annee, mois),
+        rgpt_defaut=rgpt_coche_par_defaut(dimona.get('categorie_personnel')),
+        categorie_personnel=dimona.get('categorie_personnel'),
         maladie_infos=maladie_infos, maladie_alertes=maladie_alertes,
         **ctx)
 

@@ -196,6 +196,52 @@ def get_reduction_structurelle_params(reference_date):
 
 
 # ─────────────────────────────────────────────────────────────────
+# INDEMNITE RGPT — par commission paritaire, versionnee par date (SOURCE UNIQUE:
+# aucun montant RGPT dans moteur_paie.py, regles_cp.py ni les gabarits)
+# ─────────────────────────────────────────────────────────────────
+# CP 140.03 (personnel roulant): indemnite nette par heure de travail et de
+# disponibilite, indexee chaque 1er janvier avec les salaires.
+#   01/01/2026: 1,8175 EUR/h (indexation de +2,18 %). Verifie le 02/10/2026:
+#   - bareme CSC-Transcom « Transport routier et logistique pour compte de tiers
+#     (CP 140.03) – Personnel Roulant, adaptation le 01/01/2026 : indice (+2,18 %) »,
+#     ligne « Indemnité RGPT 1,8175 » (les salaires de ce bareme sont ceux du PDF
+#     officiel salairesminimums.be: niveau 1 = 14,9255) ;
+#   - Easypay, indexations CP 140.03.01: « 01/01/2026: indemnité RGPT précédent x
+#     1,0218 (+2,18 %) » ;
+#   - fiche reelle Liantis (aout 2026): 116,32 EUR pour 64 h = 1,8175 EUR/h.
+#   Le PDF officiel salairesminimums.be (sources/baremes/14003.pdf) ne donne PAS le
+#   RGPT (il ne contient que les salaires): 'officiel': False tant que la CCT ou le
+#   bareme du Fonds social Transport et Logistique n'a pas ete lu.
+#   Montants anterieurs au 01/01/2026 non charges (ne pas deviner).
+# CP 121: 1,63 EUR PAR JOUR au 01/07/2026 (ACCG, primes CP 121) -- repris tel quel de
+#   regles_cp.py, non reverifie.
+RGPT_VERSIONS = {
+    'CP 140.03': [
+        {'date_debut': date(2026, 1, 1), 'montant_heure': 1.8175, 'beneficiaires': 'personnel roulant',
+         'obligatoire': True, 'officiel': False, 'prochaine_indexation': '01/01/2027',
+         'source': 'Barème CSC-Transcom CP 140.03 personnel roulant au 01/01/2026 (+2,18 %), Easypay, fiche réelle Liantis 08/2026'},
+    ],
+    'CP 121': [
+        {'date_debut': date(2026, 7, 1), 'montant_jour': 1.63, 'beneficiaires': 'ouvriers du nettoyage',
+         'obligatoire': False, 'officiel': False, 'prochaine_indexation': None,
+         'source': 'ACCG, primes CP 121 au 01/07/2026'},
+    ],
+}
+
+
+def get_rgpt(cp_key, reference_date):
+    """Indemnite RGPT de la CP en vigueur a la date, ou None (CP sans RGPT, ou periode
+    anterieure a la premiere version chargee: voir rgpt_prevu)."""
+    applicables = [v for v in RGPT_VERSIONS.get(cp_key, []) if v['date_debut'] <= reference_date]
+    return max(applicables, key=lambda v: v['date_debut']) if applicables else None
+
+
+def rgpt_prevu(cp_key):
+    """True si la CP a une indemnite RGPT (meme si aucune version ne couvre la date)."""
+    return bool(RGPT_VERSIONS.get(cp_key))
+
+
+# ─────────────────────────────────────────────────────────────────
 # MALADIE / ACCIDENT DE DROIT COMMUN — SALAIRE GARANTI
 # ─────────────────────────────────────────────────────────────────
 # Sources:

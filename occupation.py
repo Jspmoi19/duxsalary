@@ -51,6 +51,20 @@ def charges_famille_du_formulaire(form):
     }
 
 
+def personnel_roulant(categorie_personnel):
+    """Type de personnel du travailleur (travailleurs.categorie_personnel, saisi dans le
+    suivi des cheques): True = roulant, False = non roulant ou garage, None = non renseigne."""
+    c = (categorie_personnel or '').strip()
+    return None if not c else c == 'roulant'
+
+
+def rgpt_coche_par_defaut(categorie_personnel):
+    """Case RGPT du formulaire de generation en CP 140.03: cochee par defaut pour le
+    personnel roulant ou quand le type de personnel n'est pas renseigne, decochee pour
+    le personnel non roulant et de garage. Simple valeur par defaut: Leo peut la changer."""
+    return personnel_roulant(categorie_personnel) is not False
+
+
 def contrat_actif(contrat, aujourd_hui=None):
     """Un contrat compte comme ACTIF quand son statut est « actif » ET que sa date de fin
     est vide ou n'est pas encore depassee (un contrat qui se termine aujourd'hui est encore

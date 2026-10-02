@@ -24,7 +24,7 @@ def calculer_fiche_paie(*args, **kwargs):
         label = f"Cout employeur {r['cout_employeur']} < net + ONSS + precompte + CSS = {minimum} (cas n° {NB_CONTROLES_COUT[0]})"
         print(f"❌ {label}"); ECHECS.append(label)
     return r
-def check(label, obtenu, attendu, tol=0.01):
+def check(label, obtenu, attendu=True, tol=0.01):
     nombres = isinstance(obtenu, (int, float)) and isinstance(attendu, (int, float))
     ok = abs(obtenu - attendu) <= tol if nombres else obtenu == attendu
     print(f"{'✅' if ok else '❌'} {label}: obtenu={obtenu} attendu={attendu}")
@@ -232,6 +232,67 @@ check("Autres personnes a charge: -52 EUR/mois chacune (2 personnes)", round(pp(
 check("Personnes de 65 ans et plus dependantes: -166 EUR/mois chacune (2 personnes)", round(pp() - pp(nb_personnes_charge_dependance=2), 2), 332.0)
 check("Cumul: parent isole + handicap + 1 autre personne + 1 personne 65+ = -322 EUR/mois",
       round(pp() - pp(parent_isole=True, handicape=True, nb_autres_personnes_charge=1, nb_personnes_charge_dependance=1), 2), 322.0)
+
+print(); print("=" * 70); print("RGPT CP 140.03 -- 1,8175 EUR/h au 01/01/2026, versionne par date (parametres_dates)"); print("=" * 70)
+from parametres_dates import get_rgpt, RGPT_VERSIONS
+check("RGPT CP 140.03 au 01/01/2026: 1,8175 EUR/h, obligatoire pour le personnel roulant",
+      (get_rgpt('CP 140.03', date(2026,8,31))['montant_heure'], get_rgpt('CP 140.03', date(2026,1,1))['obligatoire']), (1.8175, True))
+check("Avant le 01/01/2026: montant non charge (None), pas de valeur devinee", get_rgpt('CP 140.03', date(2025,12,31)), None)
+check("CP sans RGPT: None", get_rgpt('CP 200', date(2026,8,31)), None)
+kw_rg = dict(heures_semaine=38.0, heures_jour=8.0, jours_semaine=4, type_contrat='CDI', cheques_repas=False,
+             jours_prestes=8, heures_prestees=64.0)
+r = calculer_fiche_paie('D','P','n','a','BE',date(2005,2,2),date(2026,1,5),'F','a','b','r','CP 140.03','Chauffeur - Niveau 1',17.5,
+    rgpt_actif=True, periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), **kw_rg)
+l_rg = next(l for l in r['lignes_indemn'] if 'RGPT' in l['libelle'])
+check("Aout 2026: 64 h x 1,8175 = 116,32 (fiche reelle Liantis)", l_rg['montant'], 116.32)
+check("... la source et la date d'effet sont affichees dans le detail", '01/01/2026' in l_rg['detail'] and 'CSC' in l_rg['detail'])
+r = calculer_fiche_paie('D','P','n','a','BE',date(2005,2,2),date(2026,1,5),'F','a','b','r','CP 140.03','Chauffeur - Niveau 1',17.5,
+    rgpt_actif=False, periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), **kw_rg)
+check("Case RGPT decochee en CP 140.03: pas d'indemnite, mais une alerte « obligatoire »",
+      (any('RGPT' in l['libelle'] for l in r['lignes_indemn']),
+       any('RGPT non appliquée' in a and 'obligatoire' in a and 'CP 140.03 (1,8175 €/h' in a for a in r['alertes_calcul'])),
+      (False, True))
+r = calculer_fiche_paie('D','P','n','a','BE',date(2005,2,2),date(2026,1,5),'F','a','b','r','CP 140.03','Magasinier',17.5,
+    rgpt_actif=False, personnel_roulant=False, periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), **kw_rg)
+check("Personnel non roulant ou de garage, case decochee: ni indemnite ni alerte",
+      (any('RGPT' in l['libelle'] for l in r['lignes_indemn']), any('RGPT' in a for a in r['alertes_calcul'])), (False, False))
+from occupation import rgpt_coche_par_defaut, personnel_roulant
+check("Case RGPT par defaut: cochee pour « roulant » et pour un type non renseigne, decochee pour « non roulant » et « garage »",
+      [rgpt_coche_par_defaut(x) for x in ('roulant', None, '', 'non_roulant', 'garage')], [True, True, True, False, False])
+check("Type de personnel: roulant / non roulant / non renseigne",
+      [personnel_roulant(x) for x in ('roulant', 'garage', 'non_roulant', None)], [True, False, False, None])
+from jinja2 import Environment as _E_rg, FileSystemLoader as _F_rg
+import branding as _b_rg
+_e_rg = _E_rg(loader=_F_rg('templates'))
+class _R_rg:
+    path = '/dimona/5/generer-paie'; form = {}; args = {}
+def _form_rgpt(categorie, vehicule=False):
+    d = {'id': 7, 'nom': 'Société Fictive SRL'}
+    return _e_rg.get_template('generer_fiche_form.html').render(
+        request=_R_rg(), marque=_b_rg.get_branding(), statique=_b_rg.url_statique, session={'user_id': 1, 'user_nom': 'U'}, tenant={},
+        tous_les_dossiers=[d], dossiers_archives=[], dossier_actif=d, dimona={'id': 5, 'prenom': 'C', 'nom': 'E', 'travailleur_id': 3},
+        contrat={'salaire_horaire': 17.5, 'cp_key': 'CP 140.03', 'type_contrat': 'CDI'}, prime_suggestion=None,
+        prime_annuelle_suggestion=None, pecule_suggestion=None, annee=2026, mois=8, mois_nom='Août', cp_key='CP 140.03',
+        vehicule_societe=vehicule, maladie_infos=[], maladie_alertes=[], km_propose=None, km_domicile=0,
+        rgpt=get_rgpt('CP 140.03', date(2026,8,31)), rgpt_defaut=rgpt_coche_par_defaut(categorie), categorie_personnel=categorie)
+_case = lambda h: h.split('name="rgpt_actif"')[1].split('>')[0]
+check("Formulaire: case RGPT cochee pour un roulant, meme avec un vehicule de societe ; montant et date affiches",
+      ('checked' in _case(_form_rgpt('roulant', vehicule=True)), '1,8175 €/h depuis le 01/01/2026' in _form_rgpt('roulant')), (True, True))
+check("Formulaire: case cochee quand le type n'est pas renseigne, avec l'invitation a le preciser",
+      ('checked' in _case(_form_rgpt(None)), 'non renseigné' in _form_rgpt(None)), (True, True))
+check("Formulaire: case decochee pour « garage » et « non roulant »",
+      ('checked' in _case(_form_rgpt('garage')), 'checked' in _case(_form_rgpt('non_roulant'))), (False, False))
+import io as _io_rg, re as _re_rg
+_src = lambda n: _io_rg.open(n, encoding='utf-8').read()
+check("Source unique: aucun montant RGPT dans moteur_paie.py, regles_cp.py ni le formulaire de generation",
+      [n for n in ('moteur_paie.py', 'regles_cp.py', 'templates/generer_fiche_form.html')
+       if _re_rg.search(r'1[.,]8175|rgpt_heure\W+[0-9]|rgpt_jour\W+[0-9]|montant_jour\W+1[.,]63', _src(n).split("if __name__ == '__main__'")[0])], [])
+from regles_cp import resume_regles_cp
+check("Regles de la CP (formulaires de contrat): RGPT date et sourcee depuis parametres_dates",
+      any('Indemnité RGPT : 1,8175 € par heure depuis le 01/01/2026' in l and 'obligatoire' in l
+          for l in resume_regles_cp('CP 140.03', reference_date=date(2026,10,1))))
+check("... et « montant non chargé » pour une date anterieure",
+      any('RGPT : montant non chargé' in l for l in resume_regles_cp('CP 140.03', reference_date=date(2025,6,1))))
 
 print(); print("=" * 70); print("RGPT CP 121 -- par JOUR (1,63 EUR)"); print("=" * 70)
 r = calculer_fiche_paie('N','T','n','a','BE',date(1990,1,1),date(2026,3,1),'X','a','b','r','CP 121','Nettoyeuse',17.17,
