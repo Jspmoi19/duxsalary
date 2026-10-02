@@ -198,6 +198,7 @@ def calculer_fiche_paie(
     incapacite=None,
     fonction=None,
     personnel_roulant=None,
+    date_fin_contrat=None, prestations_trimestre_precedentes=0.0, reductions_trimestre_precedentes=0.0,
 ):
     cp = CP_INDEMNITES.get(cp_key, {})
     # Override avec barèmes BDD si disponibles
@@ -610,6 +611,42 @@ def calculer_fiche_paie(
             jours_payes=jours_payes_onss, heures_payees=heures_payees_onss,
             jours_mu=jours_mu_onss, heures_mu=heures_mu_onss, mi_temps=contrat_mi_temps)
 
+    # ── ESTIMATION TRIMESTRIELLE du plancher de 27,5 % (le calcul mensuel ci-dessus est conserve) ──
+    # La DmfA juge le plancher sur le µ(glob) du TRIMESTRE, pour la reduction structurelle comme
+    # pour le premier engagement (Instructions ONSS 2026/3 p.377: « ßs et ßg = 0 » ; p.399,
+    # premiers engagements: prestations d'« au moins 27,5 % d'un temps plein au cours du
+    # trimestre »). Des que la fiche du mois est calculee, on estime le trimestre entier:
+    # mois deja payes + ce mois + prestations prevues par l'horaire jusqu'a la fin du trimestre
+    # ou du contrat. Si l'estimation est sous le plancher, les reductions des fiches ne seront
+    # pas accordees: on l'affiche et on chiffre le patronal en plus.
+    estimation_trimestre = None
+    alerte_estimation = None
+    if not is_etudiant and not contrat_mi_temps and periode_debut and periode_fin:
+        from dmfa import estimer_mu_trimestre
+        from profil_travailleur import PLANCHER_MU
+        en_jours_est = profil.salaire_est_mensuel_fixe
+        est = estimer_mu_trimestre(periode_debut, periode_fin, en_jours_est, jours_semaine, heures_semaine, heures_jour,
+                                   jours_mu_onss if en_jours_est else heures_mu_onss, prestations_trimestre_precedentes,
+                                   date_fin_contrat)
+        sous = est['mu'] < PLANCHER_MU
+        reductions_mois = round(red_struct + red_pe, 2)
+        en_plus_trimestre = round(reductions_mois + float(reductions_trimestre_precedentes or 0), 2) if sous else 0.0
+        estimation_trimestre = dict(est, sous_plancher=sous, patronal_en_plus_mois=reductions_mois if sous else 0.0,
+                                    patronal_en_plus_trimestre=en_plus_trimestre)
+        pc = f"{est['mu'] * 100:.0f} %"
+        horizon = (f"fin du contrat le {date_fin_contrat:%d/%m/%Y}" if est['contrat_termine']
+                   else f"prestations prévues par l'horaire jusqu'au {est['fin_trimestre']:%d/%m/%Y}")
+        if sous and en_plus_trimestre > 0:
+            alerte_estimation = (
+                f"Estimation du trimestre : prestations à {pc} d'un temps plein ({horizon}), sous le plancher de 27,5 % pour "
+                f"un contrat de moins d'un mi-temps. Le trimestre risque de ne pas ouvrir de réduction : environ "
+                f"{en_plus_trimestre:.2f} € de patronal en plus à la DmfA (réductions structurelle et premier engagement des "
+                f"fiches du trimestre, dont {reductions_mois:.2f} € sur cette fiche).")
+        elif not sous and mu_sous_plancher is not None:
+            alerte_estimation = (
+                f"Estimation du trimestre : prestations à {pc} d'un temps plein ({horizon}), au-dessus du plancher de "
+                f"27,5 % : la DmfA devrait accorder les réductions que cette fiche n'applique pas ce mois-ci.")
+
     onss_pat_net = round(max(0, onss_pat_reductible - red_struct - red_pe)
                          + onss_vacances_253 + total_compl, 2)
     # Cotisation ANNUELLE vacances ouvriers (10.27% des remunerations a 108%),
@@ -691,6 +728,12 @@ def calculer_fiche_paie(
             ([L('Réductions : plancher de 27,5 % non atteint (µ = ' + f"{mu_sous_plancher:.2f}".replace('.', ',') + ', contrat de moins d\'un mi-temps)',
                 0.0, source='ß = 0 (Instructions ONSS 2026/3 p.377)', info=True)] if mu_sous_plancher is not None else []) +
             ([L('Réduction premier engagement', -red_pe, source='Pg = G × µ × ß, G = forfait daté')] if red_pe else []) +
+            ([L(f"Estimation du trimestre : µ ≈ {estimation_trimestre['mu']:.2f}".replace('.', ',') +
+                (' (sous le plancher de 0,275 : réductions à risque)' if estimation_trimestre['sous_plancher'] else ' (plancher de 0,275 atteint)'),
+                estimation_trimestre['patronal_en_plus_trimestre'] or None,
+                source=(f"{estimation_trimestre['realise']:g} {estimation_trimestre['unite']} réalisés + "
+                        f"{estimation_trimestre['prevu']:g} prévus — Instructions ONSS 2026/3 p.377 et 399"), info=True)]
+             if estimation_trimestre else []) +
             [L('ONSS patronal net', onss_pat_net, total=True)]},
         {'titre': 'Coût employeur', 'lignes': [
             L('Provision vacances annuelles ouvriers (10,27 %, facturée l\'année suivante)',
@@ -715,6 +758,8 @@ def calculer_fiche_paie(
         alertes_calcul.append(alerte_repas_fournis)
     if alerte_rgpt:
         alertes_calcul.append(alerte_rgpt)
+    if alerte_estimation:
+        alertes_calcul.append(alerte_estimation)
     if mu_sous_plancher is not None:
         alertes_calcul.append(
             f"Réductions patronales à 0 : prestations du mois à {mu_sous_plancher * 100:.0f} % d'un temps plein, sous le "
@@ -812,6 +857,9 @@ def calculer_fiche_paie(
         'jours_feries_payes': jours_feries_payes, 'heures_feries': heures_feries,
         'jours_conge': jours_conge, 'jours_maladie': jours_maladie, 'jours_chomage': jours_chomage,
         # Maladie: lignes hors ONSS (imposables) et decompte par tranche
+        # Estimation trimestrielle du plancher de 27,5 % (None si contrat au moins a mi-temps)
+        'estimation_trimestre': estimation_trimestre,
+        'patronal_risque_trimestre': (estimation_trimestre or {}).get('patronal_en_plus_mois', 0.0),
         'lignes_hors_onss': lignes_hors_onss,
         'indemnites_maladie_hors_onss': indemn_maladie_hors_onss,
         'incapacite': ({'regime': incapacite.get('regime'), 'compte': sg['compte']} if sg else None),

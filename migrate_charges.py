@@ -48,6 +48,8 @@ COLONNES = {
         # Km domicile-travail, taux et moyen de transport saisis a la generation: reproposes
         # dans le formulaire de la fiche suivante (occupation.km_a_proposer)
         ('km_domicile', 'INTEGER'), ('taux_km', 'DECIMAL(6,4)'), ('moyen_transport', 'VARCHAR(20)'),
+        # Reductions patronales de la fiche a risque (plancher de 27,5 % estime sur le trimestre)
+        ('patronal_risque_trimestre', 'DECIMAL(10,2) DEFAULT 0'),
     ],
     'travailleurs': [
         ('sexe', 'VARCHAR(1)'), ('date_sortie', 'DATE'), ('caisse_allocations_familiales', 'VARCHAR(200)'),

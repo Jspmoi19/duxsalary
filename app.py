@@ -1833,7 +1833,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
         # Importer le moteur
         import sys
         sys.path.insert(0, '/var/www/duxsalary')
-        from moteur_paie import calculer_fiche_paie
+        from moteur_paie import calculer_fiche_paie, CP_INDEMNITES as CP_INDEMNITES_APP
         from generer_fiche_pdf import generer_fiche_paie_pdf
 
         # Premier engagement
@@ -1898,6 +1898,20 @@ def generer_fiche_depuis_calendrier(dimona_id):
                     (dimona['travailleur_id'], annee, periode_debut))
         bonus_cumul_annee = float(cur.fetchone()['cumul'] or 0)
 
+        # Mois deja payes du meme trimestre (fiches actives): prestations et reductions accordees,
+        # pour l'estimation trimestrielle du plancher de 27,5 %
+        from dmfa import bornes_trimestre, trimestre_de
+        debut_trim, _fin_trim = bornes_trimestre(*trimestre_de(periode_debut))
+        cur.execute("""SELECT COALESCE(SUM(COALESCE(heures_prestees, 0) + COALESCE(heures_feries, 0)), 0) AS heures,
+                              COALESCE(SUM(COALESCE(jours_prestes, 0) + COALESCE(jours_feries, 0)), 0) AS jours,
+                              COALESCE(SUM(COALESCE(reduction_structurelle, 0) + COALESCE(reduction_premier_engagement, 0)), 0) AS reductions
+                       FROM fiches_paie WHERE travailleur_id = %s AND remplacee_par IS NULL
+                         AND periode_debut >= %s AND periode_debut < %s""",
+                    (dimona['travailleur_id'], debut_trim, periode_debut))
+        deja_trim = cur.fetchone()
+        paye_au_mois_est = bool(contrat) and contrat['type_contrat'] in ('CDI', 'CDD') and not is_etudiant and \
+            CP_INDEMNITES_APP.get(cp_key, {}).get('type_travailleur', 'ouvrier') != 'ouvrier'
+
         data = calculer_fiche_paie(
             incapacite=incapacite,
             bonus_emploi_cumul_annee=bonus_cumul_annee,
@@ -1924,6 +1938,9 @@ def generer_fiche_depuis_calendrier(dimona_id):
             rsz_societe=dimona['rsz'] or '—',
             cp_key=cp_key, categorie=contrat['categorie'] if contrat else '—',
             fonction=contrat.get('fonction') if contrat else None,
+            date_fin_contrat=contrat.get('date_fin') if contrat else None,
+            prestations_trimestre_precedentes=float(deja_trim['jours'] if paye_au_mois_est else deja_trim['heures']),
+            reductions_trimestre_precedentes=float(deja_trim['reductions']),
             personnel_roulant=personnel_roulant(dimona.get('categorie_personnel')),
             salaire_horaire=salaire_h,
             salaire_mensuel_fixe=float(contrat.get('salaire_mensuel') or 0) if contrat else 0.0,
@@ -2297,6 +2314,14 @@ def generer_lettre_onss_pdf(dossier, fiches, annee, mois, mois_nom):
     # Instructions paiement
     e.append(HRFlowable(width='100%', thickness=0.5, color=LINE))
     e.append(Spacer(1, 0.3*cm))
+    # Estimation: reductions des fiches qui risquent de ne pas etre accordees a la declaration du
+    # trimestre (prestations sous 27,5 % d'un temps plein). Information pour l'employeur.
+    risque = round(sum(float(f.get('patronal_risque_trimestre') or 0) for f in fiches), 2)
+    if risque > 0:
+        e.append(p(f"Estimation : environ {risque:.2f} EUR de cotisations patronales supplémentaires pourraient être dus lors de "
+                   f"la déclaration trimestrielle. Les réductions comprises dans ce décompte ne sont accordées que si les "
+                   f"prestations du trimestre atteignent 27,5 % d'un temps plein (contrat de moins d'un mi-temps).", size=8))
+        e.append(Spacer(1, 0.3*cm))
     e.append(p('INSTRUCTIONS DE PAIEMENT', bold=True, size=10))
     e.append(Spacer(1, 0.15*cm))
     e.append(p(f"Virement bancaire vers : BE63 6790 2618 1108 (BIC: GEBABEBB)", size=9))

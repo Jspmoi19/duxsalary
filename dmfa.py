@@ -241,6 +241,25 @@ def reductions_trimestre(W, codes, en_jours, D, U, fin_trimestre, mu_glob=None, 
     return r
 
 
+def estimer_mu_trimestre(periode_debut, periode_fin, en_jours, D, U, heures_jour, quantite_mois, quantite_precedente=0.0,
+                         date_fin_contrat=None):
+    """ESTIMATION, des la fiche d'un mois, de la fraction de prestation µ du TRIMESTRE entier
+    (c'est elle que la DmfA compare au plancher de 0,275, Instructions ONSS 2026/3 p.377 et
+    p.399). quantite_mois: jours (occupation declaree en jours) ou heures du mois de la fiche ;
+    quantite_precedente: celles des mois deja payes du trimestre ; le reste du trimestre est
+    PREVU selon l'horaire du contrat, jusqu'a la fin du contrat si elle tombe avant la fin du
+    trimestre. Retourne {'mu', 'realise', 'prevu', 'fin_trimestre', 'contrat_termine'}."""
+    _, fin_t = bornes_trimestre(*trimestre_de(periode_debut))
+    fin_prevue = min(fin_t, date_fin_contrat) if date_fin_contrat else fin_t
+    jours_restants = jours_ouvrables(periode_fin + timedelta(days=1), fin_prevue) * (int(D or 5) / 5)
+    prevu = jours_restants if en_jours else jours_restants * float(heures_jour or 0)
+    realise = float(quantite_precedente or 0) + float(quantite_mois or 0)
+    denominateur = 13 * (int(D or 5) if en_jours else float(U or 38))
+    return {'mu': _r2((realise + prevu) / denominateur) if denominateur else 0.0, 'realise': round(realise, 2),
+            'prevu': round(prevu, 2), 'unite': 'jours' if en_jours else 'heures', 'fin_trimestre': fin_t,
+            'contrat_termine': bool(date_fin_contrat and date_fin_contrat <= fin_t)}
+
+
 # ─────────────────────────────────────────────────────────────────
 # AIDE DmfA
 # ─────────────────────────────────────────────────────────────────

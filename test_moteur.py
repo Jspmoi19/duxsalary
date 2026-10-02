@@ -101,9 +101,75 @@ rm = calculer_fiche_paie('M','N','n','a','BE',date(2005,10,31),date(2026,5,27),'
 check("Contrat au moins a mi-temps (20 h / 38 h) avec µ = 0,19: pas de plancher, reduction accordee sans alerte",
       (rm['reduction_structurelle'] > 0, any('plancher' in a for a in rm['alertes_calcul'])), (True, False))
 check("Vacances d'un ouvrier comptees dans µ (pas dans S): µ = 0,33 au-dessus du plancher, reduction structurelle 113,85",
-      (rc['reduction_structurelle'], any('plancher' in a for a in rc['alertes_calcul'])), (113.85, False))
+      (rc['reduction_structurelle'], any('Réductions patronales à 0' in a for a in rc['alertes_calcul'])), (113.85, False))
 check("... brut, ONSS personnel et net inchanges", (rc['brut_onss'], rc['onss_net'], rc['salaire_net']), (r['brut_onss'], r['onss_net'], r['salaire_net']))
 check("Conges ouvrier sans effet sur le bonus emploi", rc['bonus_emploi'], r['bonus_emploi'])
+
+print(); print("=" * 70); print("ESTIMATION TRIMESTRIELLE DU PLANCHER DE 27,5 % (Instructions ONSS 2026/3 p.377 et p.399)"); print("=" * 70)
+from dmfa import estimer_mu_trimestre, reductions_trimestre
+# Cas reel: CDD du 09/07 au 31/07/2026, 15 h sur 38, 48 h prestees + 3 h de jour ferie dans le trimestre
+kw_b = dict(heures_semaine=38.0, heures_jour=3.0, jours_semaine=5, type_contrat='CDD', premier_engagement=True, jours_prestes=16,
+            heures_prestees=48.0, jours_feries_payes=1, heures_feries=3.0, periode_debut=date(2026,7,1), periode_fin=date(2026,7,31))
+def bilal(**kw):
+    return calculer_fiche_paie('Bilal','Akattof','n','a','BE',date(2008,1,1),date(2026,7,9),'98H','a','b','r','CP 140.03','Chauffeur',14.93,
+                               **dict(kw_b, **kw))
+rb = bilal(date_fin_contrat=date(2026,7,31))
+e = rb['estimation_trimestre']
+check("CDD termine le 31/07: µ du trimestre = 51 h / (13 x 38) = 0,10, aucune prestation prevue ensuite",
+      (e['mu'], e['realise'], e['prevu'], e['contrat_termine'], e['sous_plancher']), (0.10, 51.0, 0.0, True, True))
+check("Le calcul MENSUEL de la fiche est conserve (µ du mois 0,31): structurelle 119,61, premier engagement 85,98, patronal 47,68",
+      (rb['reduction_structurelle'], rb['reduction_premier_engagement'], rb['onss_patronal']), (119.61, 85.98, 47.68))
+check("Patronal en plus estime = reductions de la fiche (119,61 + 85,98 = 205,59)",
+      (e['patronal_en_plus_mois'], e['patronal_en_plus_trimestre'], rb['patronal_risque_trimestre']), (205.59, 205.59, 205.59))
+check("Alerte des la fiche du mois: « le trimestre risque de ne pas ouvrir de réduction : environ 205.59 € de patronal en plus »",
+      any('risque de ne pas ouvrir de réduction' in a and '205.59 €' in a and '10 %' in a and 'fin du contrat le 31/07/2026' in a
+          for a in rb['alertes_calcul']), True)
+check("Page « Calculer la paie »: ligne d'estimation dans le bloc des cotisations patronales",
+      any('Estimation du trimestre' in l['libelle'] and 'sous le plancher' in l['libelle'] and l['montant'] == 205.59
+          for b in rb['detail_calcul'] if b['titre'] == 'Cotisations patronales' for l in b['lignes']), True)
+rt = reductions_trimestre(rb['brut_onss'], {1: {'jours': 17, 'heures': 51.0}}, False, 5, 38.0, date(2026,9,30), mi_temps=False,
+                          premier_engagement=True, cotisations_reductibles=rb['onss_patronal_reductible'])
+check("Le recalcul trimestriel de l'aide DmfA confirme: plancher applique a la structurelle ET au premier engagement (ßs = ßg = 0)",
+      (rt['mu'], rt['beta_s'], rt['beta_g'], rt['Ps'], rt['Pg']), (0.10, 0.0, 0.0, 0.0, 0.0))
+ro = bilal()
+e = ro['estimation_trimestre']
+check("Meme fiche sans date de fin: 51 h + 43 jours ouvrables prevus x 3 h = 180 h -> µ = 0,36, plancher atteint, aucune alerte",
+      (e['prevu'], e['mu'], e['sous_plancher'], e['patronal_en_plus_trimestre'], any('Estimation' in a for a in ro['alertes_calcul'])),
+      (129.0, 0.36, False, 0.0, False))
+r2m = bilal(date_fin_contrat=date(2026,8,14))
+check("Fin de contrat le 14/08: 10 jours prevus en aout (30 h) -> µ = 81 / 494 = 0,16, toujours sous le plancher",
+      (r2m['estimation_trimestre']['prevu'], r2m['estimation_trimestre']['mu'], r2m['estimation_trimestre']['sous_plancher']), (30.0, 0.16, True))
+ra = calculer_fiche_paie('Bilal','Akattof','n','a','BE',date(2008,1,1),date(2026,7,9),'98H','a','b','r','CP 140.03','Chauffeur',14.93,
+    heures_semaine=38.0, heures_jour=3.0, jours_semaine=5, type_contrat='CDD', premier_engagement=True, jours_prestes=5,
+    heures_prestees=15.0, periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), date_fin_contrat=date(2026,8,7),
+    prestations_trimestre_precedentes=51.0, reductions_trimestre_precedentes=205.59)
+ea = ra['estimation_trimestre']
+check("Deuxieme mois du trimestre: les 51 h et les 205,59 EUR de reductions de juillet sont repris (µ = 66 / 494 = 0,13)",
+      (ea['realise'], ea['mu'], ea['patronal_en_plus_trimestre'], ea['patronal_en_plus_mois']),
+      (66.0, 0.13, round(205.59 + ra['reduction_structurelle'] + ra['reduction_premier_engagement'], 2),
+       round(ra['reduction_structurelle'] + ra['reduction_premier_engagement'], 2)))
+rj = calculer_fiche_paie('M','N','n','a','BE',date(2005,10,31),date(2026,5,27),'S','a','b','r','CP 140.03','Nettoyeur',15.2097,
+    jours_prestes=22, heures_prestees=44.0, periode_debut=date(2026,6,1), periode_fin=date(2026,6,30), prestations_trimestre_precedentes=94.0, **kw_i)
+check("Mois sous le plancher (µ 0,27) mais trimestre estime au-dessus (138 h / 494 = 0,28): alerte « la DmfA devrait accorder les réductions »",
+      (rj['reduction_structurelle'], rj['estimation_trimestre']['mu'], any('devrait accorder les réductions' in a for a in rj['alertes_calcul'])),
+      (0.0, 0.28, True))
+check("Contrat au moins a mi-temps ou etudiant: pas d'estimation (pas de plancher)",
+      (calculer_fiche_paie('Ciwan','Ilhan','n','a','BE',date(2004,11,17),date(2026,10,1),'Eysel','a','b','r','CP 336','Comptable',13.71,
+           salaire_mensuel_fixe=2257.0, type_contrat='CDI', jours_prestes=22, heures_prestees=167.2, cheques_repas=False,
+           periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))['estimation_trimestre'],
+       calculer_fiche_paie('A','B','n','a','BE',date(2007,6,1),date(2026,7,1),'X','a','b','r','CP 200','Etudiant',12.0, type_contrat='STU',
+           is_etudiant=True, heures_jour=3.0, jours_prestes=5, heures_prestees=15.0, cheques_repas=False,
+           periode_debut=date(2026,7,1), periode_fin=date(2026,7,31))['estimation_trimestre']), (None, None))
+e_j = estimer_mu_trimestre(date(2026,7,1), date(2026,7,31), True, 2, 38.0, 7.6, 9, 0, None)
+check("Occupation declaree en jours, 2 jours par semaine: 9 jours + 43 jours ouvrables x 2/5 = 26,2 jours / 26 -> µ = 1,01",
+      (e_j['unite'], e_j['prevu'], e_j['mu']), ('jours', 17.2, 1.01))
+from documents_charges import valeurs_fiche as _vf_e
+check("La fiche enregistre le patronal a risque (repris par la lettre ONSS)", _vf_e(rb)['patronal_risque_trimestre'], 205.59)
+_lettre = open('app.py', encoding='utf-8').read().split('def generer_lettre_onss_pdf')[1].split(chr(10) + 'def ')[0]
+check("Lettre ONSS: l'estimation est imprimee quand des reductions sont a risque, sans source ni note interne",
+      ("patronal_risque_trimestre" in _lettre, 'cotisations patronales supplémentaires pourraient être dus' in _lettre,
+       any(m in _lettre.split('Estimation : environ')[1].split('size=8')[0].lower() for m in ('instructions', 'onss 2026', 'p.377', 'dmfa.py', 'source'))),
+      (True, True, False))
 
 print(); print("=" * 70); print("PLAFOND ANNUEL DU BONUS EMPLOI -- 3.594,36 EUR (Instructions ONSS 2026/3 p.453)"); print("=" * 70)
 kw_p = dict(heures_semaine=38.0, heures_jour=2.0, jours_semaine=5, type_contrat='CDI', rgpt_actif=False,
