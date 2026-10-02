@@ -193,6 +193,35 @@ r = employe(3000.0, {'regime': 'employe', 'jours': jours_oct(ve), 'infos': [], '
 check("Employe, 10 jours garantis: remuneration maintenue, fiche identique",
       (r['brut_onss'], r['salaire_net'], r['onss_patronal'], r['cout_employeur']),
       (sans['brut_onss'], sans['salaire_net'], sans['onss_patronal'], sans['cout_employeur']))
+# Cas reel du 02/10/2026 (dossier de categorie 010): employe en CDI a partir du 01/09/2026, malade des le 01/09.
+# Loi du 03/07/1978, art. 70: remuneration maintenue 30 jours, sans condition d'anciennete.
+c_j1 = {'id': 1, 'type_contrat': 'CDI', 'cp_key': 'CP 200', 'date_debut': date(2026,9,1), 'date_fin': None}
+from salaire_garanti import contexte_incapacites as _ctx
+inc_j1 = _ctx([{'id': 1, 'date_debut': date(2026,9,1), 'date_fin': None, 'type_incapacite': 'maladie', 'autre_cause': False}],
+              [c_j1], c_j1, False, date(2026,9,30))
+v_j1 = inc_j1['ventilation'][0]
+check("CDI et maladie le meme jour (01/09/2026): regime employe, 30 jours garantis, aucun a la mutuelle",
+      (inc_j1['regime'], tranches(v_j1)), ('employe', 'MG:30'))
+SEPT = dict(periode_debut=date(2026,9,1), periode_fin=date(2026,9,30))
+def employe_sept(incapacite, jours_prestes):
+    return calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2026,9,1),'X','a','b','r','CP 200','Classe A',0.0,
+        salaire_mensuel_fixe=2500.0, heures_semaine=38.0, heures_jour=7.6, jours_semaine=5, type_contrat='CDI',
+        categorie_employeur='010', cheques_repas=False, jours_prestes=jours_prestes, heures_prestees=jours_prestes * 7.6,
+        incapacite=incapacite, **SEPT)
+r = employe_sept({'regime': inc_j1['regime'], 'jours': jours_oct(v_j1, mois=9), 'infos': [], 'alertes': v_j1['alertes']}, 0)
+ref = employe_sept(None, 22)
+check("... mois entier de maladie, aucun jour preste: brut = salaire mensuel complet (2.500,00), pas 0", r['brut_onss'], 2500.0)
+check("... meme net, meme ONSS patronal et meme cout qu'un mois preste normalement",
+      (r['salaire_net'], r['onss_patronal'], r['cout_employeur']), (ref['salaire_net'], ref['onss_patronal'], ref['cout_employeur']))
+check("... 22 jours ouvres comptes en salaire garanti", r['incapacite']['compte']['MG']['jours'], 22)
+# Meme situation sous une CP d'ouvriers: pas de droit avant un mois d'anciennete, et la page le dit
+c_ouv = dict(c_j1, cp_key='CP 140.03')
+inc_ouv = _ctx([{'id': 1, 'date_debut': date(2026,9,1), 'date_fin': None, 'type_incapacite': 'maladie', 'autre_cause': False}],
+               [c_ouv], c_ouv, True, date(2026,9,30))
+check("Ouvrier malade des son premier jour: 30 jours a la mutuelle, explique clairement",
+      (tranches(inc_ouv['ventilation'][0]),
+       any("pas de salaire garanti" in a and "à charge de la mutuelle" in a for a in inc_ouv['ventilation'][0]['alertes'])),
+      ('MM:30', True))
 ve = ventiler_episodes([ep(date(2026,8,27), date(2026,10,2))], 'employe', ENTREE, HORIZON)[0]   # 30e jour = 25/09
 r = employe(3000.0, {'regime': 'employe', 'jours': jours_oct(ve), 'infos': [], 'alertes': []})
 check("Employe au-dela de 30 jours: 2 jours de mutuelle retires, brut = 3000 - 2 x 3000/22 = 2.727,27", r['brut_onss'], 2727.27)

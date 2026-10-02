@@ -1617,7 +1617,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
 
     # Récupérer dimona + travailleur + contrat + dossier
     cur.execute("""
-        SELECT d.*, t.prenom, t.nom, t.niss, t.adresse, t.iban,
+        SELECT d.*, t.prenom, t.nom, t.niss, t.adresse, t.iban, t.statut_travailleur,
                t.date_naissance, t.etat_civil, t.nb_enfants_charge,
                t.km_domicile_travail, t.moyen_transport, t.vehicule_societe,
                dos.nom as dossier_nom, dos.adresse as dossier_adresse,
@@ -1681,6 +1681,15 @@ def generer_fiche_depuis_calendrier(dimona_id):
             maladie_alertes += v['alertes']
         if du_mois:
             maladie_infos += ctx_inc['regles']
+            # Le statut vient de la CP du contrat: si la fiche du travailleur dit « employe »
+            # alors que la CP est une CP d'ouvriers, le salaire garanti suit l'art. 52
+            # (un mois d'anciennete) et non l'art. 70 -- on le dit clairement.
+            if ctx_inc['regime'] == 'ouvrier' and (dimona.get('statut_travailleur') or '') == 'employe':
+                maladie_alertes.insert(0,
+                    f"Ce travailleur est encodé comme employé, mais son contrat est en {contrat['cp_key']}, une commission "
+                    f"paritaire d'ouvriers : la paie et le salaire garanti sont calculés selon les règles des ouvriers "
+                    f"(un mois d'ancienneté requis, art. 52). Un employé a droit à 30 jours de rémunération dès le premier "
+                    f"jour (art. 70) : si c'est un employé, corrigez la commission paritaire du contrat.")
     except Exception as ex_inc:
         conn.rollback()
         app.logger.warning(f"Incapacites (fiche): {ex_inc}")
