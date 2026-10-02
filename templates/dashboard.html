@@ -33,6 +33,22 @@
   </div>
 </div>
 
+{% if travailleurs_archives %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-body" style="padding:10px 16px;font-size:13px">
+    <details>
+      <summary style="cursor:pointer;color:var(--text-muted)">Travailleurs archivés ({{ travailleurs_archives|length }}) — historique conservé, toujours repris dans les documents et l'aide DmfA</summary>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        {% for t in travailleurs_archives %}
+        <a href="/travailleur/{{ t.id }}" class="btn btn-secondary btn-sm">{{ t.prenom }} {{ t.nom }}</a>
+        {% endfor %}
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:6px">Ouvrez la fiche pour restaurer le travailleur ou le supprimer définitivement (essai, doublon).</div>
+    </details>
+  </div>
+</div>
+{% endif %}
+
 <!-- ALERTES / ÉCHÉANCES -->
 <div class="card">
   <div class="card-header"><h3>⚠ Échéances et obligations</h3></div>

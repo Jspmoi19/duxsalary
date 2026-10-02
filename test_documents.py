@@ -360,6 +360,101 @@ _mig = _io.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'migrat
 check("Migration: colonnes des lettres et retrait de l'ancienne contrainte d'unicite",
       ("'lettres_onss': [" in _mig, "DROP CONSTRAINT" in _mig and "to_regclass('lettres_onss') IS NULL" in _mig), (True, True))
 
+print(); print("=" * 70); print("TRAVAILLEUR -- archiver (historique conserve) ou supprimer definitivement (tout effacer)"); print("=" * 70)
+from suppression_travailleur import supprimer_par_passes, effacer_travailleur, inventaire, libelle_inventaire
+class FauxCurseur:
+    """Base simulee: tables liees au travailleur 5, avec des cles etrangeres (prestations -> dimona, fiches_paie -> contrats)."""
+    def __init__(self):
+        self.lignes = {'contrats': 2, 'dimona': 1, 'fiches_paie': 3, 'prestations': 41, 'incapacites': 1, 'documents': 0}
+        self.dependances = {'dimona': ['prestations'], 'contrats': ['fiches_paie', 'dimona']}   # table: tables qui la referencent
+        self.journal, self._resultat, self.travailleur_present = [], [], True
+    def execute(self, sql, params=None):
+        self.journal.append(sql)
+        if 'information_schema.columns' in sql:
+            self._resultat = [{'table_name': t} for t in sorted(self.lignes)]
+        elif sql.startswith('SELECT COUNT(*)'):
+            self._resultat = [{'n': self.lignes[sql.split('"')[1]]}]
+        elif sql.startswith('SELECT pdf_path'):
+            t = sql.split('"')[1]
+            self._resultat = [{'chemin': f'/pdf/{t}_{i}.pdf'} for i in range(self.lignes[t])] if t != 'contrats' else [{'chemin': None}]
+        elif sql.startswith('DELETE FROM "'):
+            t = sql.split('"')[1]
+            if any(self.lignes.get(x) for x in self.dependances.get(t, [])):
+                raise Exception(f'violates foreign key constraint on {t}')
+            self.lignes[t] = 0
+        elif sql.startswith('DELETE FROM travailleurs'):
+            self.travailleur_present = False
+    def fetchall(self): return self._resultat
+    def fetchone(self): return self._resultat[0]
+fc_ = FauxCurseur()
+inv = inventaire(fc_, 5)
+check("Inventaire avant suppression: seules les tables qui ont des lignes", inv, {'contrats': 2, 'dimona': 1, 'fiches_paie': 3, 'incapacites': 1, 'prestations': 41})
+check("... en clair pour la page de confirmation", libelle_inventaire(inv),
+      '2 contrat(s), 1 Dimona, 3 fiche(s) de paie, 1 incapacité(s), 41 jour(s) de prestations')
+from suppression_travailleur import SuppressionBloquee, blocage
+try:
+    effacer_travailleur(fc_, 5); refuse = None
+except SuppressionBloquee as ex:
+    refuse = str(ex)
+check("Travailleur avec des fiches de paie: suppression definitive REFUSEE (documents sociaux a conserver 5 ans), rien n'est efface",
+      ('3 fiche(s) de paie' in (refuse or '') and '5 ans' in (refuse or '') and "seul l'archivage" in (refuse or ''),
+       fc_.lignes['fiches_paie'], fc_.lignes['contrats'], fc_.travailleur_present, any(s.startswith('DELETE') for s in fc_.journal)),
+      (True, 3, 2, True, False))
+check("Une seule fiche suffit a bloquer ; sans fiche, pas de blocage", (blocage({'fiches_paie': 1}) is not None, blocage({'contrats': 2})), (True, None))
+fc_ = FauxCurseur(); fc_.lignes['fiches_paie'] = 0        # essai sans aucune fiche de paie
+inv = inventaire(fc_, 5)
+inv2, chemins = effacer_travailleur(fc_, 5)
+check("Suppression definitive d'un essai sans fiche: toutes les lignes liees sont effacees, puis le travailleur",
+      (sum(fc_.lignes.values()), fc_.travailleur_present), (0, False))
+check("... malgre les cles etrangeres (contrats references par les Dimona, Dimona par les prestations): reessai par passes, avec point de reprise",
+      (any('ROLLBACK TO SAVEPOINT' in s for s in fc_.journal), fc_.journal[-1].startswith('DELETE FROM travailleurs')), (True, True))
+check("... aucun PDF de fiche de paie n'est jamais retire (il n'y en a pas quand la suppression est permise)", chemins, [])
+ordre = supprimer_par_passes(['a', 'b', 'c'], lambda t, etat={'a': ['b'], 'b': ['c'], 'c': []}, fait=set():
+                             (_ for _ in ()).throw(Exception('fk')) if any(x not in fait for x in etat[t]) else fait.add(t))
+check("Ordre trouve sans le connaitre d'avance: c, puis b, puis a", ordre, ['c', 'b', 'a'])
+try:
+    supprimer_par_passes(['a', 'b'], lambda t: (_ for _ in ()).throw(Exception('bloque'))); leve = False
+except RuntimeError as ex:
+    leve = 'Suppression impossible pour : a, b' in str(ex)
+check("Blocage total: erreur claire (la transaction est alors annulee, rien n'est efface)", leve, True)
+check("Travailleur sans aucune donnee liee: libelle clair", libelle_inventaire({}), 'aucune donnée liée')
+ctx_t = dict(request=_Req(), marque=_branding.get_branding(), statique=_branding.url_statique, session={'user_id': 1, 'user_nom': 'U'},
+             tenant={}, tous_les_dossiers=[_dos], dossiers_archives=[], dossier=_dos, dossier_actif=_dos)
+trav_t = {'id': 5, 'prenom': 'test', 'nom': 'test', 'dossier_id': 7, 'niss': None, 'date_naissance': None, 'actif': True}
+h_t = _env.get_template('fiche_travailleur.html').render(travailleur=trav_t, tab='info', contrats=[{'id': 1, 'en_cours': True}],
+                                                         fiches=[], documents=[], **ctx_t)
+check("Fiche du travailleur: deux actions distinctes, « Archiver » et « Supprimer définitivement »",
+      ('>Archiver<' in h_t, 'href="/travailleur/5/effacer"' in h_t, 'Cette action est irréversible' in h_t), (True, True, False))
+h_t = _env.get_template('fiche_travailleur.html').render(travailleur=dict(trav_t, actif=False), tab='info',
+                                                         contrats=[{'id': 1, 'en_cours': True}], fiches=[], documents=[], **ctx_t)
+check("Travailleur archive: bandeau d'explication, bouton « Restaurer » et suppression definitive toujours possible",
+      ('Travailleur <b>archivé</b>' in h_t, 'action="/travailleur/5/restaurer"' in h_t, 'href="/travailleur/5/effacer"' in h_t), (True, True, True))
+h_t = _env.get_template('effacer_travailleur.html').render(travailleur=trav_t, inventaire=inv, resume=libelle_inventaire(inv),
+                                                           erreur=None, blocage=None, **ctx_t)
+check("Page de confirmation (travailleur sans fiche): liste de ce qui sera efface, case a cocher obligatoire",
+      ('2 contrat(s)' in h_t, 'name="confirmer" required' in h_t, 'irréversible' in h_t), (True, True, True))
+inv_f = dict(inv, fiches_paie=3)
+h_t = _env.get_template('effacer_travailleur.html').render(travailleur=trav_t, inventaire=inv_f, resume=libelle_inventaire(inv_f),
+                                                           erreur=None, blocage=blocage(inv_f), **ctx_t)
+check("Page pour un travailleur qui a des fiches: explication (5 ans), aucun bouton de suppression, archivage propose",
+      ('conservés 5 ans' in h_t, 'name="confirmer"' in h_t, '>Supprimer définitivement</button>' in h_t, 'Archiver ce travailleur' in h_t),
+      (True, False, False, True))
+h_t = _env.get_template('dashboard.html').render(echeances=[], travailleurs=[], contrats=[], fiches=[], nb_contrats_actifs=0,
+                                                 travailleurs_archives=[{'id': 5, 'prenom': 'test', 'nom': 'test'}], **ctx_t)
+check("Tableau de bord: les travailleurs archives restent accessibles", 'Travailleurs archivés (1)' in h_t and 'href="/travailleur/5"' in h_t)
+from dmfa import aide_dmfa as _aide_t
+_c_t = {'id': 11, 'type_contrat': 'CDI', 'cp_key': 'CP 200', 'date_debut': date(2026, 9, 1), 'date_fin': None, 'statut': 'actif',
+        'heures_jour': 7.6, 'jours_semaine': 5, 'heures_semaine': 38.0}
+_d_t = _aide_t({'id': 7, 'nom': 'S', 'numero_unite_etablissement': '2.123.456.789'}, 2026, 3,
+               [{'travailleur': dict(trav_t, actif=False), 'contrats': [_c_t], 'fiches': [], 'jours': []}])
+check("Aide DmfA: un travailleur archive qui a un contrat dans le trimestre reste repris, signale « (archivé) » avec la marche a suivre",
+      (_d_t['travailleurs'][0]['nom'], any('supprimez-le définitivement' in a for a in _d_t['travailleurs'][0]['alertes'])),
+      ('test test (archivé)', True))
+check("Aide DmfA: une fois supprime definitivement, il n'y figure plus", _aide_t({'id': 7, 'nom': 'S'}, 2026, 3, [])['travailleurs'], [])
+check("app.py: « Supprimer » n'efface plus en silence -- archiver, restaurer et effacer sont trois routes distinctes",
+      all(x in source_app for x in ("/travailleur/<int:travailleur_id>/restaurer", "/travailleur/<int:travailleur_id>/effacer",
+                                    "effacer_travailleur(cur, travailleur_id)")))
+
 print(); print("=" * 70)
 if ECHECS:
     print(f"❌ {len(ECHECS)} TEST(S) ECHOUE(S): {ECHECS}"); sys.exit(1)

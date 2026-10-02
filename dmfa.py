@@ -530,7 +530,11 @@ def aide_dmfa(dossier, annee, trimestre, travailleurs):
                     note="Code 3 : indemnité de rupture, sur une ligne d'occupation séparée, avec les dates de la période "
                          "couverte (à scinder par trimestre et par année) ; ni réduction structurelle ni bonus à l'emploi. "
                          "Code 7 : pécule simple de sortie. Code 870 : double pécule de sortie, au niveau de l'employeur."))
-        resultat.append({'nom': f"{trav.get('nom') or ''} {trav.get('prenom') or ''}".strip(), 'niss': trav.get('niss') or '',
+        if trav.get('actif') is False:
+            alertes_t.insert(0, "Travailleur archivé : il reste dans l'aide DmfA parce qu'il a un contrat ou des fiches dans ce "
+                                "trimestre. S'il s'agit d'un essai ou d'un doublon sans fiche de paie, supprimez-le définitivement depuis sa fiche.")
+        resultat.append({'nom': (f"{trav.get('nom') or ''} {trav.get('prenom') or ''}".strip()
+                                 + (' (archivé)' if trav.get('actif') is False else '')), 'niss': trav.get('niss') or '',
                          'id': trav.get('id'), 'occupations': occupations, 'tableaux': tableaux,
                          'alertes': alertes_t + [a for o in occupations for a in o['alertes']]})
 

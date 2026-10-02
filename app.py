@@ -139,6 +139,18 @@ def nouveau_dossier():
         return redirect(url_for('dossier_dashboard', dossier_id=did))
     return render_template('nouveau_dossier.html', **ctx)
 
+def _travailleurs_archives(dossier_id):
+    """Travailleurs archives du dossier (actif = FALSE): ils restent accessibles pour etre
+    restaures ou supprimes definitivement."""
+    from psycopg2.extras import RealDictCursor
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT id, prenom, nom, niss FROM travailleurs WHERE dossier_id = %s AND actif = FALSE ORDER BY nom, prenom",
+                (dossier_id,))
+    lignes = [dict(r) for r in cur.fetchall()]
+    cur.close(); conn.close()
+    return lignes
+
+
 @app.route('/dossier/<int:dossier_id>')
 @login_required
 def dossier_dashboard(dossier_id):
@@ -152,6 +164,7 @@ def dossier_dashboard(dossier_id):
                            dossier=dossier, dossier_actif=dossier,
                            echeances=get_echeances_dossier(dossier_id),
                            travailleurs=get_travailleurs(dossier_id),
+                           travailleurs_archives=_travailleurs_archives(dossier_id),
                            contrats=get_contrats(dossier_id=dossier_id),
                            nb_contrats_actifs=len(contrats_actifs(get_contrats(dossier_id=dossier_id))),
                            fiches=get_fiches_paie(dossier_id=dossier_id, actives_seulement=True), **ctx)
@@ -326,9 +339,57 @@ def supprimer_travailleur(travailleur_id):
     dossier_id = travailleur['dossier_id']
     conn = get_conn()
     cur = conn.cursor()
+    # ARCHIVER (et non effacer): le travailleur sort de la liste, son historique est conserve
+    # et continue de compter. La suppression definitive est une action distincte (ci-dessous).
     cur.execute("UPDATE travailleurs SET actif = FALSE WHERE id = %s", (travailleur_id,))
     conn.commit(); cur.close(); conn.close()
     return redirect(url_for('dossier_dashboard', dossier_id=dossier_id))
+
+
+@app.route('/travailleur/<int:travailleur_id>/restaurer', methods=['POST'])
+@login_required
+def restaurer_travailleur(travailleur_id):
+    travailleur = get_travailleur(travailleur_id)
+    conn = get_conn(); cur = conn.cursor()
+    cur.execute("UPDATE travailleurs SET actif = TRUE WHERE id = %s", (travailleur_id,))
+    conn.commit(); cur.close(); conn.close()
+    return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id))
+
+
+@app.route('/travailleur/<int:travailleur_id>/effacer', methods=['GET', 'POST'])
+@login_required
+def effacer_travailleur_definitivement(travailleur_id):
+    """Suppression DEFINITIVE d'un travailleur et de toutes ses donnees (essai, doublon), apres
+    une page de confirmation qui liste ce qui sera efface. Voir suppression_travailleur.py."""
+    from psycopg2.extras import RealDictCursor
+    from suppression_travailleur import inventaire, libelle_inventaire, effacer_travailleur, blocage
+    travailleur = get_travailleur(travailleur_id)
+    if not travailleur:
+        return "Introuvable", 404
+    dossier = get_dossier(travailleur['dossier_id'])
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+    erreur = None
+    if request.method == 'POST' and request.form.get('confirmer') == 'on':
+        try:
+            _inv, chemins = effacer_travailleur(cur, travailleur_id)
+            conn.commit()
+            for chemin in chemins:      # PDF du travailleur efface, s'ils ne servent plus a aucune ligne
+                try:
+                    if os.path.exists(chemin):
+                        os.remove(chemin)
+                except OSError:
+                    pass
+            cur.close(); conn.close()
+            return redirect(url_for('dossier_dashboard', dossier_id=dossier['id']))
+        except Exception as ex:
+            conn.rollback()
+            app.logger.warning(f"Suppression definitive du travailleur {travailleur_id}: {ex}")
+            erreur = f"La suppression a échoué, rien n'a été effacé : {ex}"
+    inv = inventaire(cur, travailleur_id)
+    cur.close(); conn.close()
+    ctx = get_context_base(); ctx['tenant'] = get_tenant()
+    return render_template('effacer_travailleur.html', travailleur=travailleur, dossier=dossier, dossier_actif=dossier,
+                           inventaire=inv, resume=libelle_inventaire(inv), erreur=erreur, blocage=blocage(inv), **ctx)
 
 # ── DOCUMENTS ─────────────────────────────────────────────────────────
 def get_documents_travailleur(travailleur_id):

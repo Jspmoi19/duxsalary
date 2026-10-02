@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Supprimer définitivement — {{ travailleur.prenom }} {{ travailleur.nom }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Supprimer définitivement {{ travailleur.prenom }} {{ travailleur.nom }}</h2>
+  </div>
+</div>
+
+{% if erreur %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #c0392b;background:#fff5f5">
+  <div class="card-body" style="padding:12px 16px;font-size:13px;color:#a93226">⛔ {{ erreur }}</div>
+</div>
+{% endif %}
+
+{% if blocage %}
+<div class="card" style="border-left:4px solid #f39c12">
+  <div class="card-body" style="padding:16px;font-size:13px">
+    <p><b>{{ blocage }}</b></p>
+    <p>Données de ce travailleur : {{ resume }}.</p>
+    <p style="color:var(--text-muted)">L'archivage le retire de la liste du dossier en conservant tout son historique ; il reste
+      repris dans les documents de charges et dans l'aide DmfA des périodes où il a des fiches.</p>
+    <div style="margin-top:14px;display:flex;gap:10px">
+      {% if travailleur.actif is not sameas false %}
+      <form method="POST" action="/travailleur/{{ travailleur.id }}/supprimer">
+        <button type="submit" class="btn btn-primary">Archiver ce travailleur</button>
+      </form>
+      {% endif %}
+      <a href="/travailleur/{{ travailleur.id }}" class="btn btn-secondary">Retour à la fiche</a>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card" style="border-left:4px solid #c0392b">
+  <div class="card-body" style="padding:16px;font-size:13px">
+    <p><b>Cette action efface le travailleur et toutes ses données de la base. Elle est irréversible.</b></p>
+    <p>Seront effacés : <b>{{ resume }}</b>.</p>
+    <p style="color:var(--text-muted)">Réservé à un essai ou à un doublon : ce travailleur n'a aucune fiche de paie.</p>
+    <form method="POST" style="margin-top:14px">
+      <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin-bottom:12px">
+        <input type="checkbox" name="confirmer" required> Je confirme la suppression définitive de {{ travailleur.prenom }} {{ travailleur.nom }}</label>
+      <button type="submit" class="btn btn-danger">Supprimer définitivement</button>
+      <a href="/travailleur/{{ travailleur.id }}" class="btn btn-secondary">Annuler</a>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

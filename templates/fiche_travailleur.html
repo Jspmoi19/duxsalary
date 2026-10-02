@@ -9,12 +9,27 @@
   </div>
   <div class="page-actions">
     <a href="/travailleur/{{ travailleur.id }}/modifier" class="btn btn-secondary">Modifier</a>
-    <form method="POST" action="/travailleur/{{ travailleur.id }}/supprimer" style="display:inline" onsubmit="return confirm('Supprimer ce travailleur ? Cette action est irréversible.')">
-      <button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
+    {% if travailleur.actif is not sameas false %}
+    <form method="POST" action="/travailleur/{{ travailleur.id }}/supprimer" style="display:inline" onsubmit="return confirm('Archiver ce travailleur ? Il sort de la liste, son historique est conservé.')">
+      <button type="submit" class="btn btn-secondary btn-sm">Archiver</button>
     </form>
+    {% else %}
+    <form method="POST" action="/travailleur/{{ travailleur.id }}/restaurer" style="display:inline">
+      <button type="submit" class="btn btn-secondary btn-sm">Restaurer</button>
+    </form>
+    {% endif %}
+    <a href="/travailleur/{{ travailleur.id }}/effacer" class="btn btn-danger btn-sm">Supprimer définitivement</a>
   </div>
 </div>
 
+{% if travailleur.actif is sameas false %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #f39c12">
+  <div class="card-body" style="padding:12px 16px;font-size:13px;color:#8a5a00">
+    Travailleur <b>archivé</b> : il n'apparaît plus dans la liste du dossier, mais ses contrats et ses fiches sont conservés et
+    comptent toujours dans les documents de charges et l'aide DmfA. Pour un essai ou un doublon, utilisez « Supprimer définitivement ».
+  </div>
+</div>
+{% endif %}
 {% if not contrats|selectattr('en_cours')|list %}
 <div class="card" style="margin-bottom:16px;border-left:4px solid #c0392b;background:#fff5f5">
   <div class="card-body" style="padding:12px 16px;font-size:13px;color:#a93226">
