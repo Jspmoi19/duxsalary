@@ -356,3 +356,25 @@ def contexte_incapacites(episodes, contrats, contrat, is_ouvrier, jusqu_au):
     return {'episodes': episodes, 'ventilation': ventilation, 'par_date': tranches_par_date(ventilation),
             'regime': regime, 'contrat': contrat, 'contrats': contrats, 'debut_anciennete': debut_anc, 'alertes': alertes,
             'regles': regles_affichees(regime, jusqu_au) if contrat else []}
+
+
+# ─────────────────────────────────────────────────────────────────
+# PROTECTION: jours « maladie » du calendrier sans episode
+# ─────────────────────────────────────────────────────────────────
+CODES_MALADIE_CALENDRIER = ('MA',) + CODES_INCAPACITE
+
+
+def jours_maladie_sans_episode(jours_codes, par_date):
+    """jours_codes: [(date, code du calendrier)] ; par_date: tranches_par_date(...).
+    Retourne les groupes de jours codes maladie qui ne tombent dans AUCUN episode
+    d'incapacite: [{'debut', 'fin', 'jours'}] -- un groupe par suite de jours
+    (un week-end ou un jour ferie entre deux jours ne coupe pas le groupe).
+    Sert a proposer la creation de l'episode, pre-rempli avec ces dates."""
+    orphelins = sorted(d for d, code in jours_codes if code in CODES_MALADIE_CALENDRIER and d not in (par_date or {}))
+    groupes = []
+    for d in orphelins:
+        if groupes and (d - groupes[-1]['fin']).days <= 4:
+            groupes[-1]['fin'] = d; groupes[-1]['jours'] += 1
+        else:
+            groupes.append({'debut': d, 'fin': d, 'jours': 1})
+    return groupes

@@ -460,7 +460,7 @@ def calendrier_prestations(dimona_id):
         (travailleur['id'], annee, mois))
     # Incapacites en cours ou touchant ce mois: le calendrier est complete jusqu'a la
     # fin du mois affiche (episode sans date de fin), puis relu
-    incapacites_mois, incapacites_alertes = [], []
+    incapacites_mois, incapacites_alertes, par_date_inc = [], [], None
     try:
         fin_mois_aff = date(annee, mois, calendar.monthrange(annee, mois)[1])
         ctx_inc = _contexte_incapacites(cur, travailleur['id'], fin_mois_aff)
@@ -474,6 +474,7 @@ def calendrier_prestations(dimona_id):
                 _marquer_incapacites_au_calendrier(cur, travailleur['id'], dossier['id'], ctx_inc)
                 conn.commit()
         incapacites_alertes = ctx_inc['alertes'] + [a for v in incapacites_mois for a in v['alertes']]
+        par_date_inc = ctx_inc['par_date'] if ctx_inc['regime'] else None
     except Exception as ex_inc:
         conn.rollback()
         app.logger.warning(f"Incapacites (calendrier): {ex_inc}")
@@ -484,6 +485,10 @@ def calendrier_prestations(dimona_id):
         (travailleur['id'], annee, mois))
     prests_dict = {row['date_prestation']: dict(row) for row in cur.fetchall()}
     cur.close(); conn.close()
+    # Protection: jours codes maladie sans episode d'incapacite -> alerte + creation en un clic
+    from salaire_garanti import jours_maladie_sans_episode
+    maladie_sans_episode = [] if par_date_inc is None else jours_maladie_sans_episode(
+        [(d_p, row['code_journee']) for d_p, row in prests_dict.items()], par_date_inc)
 
     jours_feries = get_jours_feries(annee)
     _, nb_jours = calendar.monthrange(annee, mois)
@@ -566,7 +571,8 @@ def calendrier_prestations(dimona_id):
                            mois_nom=mois_noms[mois], premier_jour_semaine=premier_jour_semaine,
                            codes=CODES_JOURNALIERS, codes_json=jsonlib.dumps(CODES_JOURNALIERS),
                            heures_jour=round(heures_jour, 2),
-                           incapacites_mois=incapacites_mois, incapacites_alertes=incapacites_alertes, **ctx)
+                           incapacites_mois=incapacites_mois, incapacites_alertes=incapacites_alertes,
+                           maladie_sans_episode=maladie_sans_episode, **ctx)
 
 @app.route('/prestation/sauvegarder', methods=['POST'])
 @login_required
@@ -1749,10 +1755,15 @@ def generer_fiche_depuis_calendrier(dimona_id):
                                          'heures': float(p['heures'] or heures_jour)})
             else:
                 hors_episode += 1
+        maladie_sans_episode = []
         if hors_episode:
             maladie_alertes.append(
                 f"{hors_episode} jour(s) codé(s) maladie dans le calendrier hors de tout épisode d'incapacité : rien n'est "
-                f"calculé pour ces jours. Encodez l'incapacité dans la fiche du travailleur (« Maladie »).")
+                f"calculé pour ces jours. Créez l'épisode (bouton ci-dessous ou page « Maladie » du travailleur), puis recalculez.")
+            if ctx_inc and ctx_inc['regime']:
+                from salaire_garanti import jours_maladie_sans_episode
+                maladie_sans_episode = jours_maladie_sans_episode(
+                    [(p['date_prestation'], p['code_journee']) for p in prestations], ctx_inc['par_date'])
         incapacite = {'regime': ctx_inc['regime'] if ctx_inc else None, 'jours': jours_incapacite,
                       'infos': maladie_infos, 'alertes': maladie_alertes}
 
@@ -1892,6 +1903,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
             champs = [(k, v) for k, v in form.items(multi=True) if k != 'action']
             return render_template('calcul_paie_detail.html', data=data, dimona=dimona, contrat=contrat,
                                    annee=annee, mois=mois, mois_nom=mois_nom_calc, champs=champs,
+                                   maladie_sans_episode=maladie_sans_episode,
                                    dossier_actif=get_dossier(dimona['dossier_id']), **ctx)
 
         # ── ETAPE 2 : "Generer la fiche" (valide sur la page de detail) ──

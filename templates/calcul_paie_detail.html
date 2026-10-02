@@ -36,6 +36,8 @@
 </div>
 {% endif %}
 
+{% set tid = dimona.travailleur_id %}{% include "_maladie_sans_episode.html" %}
+
 <div class="calc-cards">
   <div class="calc-card"><div class="lbl">Brut ONSS</div><div class="val" style="color:#1F4E79">{{ "%.2f"|format(data.brut_onss) }} €</div></div>
   <div class="calc-card"><div class="lbl">Net à payer</div><div class="val" style="color:#27ae60">{{ "%.2f"|format(data.salaire_net) }} €</div></div>

@@ -25,6 +25,8 @@
   </div>
 </div>
 
+{% set tid = travailleur.id %}{% include "_maladie_sans_episode.html" %}
+
 <!-- MALADIE: incapacites touchant ce mois (tranches de salaire garanti) -->
 {% if incapacites_mois or incapacites_alertes %}
 <div class="card" style="margin-bottom:14px;border-left:4px solid #f39c12">

@@ -15,6 +15,17 @@
   </div>
 </div>
 
+{% if not contrats %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #c0392b;background:#fff5f5">
+  <div class="card-body" style="padding:12px 16px;font-size:13px;color:#a93226">
+    ⛔ <b>Aucun contrat actif pour ce travailleur</b> (contrats archivés ou supprimés, ou aucun contrat créé).
+    Sans contrat actif, la paie, les chèques et le salaire garanti ne peuvent pas être calculés correctement.
+    <a href="/dossier/{{ dossier.id }}/contrat/nouveau?travailleur_id={{ travailleur.id }}" style="color:var(--accent)">Créer un contrat CDI/CDD</a> ·
+    <a href="/contrat/etudiant/nouveau?dossier_id={{ dossier.id }}&travailleur_id={{ travailleur.id }}" style="color:var(--accent)">Créer un contrat étudiant</a>
+  </div>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="worker-header" style="display:flex;align-items:center;gap:16px;padding:18px;">
     <div class="worker-avatar" style="width:52px;height:52px;font-size:20px;">{{ travailleur.prenom[0] }}{{ travailleur.nom[0] }}</div>

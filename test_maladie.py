@@ -335,6 +335,38 @@ h = rendre('generer_fiche_form.html', '/dimona/5/generer-paie', dimona={'id': 5,
            mois_nom='Octobre', cp_key='CP 140.03', vehicule_societe=False, km_domicile=0,
            maladie_infos=infos, maladie_alertes=du_mois[0]['alertes'])
 check("Formulaire de generation: rappel de l'incapacite du mois avant le calcul", 'Maladie et salaire garanti ce mois-ci' in h and 'Rechute' in h)
+
+print(); print("=" * 70); print("PROTECTIONS -- jours maladie sans episode ; travailleur sans contrat actif"); print("=" * 70)
+from salaire_garanti import jours_maladie_sans_episode
+codes = [(date(2026,10,n), 'MA') for n in (12, 13, 14, 15, 16, 19, 20)] + [(date(2026,10,28), 'MG'), (date(2026,10,1), 'M2'),
+         (date(2026,10,21), 'P'), (date(2026,10,22), 'CL')]
+g = jours_maladie_sans_episode(codes, par_date)
+check("Jours maladie hors episode regroupes (le week-end ne coupe pas): 12/10 -> 20/10 (7 j) et 28/10 (1 j)",
+      [(x['debut'], x['fin'], x['jours']) for x in g], [(date(2026,10,12), date(2026,10,20), 7), (date(2026,10,28), date(2026,10,28), 1)])
+check("Un jour maladie couvert par un episode (01/10) n'est pas signale ; ni les jours prestes ou de conge",
+      any(x['debut'] <= date(2026,10,1) <= x['fin'] or x['debut'] <= date(2026,10,21) <= x['fin'] for x in g), False)
+check("Aucun jour maladie orphelin: aucune alerte", jours_maladie_sans_episode([(date(2026,10,1), 'M2'), (date(2026,10,21), 'P')], par_date), [])
+ctx_cal = dict(dimona={'id': 5, 'type_dimona': 'OTH', 'date_debut': ENTREE, 'date_fin': None}, jours=jours_cal,
+               stats={'jours_prestes': 15, 'heures_prestees': 114.0, 'jours_conge': 0, 'jours_maladie': 7, 'jours_ferie': 0,
+                      'jours_chomage': 0, 'jours_cnp': 0}, calcul=None, annee=2026, mois=10, mois_nom='Octobre',
+               premier_jour_semaine=3, codes=CODES_JOURNALIERS, codes_json=json.dumps(CODES_JOURNALIERS), heures_jour=7.6,
+               incapacites_mois=[], incapacites_alertes=[])
+h = rendre('calendrier_prestations.html', '/dimona/5/prestations', maladie_sans_episode=g, **ctx_cal)
+check("Calendrier: alerte claire + bouton de creation pre-rempli (du 12/10 au 20/10)",
+      "sans épisode d'incapacité" in h and 'action="/travailleur/3/incapacites"' in h and 'name="date_debut" value="2026-10-12"' in h
+      and 'name="date_fin" value="2026-10-20"' in h and 'name="action" value="creer"' in h)
+check("Calendrier sans jour orphelin: pas d'alerte", "sans épisode d'incapacité" in
+      rendre('calendrier_prestations.html', '/dimona/5/prestations', maladie_sans_episode=[], **ctx_cal), False)
+h = rendre('calcul_paie_detail.html', '/dimona/5/generer-paie', data=r, dimona={'id': 5, 'prenom': 'Camille', 'nom': 'Exemple', 'travailleur_id': 3},
+           contrat=contrat, annee=2026, mois=10, mois_nom='Octobre', champs=[], maladie_sans_episode=g)
+check("« Calculer la paie »: meme alerte et meme bouton, hors du formulaire de generation",
+      'name="date_debut" value="2026-10-12"' in h and h.index("sans épisode d'incapacité") < h.index('data-pdf="Fiche de paie"'))
+ctx_ft = dict(tab='info', fiches=[], documents=[])
+h = rendre('fiche_travailleur.html', '/travailleur/3', contrats=[], **ctx_ft)
+check("Fiche du travailleur sans contrat actif: alerte avec les liens pour en creer un",
+      'Aucun contrat actif pour ce travailleur' in h and '/dossier/7/contrat/nouveau?travailleur_id=3' in h)
+check("Fiche du travailleur avec un contrat actif: pas d'alerte", 'Aucun contrat actif' in
+      rendre('fiche_travailleur.html', '/travailleur/3', contrats=[contrat], **ctx_ft), False)
 if SORTIE:
     from generer_fiche_pdf import generer_fiche_paie_pdf
     r.update(periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
