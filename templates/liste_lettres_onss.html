@@ -15,7 +15,8 @@
     <tbody>
     {% for l in lettres %}
     <tr {% if l.remplacement %}style="color:#999;background:#fafafa"{% endif %}>
-      <td>{% if l.remplacement %}{{ l.mois_nom }} {{ l.annee }}<br><span class="badge badge-orange" title="Lettre conservée avec son PDF ; seule la lettre active de la période porte les montants à payer">{{ l.remplacement }}</span>{% else %}<strong>{{ l.mois_nom }} {{ l.annee }}</strong>{% endif %}</td>
+      <td>{% if l.remplacement %}{{ l.mois_nom }} {{ l.annee }}<br><span class="badge badge-orange" title="Lettre conservée avec son PDF ; seule la lettre active de la période porte les montants à payer">{{ l.remplacement }}</span>{% else %}<strong>{{ l.mois_nom }} {{ l.annee }}</strong>{% if l.a_regenerer %}<br><span class="badge badge-orange" title="Une fiche de paie de ce mois a été supprimée ou régénérée depuis : les montants de cette lettre ne correspondent plus">à régénérer</span>
+        <a href="/dossier/{{ dossier.id }}/lettre-onss?annee={{ l.annee }}&mois={{ l.mois }}" style="font-size:12px;color:var(--accent)">régénérer</a>{% endif %}{% endif %}</td>
       <td>{{ "%.2f"|format(l.total_brut or 0) }} €</td>
       <td>{{ "%.2f"|format(l.total_onss_personnel or 0) }} €</td>
       <td>{{ "%.2f"|format(l.total_onss_patronal or 0) }} €</td>

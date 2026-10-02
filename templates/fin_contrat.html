@@ -48,6 +48,9 @@
           </select></div>
         <div class="form-group"><label>Dernier jour du contrat (si le préavis n'est pas presté jusqu'au bout)</label>
           <input type="date" name="date_fin_effective" class="form-control" value="{{ f.get('date_fin_effective', '') }}"></div>
+        <div class="form-group"><label>Jours de suspension pendant le préavis (maladie, vacances…)</label>
+          <input type="number" min="0" step="1" name="jours_suspension" class="form-control" value="{{ f.get('jours_suspension', '0') }}">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Jours calendrier. Reporte la fin d'un préavis donné par l'employeur.</div></div>
       </div>
       <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px;margin:10px 0">
         <label style="display:flex;gap:8px;align-items:center;font-weight:400">
@@ -123,7 +126,8 @@
   <div style="padding:10px 16px;font-size:13px;border-bottom:1px solid #f0f2f5">
     Préavis : <b>{{ d.preavis.semaines }} semaine(s)</b> · ancienneté {{ d.preavis.anciennete_mois }} mois · {{ d.preavis.version }}
     {% if d.preavis.dates %}<br>Notification effective le {{ d.preavis.dates.effet.strftime('%d/%m/%Y') }} · préavis du
-    <b>{{ d.preavis.dates.debut.strftime('%d/%m/%Y') }}</b> au <b>{{ d.preavis.dates.fin.strftime('%d/%m/%Y') }}</b>{% endif %}
+    <b>{{ d.preavis.dates.debut.strftime('%d/%m/%Y') }}</b> au <b>{{ d.preavis.dates.fin.strftime('%d/%m/%Y') }}</b>
+    {% if d.preavis.dates.jours_suspension %}(reporté de {{ d.preavis.dates.jours_suspension }} jour(s) de suspension ; sans suspension : {{ d.preavis.dates.fin_sans_suspension.strftime('%d/%m/%Y') }}){% endif %}{% endif %}
   </div>
   {% endif %}
   <table class="fc-table">

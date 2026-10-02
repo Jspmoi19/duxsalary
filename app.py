@@ -2103,6 +2103,14 @@ def generer_fiche_depuis_calendrier(dimona_id):
                          AND periode_debut = %s AND periode_fin = %s AND id <> %s AND remplacee_par IS NULL""",
                     (fiche_id, dimona['travailleur_id'], contrat['id'] if contrat else None,
                      periode_debut, periode_fin, fiche_id))
+        # Une fiche du mois vient de changer: la lettre ONSS deja generee pour ce mois est a regenerer
+        try:
+            cur.execute('SAVEPOINT lettre_a_regenerer')
+            _marquer_lettre_a_regenerer(cur, dimona['dossier_id'], periode_debut)
+            cur.execute('RELEASE SAVEPOINT lettre_a_regenerer')
+        except Exception as ex_l:
+            cur.execute('ROLLBACK TO SAVEPOINT lettre_a_regenerer')
+            app.logger.warning(f"Lettre ONSS non marquee a regenerer: {ex_l}")
         conn.commit()
         cur.close(); conn.close()
 
@@ -2194,18 +2202,62 @@ def generer_fiche_depuis_calendrier(dimona_id):
 
 # ── SUPPRESSION FICHE DE PAIE ─────────────────────────────────────────
 
-@app.route('/fiche/<int:fiche_id>/supprimer', methods=['POST'])
+def _marquer_lettre_a_regenerer(cur, dossier_id, periode_debut):
+    """La lettre ONSS active du dossier pour ce mois ne correspond plus aux fiches (fiche
+    supprimee ou regeneree): elle est marquee « a regenerer » dans l'historique ONSS."""
+    cur.execute("""UPDATE lettres_onss SET a_regenerer = TRUE
+                   WHERE dossier_id = %s AND mois = %s AND annee = %s AND remplacee_par IS NULL""",
+                (dossier_id, periode_debut.month, periode_debut.year))
+
+
+@app.route('/fiche/<int:fiche_id>/supprimer', methods=['GET', 'POST'])
 @login_required
 def supprimer_fiche_paie(fiche_id):
+    """Suppression d'une fiche de paie: page de confirmation (travailleur, periode, montants),
+    alerte si une lettre ONSS existe pour le mois, regeneration proposee en priorite. La
+    suppression reste possible (il faut pouvoir corriger une erreur), apres confirmation."""
     conn = get_conn()
     from psycopg2.extras import RealDictCursor
+    from lettres_remplacees import MOIS as MOIS_LETTRES
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT travailleur_id, pdf_path FROM fiches_paie WHERE id = %s", (fiche_id,))
+    cur.execute("SELECT * FROM fiches_paie WHERE id = %s", (fiche_id,))
     fiche = cur.fetchone()
     if not fiche:
         cur.close(); conn.close()
         return "Introuvable", 404
     travailleur_id = fiche['travailleur_id']
+    if request.method != 'POST' or request.form.get('confirmer') != 'on':
+        lettre = None
+        try:
+            cur.execute("""SELECT * FROM lettres_onss WHERE dossier_id = %s AND mois = %s AND annee = %s
+                           AND remplacee_par IS NULL ORDER BY id DESC LIMIT 1""",
+                        (fiche['dossier_id'], fiche['periode_debut'].month, fiche['periode_debut'].year))
+            lettre = cur.fetchone()
+            lettre = dict(lettre, mois_nom=MOIS_LETTRES[lettre['mois']]) if lettre else None
+        except Exception as ex_l:
+            conn.rollback()
+            app.logger.warning(f"Lettre ONSS du mois non lue: {ex_l}")
+        # Lien direct vers la regeneration: la Dimona du travailleur qui couvre le mois de la fiche
+        cur.execute("""SELECT id FROM dimona WHERE travailleur_id = %s AND date_debut <= %s
+                       AND (date_fin IS NULL OR date_fin >= %s) ORDER BY date_debut DESC LIMIT 1""",
+                    (travailleur_id, fiche['periode_fin'], fiche['periode_debut']))
+        dim = cur.fetchone()
+        cur.execute("SELECT COUNT(*) AS n FROM fiches_paie WHERE remplacee_par = %s", (fiche_id,))
+        nb_remplacees = cur.fetchone()['n']
+        cur.close(); conn.close()
+        travailleur = get_travailleur(travailleur_id)
+        dossier = get_dossier(travailleur['dossier_id'])
+        ctx = get_context_base(); ctx['tenant'] = get_tenant()
+        lien = (f"/dimona/{dim['id']}/prestations?annee={fiche['periode_debut'].year}&mois={fiche['periode_debut'].month}"
+                if dim else f"/travailleur/{travailleur_id}/dimona")
+        return render_template('supprimer_fiche.html', fiche=dict(fiche), travailleur=travailleur, dossier=dossier,
+                               dossier_actif=dossier, lettre=lettre, lien_regenerer=lien, regeneration_directe=bool(dim),
+                               nb_remplacees=nb_remplacees, **ctx)
+    try:
+        _marquer_lettre_a_regenerer(cur, fiche['dossier_id'], fiche['periode_debut'])
+    except Exception as ex_l:
+        conn.rollback()
+        app.logger.warning(f"Lettre ONSS non marquee a regenerer: {ex_l}")
     # Les fiches que celle-ci remplacait redeviennent actives (sinon la periode n'aurait plus de fiche)
     cur.execute("UPDATE fiches_paie SET remplacee_par = NULL, remplacee_le = NULL WHERE remplacee_par = %s", (fiche_id,))
     # Supprimer le fichier PDF s'il existe et qu'aucune autre fiche ne l'utilise
@@ -2487,8 +2539,15 @@ def fin_contrat(contrat_id):
         try:
             if profil_fc is None:
                 raise ValueError(fc['erreur'] or "Données du contrat illisibles.")
-            decompte, saisie = decompte_depuis_formulaire(request.form, profil_fc, dict(contrat), contrats_fc, fiches_fc,
-                                                          nb_enfants=fc.get('nb_enfants', 0))
+            decompte, saisie = decompte_depuis_formulaire(
+                request.form, profil_fc, dict(contrat), contrats_fc, fiches_fc, nb_enfants=fc.get('nb_enfants', 0),
+                situation_familiale={   # pour la dispense de precompte du n° 61 (bareme mensuel)
+                    'etat_civil': trav_fc.get('etat_civil') or 'celibataire', 'nb_enfants': fc.get('nb_enfants', 0),
+                    'partenaire_revenus_pro': trav_fc.get('partenaire_revenus_pro') or 'non',
+                    'charges': {'parent_isole': bool(trav_fc.get('parent_isole')), 'handicape': bool(trav_fc.get('handicape')),
+                                'conjoint_handicape': bool(trav_fc.get('conjoint_handicape')),
+                                'nb_personnes_charge_dependance': int(trav_fc.get('nb_personnes_charge_66') or 0),
+                                'nb_autres_personnes_charge': int(trav_fc.get('nb_autres_personnes_charge') or 0)}})
             fc['decompte'], fc['saisie'] = decompte, saisie
             if request.form.get('action') == 'pdf':
                 from pdf_fin_contrat import generer_pdf_decompte

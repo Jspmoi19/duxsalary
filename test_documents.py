@@ -360,6 +360,45 @@ _mig = _io.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'migrat
 check("Migration: colonnes des lettres et retrait de l'ancienne contrainte d'unicite",
       ("'lettres_onss': [" in _mig, "DROP CONSTRAINT" in _mig and "to_regclass('lettres_onss') IS NULL" in _mig), (True, True))
 
+print(); print("=" * 70); print("SUPPRESSION D'UNE FICHE -- confirmation, lettre ONSS a regenerer, regeneration proposee d'abord"); print("=" * 70)
+_fiche_s = dict(fp(2, cree=datetime(2026, 8, 3)), dossier_id=7, total_onss=155.16, salaire_brut=761.43, salaire_net=808.87,
+                periode_fin=date(2026, 7, 31))
+_ctx_s = dict(request=_Req(), marque=_branding.get_branding(), statique=_branding.url_statique, session={'user_id': 1, 'user_nom': 'U'},
+              tenant={}, tous_les_dossiers=[_dos], dossiers_archives=[], dossier=_dos, dossier_actif=_dos,
+              travailleur={'id': 3, 'prenom': 'Camille', 'nom': 'Exemple', 'dossier_id': 7})
+h_s = _env.get_template('supprimer_fiche.html').render(
+    fiche=_fiche_s, lettre={'mois_nom': 'Juillet', 'annee': 2026, 'total_onss': 155.16}, nb_remplacees=1,
+    lien_regenerer='/dimona/5/prestations?annee=2026&mois=7', regeneration_directe=True, **_ctx_s)
+check("Page de confirmation: travailleur, periode et montants de la fiche",
+      all(x in h_s for x in ('Camille Exemple', '01/07/2026 au 31/07/2026', '761.43', '808.87', '155.16')))
+check("... alerte: la lettre ONSS du mois ne correspondra plus et sera marquee a regenerer",
+      'la lettre ONSS du mois ne correspondra plus' in h_s and 'à régénérer' in h_s and 'Juillet 2026' in h_s)
+check("... la regeneration est proposee EN PREMIER, avant la suppression, avec le lien direct vers le mois",
+      (h_s.index('Régénérer la fiche de ce mois') < h_s.index('Supprimer quand même'), 'href="/dimona/5/prestations?annee=2026&mois=7"' in h_s,
+       'reste conservée' in h_s), (True, True, True))
+check("... la suppression reste possible, apres une case a cocher obligatoire", 'name="confirmer" required' in h_s and '>Supprimer la fiche</button>' in h_s)
+check("... et annonce que la fiche remplacee redevient active", 'redeviendra la fiche active' in h_s)
+h_s2 = _env.get_template('supprimer_fiche.html').render(fiche=_fiche_s, lettre=None, nb_remplacees=0,
+    lien_regenerer='/travailleur/3/dimona', regeneration_directe=False, **_ctx_s)
+check("Sans lettre ONSS pour le mois: pas d'alerte ; sans Dimona retrouvee: lien vers les prestations du travailleur",
+      ('ne correspondra plus' in h_s2, 'href="/travailleur/3/dimona"' in h_s2), (False, True))
+check("Fiche du travailleur: le bouton ouvre la page de confirmation, il ne supprime plus en un clic",
+      ('href="/fiche/2/supprimer"' in h, "confirm('Supprimer cette fiche de paie ?')" in h), (True, False))
+check("Serveur: sans confirmation la fiche n'est pas supprimee ; la lettre active du mois est marquee a regenerer (suppression et regeneration)",
+      ("request.form.get('confirmer') != 'on'" in source_app, source_app.count('_marquer_lettre_a_regenerer(cur,') >= 2,
+       'SET a_regenerer = TRUE' in source_app and 'AND remplacee_par IS NULL' in source_app.split('def _marquer_lettre_a_regenerer')[1][:600]),
+      (True, True, True))
+hist_r, _tot_r = pour_historique([lo(2, cree=datetime(2026, 10, 2), a_regenerer=True),
+                                  lo(1, cree=datetime(2026, 8, 3), remplacee_par=2, a_regenerer=True), lo(3, mois=8)])
+check("Historique ONSS: seule la lettre ACTIVE dont une fiche a change est marquee « à régénérer »",
+      [(l['id'], l['a_regenerer']) for l in hist_r], [(3, False), (2, True), (1, False)])
+h_lr = _env.get_template('liste_lettres_onss.html').render(
+    request=_Req(), marque=_branding.get_branding(), statique=_branding.url_statique, session={'user_id': 1, 'user_nom': 'U'},
+    tenant={}, tous_les_dossiers=[_dos], dossiers_archives=[], dossier=_dos, dossier_actif=_dos, lettres=hist_r, totaux=_tot_r)
+check("... avec l'etiquette et le lien pour regenerer la lettre du mois",
+      (h_lr.count('>à régénérer<'), 'href="/dossier/7/lettre-onss?annee=2026&mois=7"' in h_lr), (1, True))
+check("Migration: colonne a_regenerer des lettres", "('a_regenerer', 'BOOLEAN DEFAULT FALSE')" in _mig)
+
 print(); print("=" * 70); print("TRAVAILLEUR -- archiver (historique conserve) ou supprimer definitivement (tout effacer)"); print("=" * 70)
 from suppression_travailleur import supprimer_par_passes, effacer_travailleur, inventaire, libelle_inventaire
 class FauxCurseur:

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Supprimer une fiche de paie — {{ travailleur.prenom }} {{ travailleur.nom }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Supprimer une fiche de paie</h2>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>{{ travailleur.prenom }} {{ travailleur.nom }} — {{ fiche.periode_debut.strftime('%d/%m/%Y') }} au {{ fiche.periode_fin.strftime('%d/%m/%Y') }}</h3></div>
+  <div class="card-body" style="padding:14px 16px;font-size:13px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:6px 18px">
+    <div>Brut : <b>{{ "%.2f"|format(fiche.salaire_brut or 0) }} €</b></div>
+    <div>Net : <b>{{ "%.2f"|format(fiche.salaire_net or 0) }} €</b></div>
+    <div>ONSS (travailleur + employeur) : <b>{{ "%.2f"|format(fiche.total_onss or 0) }} €</b></div>
+    <div>Générée le : <b>{{ fiche.created_at.strftime('%d/%m/%Y') if fiche.created_at else '—' }}</b></div>
+    {% if fiche.remplacee_par %}<div style="color:#8a5a00">Fiche déjà remplacée par une fiche plus récente</div>{% endif %}
+  </div>
+</div>
+
+{% if lettre %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #f39c12">
+  <div class="card-body" style="padding:12px 16px;font-size:13px;color:#8a5a00">
+    ⚠ Une lettre ONSS existe pour {{ lettre.mois_nom }} {{ lettre.annee }} (total {{ "%.2f"|format(lettre.total_onss or 0) }} €) :
+    <b>la lettre ONSS du mois ne correspondra plus</b>. Elle sera marquée « à régénérer » dans l'historique ONSS.
+  </div>
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom:16px;border-left:4px solid #27ae60">
+  <div class="card-body" style="padding:16px;font-size:13px">
+    <p><b>Recommandé : régénérer la fiche plutôt que la supprimer.</b></p>
+    <p style="color:var(--text-muted)">La nouvelle fiche remplace l'ancienne, qui passe au statut « remplacée » et reste conservée avec
+      son PDF. C'est la bonne manière de corriger une fiche, surtout si elle a déjà été envoyée au client ou au travailleur.</p>
+    <a href="{{ lien_regenerer }}" class="btn btn-primary">{{ 'Régénérer la fiche de ce mois' if regeneration_directe else 'Ouvrir les prestations du travailleur pour régénérer' }}</a>
+    <a href="/travailleur/{{ travailleur.id }}?tab=fiches" class="btn btn-secondary">Annuler</a>
+  </div>
+</div>
+
+<div class="card" style="border-left:4px solid #c0392b">
+  <div class="card-body" style="padding:16px;font-size:13px">
+    <p><b>Supprimer quand même.</b> La fiche et son PDF sont effacés, sans retour possible. À réserver à une fiche créée par erreur.</p>
+    {% if nb_remplacees %}<p style="color:var(--text-muted)">La fiche qu'elle remplaçait redeviendra la fiche active de la période.</p>{% endif %}
+    <form method="POST">
+      <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin-bottom:12px">
+        <input type="checkbox" name="confirmer" required> Je confirme la suppression de cette fiche de paie</label>
+      <button type="submit" class="btn btn-danger">Supprimer la fiche</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

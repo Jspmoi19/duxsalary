@@ -62,6 +62,8 @@ def pour_historique(lettres):
     resultat = []
     for l in lettres:
         l = dict(l, mois_nom=MOIS[l['mois']], remplacement=libelle_remplacement(l))
+        # « a regenerer »: seulement pour une lettre active dont une fiche du mois a change depuis
+        l['a_regenerer'] = bool(l.get('a_regenerer')) and not l['remplacement']
         resultat.append(l)
     resultat.sort(key=lambda l: (-l['annee'], -l['mois'], l['remplacement'] is not None, -l['id']))
     actives = [l for l in resultat if not l['remplacement']]

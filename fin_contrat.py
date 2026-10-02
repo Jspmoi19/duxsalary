@@ -219,8 +219,8 @@ def precompte_indemnite_dedit(imposable, remuneration_reference_annuelle, refere
 def decompte_sortie(profil, motif, type_contrat, date_debut_contrat, date_fin_contrat_prevue, debut_anciennete,
                     date_notification, mode_notification='recommande', preavis_preste=True, date_fin_effective=None,
                     hebdo_base=0.0, explication_hebdo='', avantages_annuels=None, nb_enfants=0,
-                    remuneration_annuelle_normale=None, precompte_mensuel_nul=False,
-                    pecule=None, retenue_travailleur=0.0):
+                    remuneration_annuelle_normale=None, precompte_mensuel_nul=None,
+                    pecule=None, retenue_travailleur=0.0, situation_familiale=None, jours_suspension=0):
     """Calcule le decompte de sortie.
     profil: ProfilTravailleur (statut, taux ONSS). motif: cle de MOTIFS.
     preavis_preste: le preavis est preste jusqu'a son terme (aucune indemnite) ; sinon le
@@ -228,6 +228,12 @@ def decompte_sortie(profil, motif, type_contrat, date_debut_contrat, date_fin_co
     payee en indemnite.
     pecule (employes): {'brut_annee_en_cours', 'brut_annee_precedente', 'jours_vacances_pris',
     'double_deja_paye'} ou None.
+    precompte_mensuel_nul: None = calcule (dispense du n° 61 de l'annexe III: aucun precompte
+    quand le douzieme de la remuneration de reference n'en donne pas au bareme mensuel, selon
+    situation_familiale = {'etat_civil', 'nb_enfants', 'partenaire_revenus_pro', 'charges'}).
+    jours_suspension: jours calendrier de suspension du contrat pendant le preavis (maladie,
+    vacances...) quand le conge est donne par l'employeur: la fin du preavis est reportee
+    d'autant (art. 38 § 2).
     retenue_travailleur: montant que Leo decide de retenir sur le net quand l'indemnite est due
     PAR le travailleur (demission sans preavis preste). Rien n'est retenu d'office: voir plus bas.
     Retourne {'preavis', 'indemnite', 'pecule', 'lignes' (pour le document client, SANS
@@ -263,6 +269,15 @@ def decompte_sortie(profil, motif, type_contrat, date_debut_contrat, date_fin_co
         mois = anciennete_mois(debut_anciennete, debut_preavis)
         semaines, version, plafonne = semaines_preavis(auteur, mois, date_debut_contrat)
         dates = dates_preavis(date_notification, mode_notification, semaines)
+        report = int(jours_suspension or 0) if auteur == 'employeur' else 0
+        if report > 0:
+            dates = dict(dates, fin_sans_suspension=dates['fin'], fin=dates['fin'] + timedelta(days=report), jours_suspension=report)
+            regles.append(f"Préavis suspendu pendant {report} jour(s) (maladie, vacances…) : sa fin est reportée du "
+                          f"{_jj(dates['fin_sans_suspension'])} au {_jj(dates['fin'])} (art. 38 § 2 : en cas de congé donné par "
+                          f"l'employeur, le délai de préavis ne court pas pendant la suspension).")
+        elif int(jours_suspension or 0) > 0:
+            regles.append("Congé donné par le travailleur : le préavis court pendant la suspension, sa fin n'est pas reportée "
+                          "(art. 38 § 1er).")
         auteur_txt = "l'employeur" if auteur == 'employeur' else 'le travailleur'
         regles.append(f"Préavis de {semaines} semaine(s) : congé donné par {auteur_txt}, "
                       f"{mois} mois d'ancienneté au {_jj(debut_preavis)}, {version['libelle']} ({version['source']}).")
@@ -300,9 +315,9 @@ def decompte_sortie(profil, motif, type_contrat, date_debut_contrat, date_fin_co
                 semaines_indemnite = round(((dates['fin'] - fin_eff).days) / 7, 2)
             regles.append(f"Préavis non presté (ou partiellement) : fin du contrat le {_jj(fin_eff)}, indemnité pour "
                           f"{semaines_indemnite:g} semaine(s) restant à courir (art. 39 § 1er).")
-        if dates and auteur == 'employeur':
+        if dates and auteur == 'employeur' and not dates.get('jours_suspension'):
             alertes.append("Congé donné par l'employeur : le préavis ne court pas pendant une suspension du contrat "
-                           "(vacances, maladie…) ; la date de fin est à reporter d'autant (art. 38 § 2).")
+                           "(vacances, maladie…). Indiquez les jours de suspension pour reporter la date de fin (art. 38 § 2).")
         if semaines >= PREAVIS_SEUIL_RECLASSEMENT_SEMAINES and auteur == 'employeur':
             alertes.append(f"Préavis de {semaines} semaines (30 ou plus) : reclassement professionnel obligatoire. Son "
                            f"imputation (4 semaines) sur l'indemnité de rupture n'est pas calculée par l'outil.")
@@ -343,7 +358,19 @@ def decompte_sortie(profil, motif, type_contrat, date_debut_contrat, date_fin_co
             base_pat = profil.base_onss_patronale(brut)
             onss_pat = _r2(base_pat * profil.onss_patronal_taux_base)
             annuel_ref = _r2(hebdo * 52)
-            pp, taux_pp, exonere = precompte_indemnite_dedit(_r2(brut - onss), annuel_ref, ref, nb_enfants, precompte_mensuel_nul)
+            # Dispense du n° 61: le douzieme de la remuneration de reference donne-t-il du precompte au bareme mensuel ?
+            dispense = precompte_mensuel_nul
+            if dispense is None:
+                sf = situation_familiale or {}
+                mensuel_ref = _r2(annuel_ref / 12)
+                imposable_ref = _r2(mensuel_ref - profil.onss_personnel(mensuel_ref))
+                dispense = profil.precompte_brut(imposable_ref, sf.get('etat_civil') or 'celibataire', int(sf.get('nb_enfants') or 0),
+                                                 sf.get('partenaire_revenus_pro') or 'non', reference_date=ref,
+                                                 charges=sf.get('charges')) <= 0
+            pp, taux_pp, exonere = precompte_indemnite_dedit(_r2(brut - onss), annuel_ref, ref, nb_enfants, dispense)
+            if dispense:
+                regles.append(f"Dispense de précompte sur l'indemnité : le douzième de la rémunération de référence "
+                              f"({annuel_ref / 12:.2f} € par mois) ne donne pas de précompte au barème mensuel (annexe III 2026, n° 61).")
             c812 = 0.0
             p812 = get_cotisation_rupture_params(ref)
             taux_812 = next((t for seuil, t in (p812 or {}).get('paliers', []) if annuel_ref >= seuil), 0.0)
@@ -368,9 +395,11 @@ def decompte_sortie(profil, motif, type_contrat, date_debut_contrat, date_fin_co
                 f"{hebdo_av:.2f} € = {hebdo:.2f} € × {semaines_indemnite:g} semaines (art. 39).",
                 "ONSS : cotisations ordinaires, code rémunération 3, période couverte à partir du lendemain de la fin du "
                 "contrat ; ni réduction structurelle ni bonus à l'emploi (Instructions ONSS 2026/3).",
-                f"Précompte : {taux_pp * 100:.2f} % sur l'imposable, rémunération de référence annuelle {annuel_ref:.2f} € "
-                f"(annexe III 2026, n° 58 à 62)" + (f", {exonere:.2f} € exonérés pour enfants à charge (n° 60)" if exonere else '') + ".",
             ]
+            if not dispense:
+                regles.append(
+                    f"Précompte : {taux_pp * 100:.2f} % sur l'imposable, rémunération de référence annuelle {annuel_ref:.2f} € "
+                    f"(annexe III 2026, n° 58 à 62)" + (f", {exonere:.2f} € exonérés pour enfants à charge (n° 60)" if exonere else '') + ".")
             if lig_av:
                 regles.append("Rappel : l'indemnité de rupture est soumise en entier aux cotisations ordinaires, avantages "
                               "compris (même ceux qui étaient exonérés pendant le contrat) ; les montants des avantages "
@@ -506,7 +535,7 @@ def propositions(contrat, fiches, statut, date_fin, cheque_part_patronale=0.0, a
     }
 
 
-def decompte_depuis_formulaire(form, profil, contrat, contrats, fiches, nb_enfants=0):
+def decompte_depuis_formulaire(form, profil, contrat, contrats, fiches, nb_enfants=0, situation_familiale=None):
     """Lit le formulaire de la page « Fin de contrat » et calcule le decompte.
     form: dict (ou request.form). Retourne (decompte, saisie relue)."""
     from salaire_garanti import debut_occupation_ininterrompue
@@ -551,6 +580,7 @@ def decompte_depuis_formulaire(form, profil, contrat, contrats, fiches, nb_enfan
         form.get('mode_notification') or 'recommande', preavis_preste=preste, date_fin_effective=fin_effective,
         hebdo_base=hebdo, explication_hebdo=explication, avantages_annuels=avantages, nb_enfants=nb_enfants,
         remuneration_annuelle_normale=mensuel * 12 if paye_au_mois else hebdo * 52, pecule=pecule,
-        retenue_travailleur=nombre('retenue_travailleur'))
+        retenue_travailleur=nombre('retenue_travailleur'), situation_familiale=situation_familiale,
+        jours_suspension=int(nombre('jours_suspension')))
     decompte['date_fin'] = fin_effective or ((decompte['preavis'] or {}).get('dates') or {}).get('fin') or notification
     return decompte, {'hebdo': hebdo, 'explication_hebdo': explication, 'avantages': avantages, 'debut_anciennete': debut_anc}

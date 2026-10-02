@@ -142,9 +142,16 @@ r = decompte_sortie(EMP, 'licenciement', 'CDI', date(2025, 1, 1), None, date(202
 check("Preavis interrompu le 29/11/2026: 4 semaines restant a courir, indemnite 4 x 692,31 = 2.769,24", (r['indemnite']['semaines'], r['indemnite']['brut']), (4.0, 2769.24))
 
 # 4. CDI debute apres le 01/08/2026, licencie apres 4 mois: 1 semaine
-r = decompte_sortie(EMP, 'licenciement', 'CDI', date(2026, 9, 1), None, date(2026, 9, 1), date(2027, 1, 6), 'recommande',
-                    preavis_preste=False, date_fin_effective=date(2027, 1, 10), hebdo_base=H_EMP[0])
-check("CDI debute le 01/09/2026, licencie apres 4 mois: preavis d'une semaine, indemnite 692,31", (r['preavis']['semaines'], r['indemnite']['brut']), (1, 692.31))
+r = decompte_sortie(EMP, 'licenciement', 'CDI', date(2026, 8, 3), None, date(2026, 8, 3), date(2026, 12, 2), 'recommande',
+                    preavis_preste=False, date_fin_effective=date(2026, 12, 6), hebdo_base=H_EMP[0])
+check("CDI debute le 03/08/2026, licencie apres 4 mois: preavis d'une semaine, indemnite 692,31",
+      (r['preavis']['semaines'], r['preavis']['anciennete_mois'], r['indemnite']['brut']), (1, 4, 692.31))
+try:
+    decompte_sortie(EMP, 'licenciement', 'CDI', date(2026, 9, 1), None, date(2026, 9, 1), date(2027, 1, 6), 'recommande',
+                    preavis_preste=False, date_fin_effective=date(2027, 1, 10), hebdo_base=H_EMP[0]); leve = False
+except ValueError as ex:
+    leve = '2027' in str(ex)
+check("Decompte date de 2027: refuse tant que le bareme du precompte 2027 n'est pas charge (pas de repli sur 2026)", leve)
 r = decompte_sortie(EMP, 'licenciement', 'CDI', date(2026, 3, 2), None, date(2026, 3, 2), date(2026, 7, 8), 'recommande',
                     preavis_preste=False, date_fin_effective=date(2026, 7, 12), hebdo_base=H_EMP[0])
 check("CDI debute le 02/03/2026, licencie apres 4 mois: 4 semaines, indemnite 2.769,24", (r['preavis']['semaines'], r['indemnite']['brut']), (4, 2769.24))
@@ -217,6 +224,38 @@ check("Ouvrier licencie apres 2 ans et 4 mois: 12 semaines x 570,00 = 6.840,00",
 check("Ouvrier: ONSS travailleur sur 108 % (7.387,20 x 13,07 % = 965,51)", i['onss'], 965.51)
 check("Ouvrier: aucun pecule de sortie a charge de l'employeur, et la regle le dit", (r['pecule'], any('caisse de vacances' in x for x in r['regles'])), (None, True))
 check("Meme table de preavis pour un ouvrier et un employe (statut unique)", sem('employeur', 28, date(2024, 6, 3)), 12)
+
+# 8 bis. Report de la fin du preavis en cas de suspension (art. 38 § 2)
+base_s = dict(type_contrat='CDI', date_debut_contrat=date(2025, 1, 1), date_fin_contrat_prevue=None, debut_anciennete=date(2025, 1, 1),
+              date_notification=date(2026, 10, 7), mode_notification='recommande', preavis_preste=True, hebdo_base=H_EMP[0])
+r = decompte_sortie(EMP, 'licenciement', jours_suspension=10, **base_s)
+check("Licenciement, 10 jours de maladie pendant le preavis: fin reportee du 27/12/2026 au 06/01/2027",
+      (r['preavis']['dates']['fin_sans_suspension'], r['preavis']['dates']['fin'], r['preavis']['dates']['jours_suspension']),
+      (date(2026, 12, 27), date(2027, 1, 6), 10))
+check("... la regle est expliquee, et l'alerte de rappel disparait",
+      (any('reportée du 27/12/2026 au 06/01/2027' in x for x in r['regles']), any('Indiquez les jours de suspension' in a for a in r['alertes'])),
+      (True, False))
+r = decompte_sortie(EMP, 'licenciement', **base_s)
+check("Sans jour de suspension saisi: date de fin inchangee, rappel d'indiquer les jours de suspension",
+      (r['preavis']['dates']['fin'], any('Indiquez les jours de suspension' in a for a in r['alertes'])), (date(2026, 12, 27), True))
+r = decompte_sortie(EMP, 'demission', jours_suspension=10, **dict(base_s, date_notification=date(2026, 10, 9), mode_notification='remise'))
+check("Demission: le preavis court pendant la suspension, pas de report (fin le 15/11/2026)",
+      (r['preavis']['dates']['fin'], any("n'est pas reportée" in x for x in r['regles'])), (date(2026, 11, 15), True))
+
+# 8 ter. Dispense de precompte (annexe III n° 61)
+PETIT = construire_profil('CP 200', 'employe', type_contrat='CDI', reference_date=date(2026, 10, 31), categorie_employeur='010')
+h_petit = remuneration_hebdomadaire(True, salaire_mensuel=900.0)      # 10.800 EUR par an: aucun precompte au bareme mensuel
+r = decompte_sortie(PETIT, 'licenciement', 'CDI', date(2025, 1, 1), None, date(2025, 1, 1), date(2026, 10, 7), 'recommande',
+                    preavis_preste=False, date_fin_effective=date(2026, 10, 11), hebdo_base=h_petit[0])
+check("Remuneration de reference de 900,00 EUR par mois: aucun precompte au bareme mensuel -> dispense sur l'indemnite (n° 61)",
+      (r['indemnite']['precompte'], any('Dispense de précompte' in x and 'n° 61' in x for x in r['regles'])), (0.0, True))
+r = decompte_sortie(EMP, 'licenciement', 'CDI', date(2025, 1, 1), None, date(2025, 1, 1), date(2026, 10, 7), 'recommande',
+                    preavis_preste=False, date_fin_effective=date(2026, 10, 11), hebdo_base=H_EMP[0])
+check("Remuneration de 3.000,00 EUR par mois: pas de dispense, precompte au taux du bareme",
+      (r['indemnite']['precompte'] > 0, any('Dispense de précompte' in x for x in r['regles'])), (True, False))
+r = decompte_sortie(EMP, 'licenciement', 'CDI', date(2025, 1, 1), None, date(2025, 1, 1), date(2026, 10, 7), 'recommande',
+                    preavis_preste=False, date_fin_effective=date(2026, 10, 11), hebdo_base=H_EMP[0], precompte_mensuel_nul=True)
+check("La dispense peut aussi etre imposee par l'appelant", r['indemnite']['precompte'], 0.0)
 
 # 9. Alertes de perimetre
 r = decompte_sortie(EMP, 'licenciement', 'CDI', date(2016, 1, 4), None, date(2016, 1, 4), date(2026, 10, 7), 'recommande',
@@ -327,6 +366,7 @@ commun = dict(request=Requete(), marque=branding.get_branding(), statique=brandi
               contrat=dict(CONTRAT, prenom='Camille', nom='Exemple'))
 fc = {'erreur': None, 'decompte': None, 'saisie': None, 'propositions': prop, 'motifs': _M, 'avantages': _A, 'statut': 'employe', 'nb_enfants': 0}
 h = env.get_template('fin_contrat.html').render(fc=fc, formulaire={}, **commun)
+check("Page: champ des jours de suspension pendant le preavis", 'name="jours_suspension"' in h)
 check("Page: formulaire du decompte avec les motifs, les 7 avantages pre-remplis et le pecule de sortie",
       all(x in h for x in ('name="motif"', 'name="av_voiture_societe"', 'name="av_prime_fin_annee" class="form-control" value="3000.00"',
                            'name="brut_annee_en_cours" class="form-control" value="27000.00"', 'Certificat de travail', 'Formulaire C4')))

@@ -150,9 +150,7 @@
       <td>{{ f.total_onss }} €</td>
       <td style="display:flex;gap:6px">
         {% if f.pdf_path %}<a href="/download/{{ f.pdf_path|basename }}" class="btn btn-secondary btn-xs">PDF</a>{% endif %}
-        <form method="POST" action="/fiche/{{ f.id }}/supprimer" style="display:inline" onsubmit="return confirm('Supprimer cette fiche de paie ?')">
-          <button type="submit" class="btn btn-danger btn-xs">Supprimer</button>
-        </form>
+        <a href="/fiche/{{ f.id }}/supprimer" class="btn btn-danger btn-xs">Supprimer…</a>
       </td>
     </tr>
     {% else %}

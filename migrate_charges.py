@@ -86,6 +86,9 @@ COLONNES = {
     # la date de la migration).
     'lettres_onss': [
         ('remplacee_par', 'INTEGER'), ('remplacee_le', 'TIMESTAMP'), ('created_at', 'TIMESTAMP DEFAULT NOW()'),
+        # TRUE quand une fiche du mois a ete supprimee ou regeneree apres la lettre: ses montants ne
+        # correspondent plus aux fiches, elle est a regenerer (affiche dans l'historique ONSS)
+        ('a_regenerer', 'BOOLEAN DEFAULT FALSE'),
     ],
     'dossiers': [
         ('caisse_vacances', 'VARCHAR(200)'), ('service_medical', 'VARCHAR(200)'), ('assurance_groupe', 'VARCHAR(200)'),
