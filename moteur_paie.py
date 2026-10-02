@@ -387,6 +387,10 @@ def calculer_fiche_paie(
     css = profil.css_mensuelle(base_css, etat_civil, partenaire_revenus_pro, reference_date=ref_date_fiscale)
 
     # ── INDEMNITÉS EXONÉRÉES ──────────────────────────────────────────
+    # Chaque ligne separe ce qui va sur la FICHE DE PAIE remise au travailleur
+    # ('detail': court -- taux, nombre, base) de ce qui reste INTERNE ('source': origine
+    # du montant, affichee seulement sur la page « Calculer la paie »). Aucun nom de
+    # source ni note interne dans 'libelle' ou 'detail' (verifie par test_branding.py).
     lignes_indemn = []
 
     # RGPT
@@ -407,11 +411,12 @@ def calculer_fiche_paie(
     if rgpt_j > 0 and rgpt_actif and jours_prestes > 0:
         montant_rgpt = round(rgpt_j * jours_prestes, 2)
         lignes_indemn.append({'libelle': f'Indemnité RGPT ({jours_prestes} j)',
-            'detail': f"{rgpt_j:.4f} €/jour — {rgpt_v['source']}", 'jours': jours_prestes, 'montant': montant_rgpt})
+            'detail': f"{rgpt_j:.4f} €/jour", 'source': f"depuis le {rgpt_v['date_debut']:%d/%m/%Y} — {rgpt_v['source']}",
+            'jours': jours_prestes, 'montant': montant_rgpt})
     elif rgpt_h > 0 and rgpt_actif and heures_prestees > 0:
         montant_rgpt = round(rgpt_h * heures_prestees, 2)
         lignes_indemn.append({'libelle': f'Indemnité RGPT ({heures_prestees:.0f}h)',
-            'detail': f"{rgpt_h:.4f} €/h depuis le {rgpt_v['date_debut']:%d/%m/%Y} — {rgpt_v['source']}",
+            'detail': f"{rgpt_h:.4f} €/h", 'source': f"depuis le {rgpt_v['date_debut']:%d/%m/%Y} — {rgpt_v['source']}",
             'jours': 0, 'montant': montant_rgpt})
 
     # ARAB
@@ -472,7 +477,7 @@ def calculer_fiche_paie(
             montant_cr_ded = -round(nb_cr * pt_cr, 2)
             cr_empl_total = round(nb_cr * float(cr_calc.get('part_patronale') or 0), 2)
             lignes_indemn.append({'libelle': f'Chèques-repas part travailleur ({nb_cr} x {pt_cr:.2f} €)',
-                'detail': f"{nb_cr} chèques de {float(cr_calc.get('valeur') or 0):.2f} € — {origine_cr}",
+                'detail': f"{nb_cr} chèques de {float(cr_calc.get('valeur') or 0):.2f} €", 'source': origine_cr,
                 'jours': 0, 'montant': montant_cr_ded})
         alertes_cheques += [f"Chèques-repas : {a}" for a in cr_calc.get('alertes') or []]
 
@@ -513,7 +518,7 @@ def calculer_fiche_paie(
         lignes_exc += [
             {'libelle': f'{libelle_prime} (brut)', 'detail': 'Allocation exceptionnelle', 'jours': 0, 'montant': round(prime_exceptionnelle, 2)},
             {'libelle': f'ONSS sur {libelle_prime.lower()}', 'detail': f'{onss_pers_taux*100:.2f} %', 'jours': 0, 'montant': -prime_onss},
-            {'libelle': f'Précompte sur {libelle_prime.lower()}', 'detail': f'{taux_pp_prime*100:.2f} % (barème allocations exceptionnelles)', 'jours': 0, 'montant': -prime_precompte},
+            {'libelle': f'Précompte sur {libelle_prime.lower()}', 'detail': f'{taux_pp_prime*100:.2f} %', 'source': 'barème des allocations exceptionnelles', 'jours': 0, 'montant': -prime_precompte},
         ]
     pecule_retenue = pecule_imposable = pecule_precompte = 0.0
     if double_pecule and double_pecule > 0 and not is_etudiant:
@@ -531,8 +536,9 @@ def calculer_fiche_paie(
         lignes_exc += [
             {'libelle': 'Double pécule de vacances (brut)', 'detail': 'Allocation exceptionnelle', 'jours': 0, 'montant': round(double_pecule, 2)},
             {'libelle': 'Retenue double pécule', 'detail': f'13,07 % sur 85/92 ({pecule_base_soumise:.2f})', 'jours': 0, 'montant': -pecule_retenue},
-            {'libelle': 'Précompte double pécule', 'detail': ('saisi manuellement' if taux_pp_pec is None
-                        else f'{taux_pp_pec*100:.2f} % (barème allocations exceptionnelles)'), 'jours': 0, 'montant': -pecule_precompte},
+            {'libelle': 'Précompte double pécule', 'detail': ('' if taux_pp_pec is None else f'{taux_pp_pec*100:.2f} %'),
+             'source': ('saisi manuellement' if taux_pp_pec is None else 'barème des allocations exceptionnelles'),
+             'jours': 0, 'montant': -pecule_precompte},
         ]
     lignes_indemn.extend(lignes_exc)
     net_exceptionnel = round(net_exceptionnel, 2)
@@ -663,10 +669,12 @@ def calculer_fiche_paie(
             L('Réduction liée au bonus à l\'emploi', red_precompte_bonus, source='33,14 % volet A / 52,54 % volet B'),
             L('Précompte retenu', -precompte, total=True)]},
         {'titre': 'Indemnités et retenues nettes', 'lignes':
-            [L(l['libelle'], l['montant'], source=l.get('detail')) for l in lignes_indemn]},
+            [L(l['libelle'], l['montant'], source=' — '.join(x for x in (l.get('detail'), l.get('source')) if x))
+             for l in lignes_indemn]},
         {'titre': 'Allocations exceptionnelles', 'lignes':
             ([L('Rémunération annuelle brute normale (base du taux)', remu_annuelle_normale, info=True)] if lignes_exc else []) +
-            [L(l['libelle'], l['montant'], source=l['detail']) for l in lignes_exc] +
+            [L(l['libelle'], l['montant'], source=' — '.join(x for x in (l.get('detail'), l.get('source')) if x))
+             for l in lignes_exc] +
             ([L('Net des allocations exceptionnelles', net_exceptionnel, total=True)] if lignes_exc else [])},
         {'titre': 'Net à payer', 'lignes': [L('Salaire net', salaire_net, total=True)]},
         {'titre': 'Cotisations patronales', 'lignes': [
@@ -776,6 +784,7 @@ def calculer_fiche_paie(
         'lignes_salaire': lignes_salaire,
         'brut_onss': brut_onss,
         'onss_travailleur': -onss_trav_brut,
+        'onss_personnel_taux': onss_pers_taux,
         'onss_net': -onss_trav_net,
         'bonus_emploi_a': bonus_a, 'bonus_emploi_b': bonus_b,
         'bonus_emploi': bonus_a + bonus_b,
@@ -818,33 +827,3 @@ def calculer_fiche_paie(
             ('Avantage repas reçu en nature (non versé)', -montant_avantage)) if mt]
             + [{'libelle': l['libelle'] + ' – hors ONSS, imposable', 'montant': l['montant']} for l in lignes_hors_onss],
     }
-
-
-if __name__ == '__main__':
-    r = calculer_fiche_paie(
-        'Dorian', 'Plavmyzha', '05022018542',
-        'Bld Prince de Liège 216 Bte 4 - 1070 Anderlecht', 'BE30 0637 2951 5211',
-        date(2005,2,2), date(2026,8,10),
-        'FDLR LOGISTICS SRL', 'Sint-Amandsstraat 2 - 1853 Grimbergen',
-        '1029.507.718', '1070562-80',
-        'CP 140.03', 'Chauffeur - Niveau 1', 17.5,
-        heures_semaine=38.0, heures_jour=6.0, jours_semaine=4,
-        premier_engagement=True,
-        jours_prestes=8, heures_prestees=64.0,
-        rgpt_actif=True, cheques_repas=True,
-        periode_debut=date(2026,8,1), periode_fin=date(2026,8,31),
-    )
-    print("=== TEST vs Liantis FDLR ===")
-    print(f"Brut ONSS:   {r['brut_onss']:.2f}€  (Liantis: 1209.60€)")
-    print(f"ONSS trav:   {abs(r['onss_travailleur']):.2f}€  (Liantis: 158.09€)")
-    print(f"Bonus A:     {r['bonus_emploi_a']:.2f}€  (Liantis: 55.10€)")
-    print(f"Bonus B:     {r['bonus_emploi_b']:.2f}€  (Liantis: 16.89€)")
-    print(f"Imposable:   {r['brut_imposable']:.2f}€  (Liantis: 1033.90€)")
-    rgpt = next((l for l in r['lignes_indemn'] if 'RGPT' in l['libelle']), None)
-    print(f"RGPT:        {rgpt['montant']:.2f}€  (Liantis: 116.32€)")
-    cr = next((l for l in r['lignes_indemn'] if 'coll' in l['libelle']), None)
-    print(f"CR déduc:    {cr['montant']:.2f}€  (Liantis: -8.72€)")
-    print(f"Net:         {r['salaire_net']:.2f}€  (Liantis: 1150.22€)")
-    print(f"À payer:     {r['a_payer']:.2f}€  (Liantis: 1141.50€)")
-    print(f"\nCR empl (Monizze): {r['cr_empl_total']:.2f}€  (Liantis: 55.28€)")
-    print(f"ONSS patronal net: {r['onss_patronal']:.2f}€")

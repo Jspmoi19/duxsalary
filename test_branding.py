@@ -293,6 +293,142 @@ check("Document de charges: logo et mentions", len(page.images) >= 1 and 'Global
 if not SORTIE:
     os.remove(chemin_pdf); os.remove(os.path.join(tempfile.gettempdir(), 'exemple_fiche_de_paie.pdf'))
 
+print(); print("=" * 70); print("DOCUMENTS CLIENTS -- aucune source ni note interne ; fiche de paie lisible"); print("=" * 70)
+# Tout PDF remis au client ou au travailleur ne contient que des libelles, bases, taux,
+# nombres et montants. Les sources restent sur la page « Calculer la paie » et dans l'aide DmfA.
+import io as _io_s
+from datetime import timedelta as _td_s
+INTERDITS = ['easypay', 'liantis', 'securex', 'partena', 'acerta', 'group s', 'csc', 'cgslb', 'fgtb', 'synova', 'transcom',
+             'techlib', 'instructions onss', 'instructions administratives', 'salairesminimums', 'parametres_dates',
+             'suivi des chèques', 'suivi des cheques', 'règle sectorielle', 'regle sectorielle', 'source', 'accg', 'justel',
+             'spf ', 'saisi manuellement', 'à confirmer', 'à vérifier', 'non vérifié', '.py', 'barème des allocations',
+             'fiche réelle', 'interconsult']
+def texte_pdf(contenu):
+    lecteur = PdfReader(_io_s.BytesIO(contenu) if isinstance(contenu, bytes) else contenu)
+    return ' '.join((pg.extract_text() or '') for pg in lecteur.pages)
+def interdits_dans(texte):
+    # mot entier pour les noms (« partenaires » n'est pas « Partena »), sous-chaine pour le reste
+    bas = _re2.sub(r'\s+', ' ', texte).lower()
+    return [m for m in INTERDITS if (_re2.search(r'(?<![a-zà-ÿ])' + _re2.escape(m.strip()) + r'(?![a-zà-ÿ])', bas)
+                                     if m.strip().isalpha() else m in bas)]
+def fiche_pdf(donnees, nom):
+    chemin = os.path.join(SORTIE or tempfile.gettempdir(), nom)
+    generer_fiche_paie_pdf(donnees, chemin)
+    texte = _re2.sub(r'\s+', ' ', texte_pdf(chemin))
+    if not SORTIE:
+        os.remove(chemin)
+    return texte
+from cheques_regles import cheques_repas_du_mois as _crm_s
+from documents_charges import valeurs_fiche as _vf_s, compte_individuel as _ci_s, attestation_salariale as _as_s, liste_ventilation as _lv_s
+ID = ('Rue Exemple 1, 1000 Bruxelles', 'BE00 0000 0000 0000')
+SOC = ('Société Fictive SRL', 'Rue Exemple 1, 1000 Bruxelles', '0000.000.000', '000-0000000-00')
+
+# Bilal, juillet 2026 (CP 140.03, ouvrier 15 h/semaine): RGPT, pas de cheques sectoriels
+bilal = calculer_fiche_paie('Bilal', 'Exemple', '00.00.00-000.00', *ID, date(2006, 1, 1), date(2026, 7, 9), *SOC,
+    'CP 140.03', 'Personnel Roulant Niveau 1', 14.93, fonction='Chauffeur', heures_semaine=38.0, heures_jour=3.0, jours_semaine=5,
+    type_contrat='CDD', premier_engagement=True, jours_prestes=16, heures_prestees=48.0, jours_feries_payes=1, heures_feries=3.0,
+    rgpt_actif=True, cheques_repas=True, periode_debut=date(2026, 7, 1), periode_fin=date(2026, 7, 31))
+t_bilal = fiche_pdf(bilal, 'exemple_fiche_bilal_juillet_2026.pdf')
+check("Bilal juillet: aucune source ni note interne sur la fiche", interdits_dans(t_bilal), [])
+check("Bilal juillet: ONSS travailleur avec sa vraie base (108 % : 822,34) et le taux 13,07, plus le brut a 100 % (761,43)",
+      ('ONSS TRAVAILLEUR (base : 108 % du brut) 822.34 13.07 -107.48' in t_bilal, 'Base calcul' in t_bilal), (True, False))
+check("Bilal juillet: precompte nul affiche 0.00 (pas -0.00), sur une seule ligne", 'PRECOMPTE PROFESSIONNEL RETENU 721.63 0.00' in t_bilal)
+check("Bilal juillet: indemnite RGPT avec son taux seul (1,8175 €/h), sans date ni source",
+      'Indemnité RGPT (48h) 1.8175 €/h 87.24' in t_bilal)
+check("Fiche: le detail court et la source interne sont deux champs distincts dans le moteur",
+      [(l['detail'], 'CSC' in l['source']) for l in bilal['lignes_indemn'] if 'RGPT' in l['libelle']], [('1.8175 €/h', True)])
+check("Page « Calculer la paie » (interne): la source y reste",
+      any('CSC' in (l['source'] or '') for b in bilal['detail_calcul'] for l in b['lignes'] if 'RGPT' in l['libelle']))
+check("Bloc Information: « Réduction structurelle », « Bonus à l'emploi », plus de « Champ B » ni d'abreviation",
+      ('Réduction structurelle 119.61' in t_bilal, "Bonus à l'emploi" in t_bilal, 'Réduction premier engagement' in t_bilal,
+       'Champ B' in t_bilal or 'Déd. cot.' in t_bilal or 'Red. 1er' in t_bilal), (True, True, True, False))
+
+# Ciwan, octobre 2026 (CP 336, employe): precompte detaille
+ciwan = calculer_fiche_paie('Ciwan', 'Exemple', '00.00.00-000.00', *ID, date(2004, 1, 1), date(2026, 10, 1), *SOC,
+    'CP 336', 'Minimum sectoriel', 13.71, fonction='Comptable', heures_semaine=38.0, heures_jour=7.6, jours_semaine=5,
+    type_contrat='CDI', premier_engagement=True, salaire_mensuel_fixe=2257.0, jours_prestes=22, heures_prestees=167.2,
+    frais_nets=200.0, km_domicile=12, taux_km=0.08, rgpt_actif=False, cheques_repas=False, categorie_employeur='010',
+    code_ffe='C', code_importance='1', periode_debut=date(2026, 10, 1), periode_fin=date(2026, 10, 31))
+t_ciwan = fiche_pdf(ciwan, 'exemple_fiche_ciwan_octobre_2026.pdf')
+check("Ciwan octobre: aucune source ni note interne sur la fiche", interdits_dans(t_ciwan), [])
+pc_av, pc_red, pc_ret = -ciwan['precompte_brut'], ciwan['red_precompte_bonus'], -ciwan['precompte']
+check("Ciwan octobre: precompte detaille en trois lignes -- avant reduction / reduction liee au bonus / retenu",
+      (f'Précompte professionnel avant réduction 2257.00 -{pc_av:.2f}' in t_ciwan,
+       f"Réduction du précompte liée au bonus à l'emploi {pc_red:.2f}" in t_ciwan,
+       f'PRECOMPTE PROFESSIONNEL RETENU -{pc_ret:.2f}' in t_ciwan), (True, True, True))
+check("... les trois montants se tiennent: avant reduction - reduction = retenu", round(pc_av - pc_red, 2), pc_ret)
+check("... valeurs du moteur pour ce cas (12 km a 0,08 EUR: 0,57 EUR de km imposable)", (pc_av, pc_red, pc_ret), (277.25, 130.24, 147.01))
+check("Ciwan octobre: net inchange (2.341,16) et base ONSS = brut (employe, pas de 108 %)",
+      (ciwan['salaire_net'], 'ONSS TRAVAILLEUR 2257.00 13.07 -294.99' in t_ciwan), (2341.16, True))
+
+# Cas charges: cheques du dossier, cheques sectoriels, maladie, prime, double pecule au precompte saisi, etudiant, CP 121
+cfg_d = {'actif': True, 'valeur': 8.0, 'part_patronale': 6.91, 'part_travailleur': 1.09, 'date_debut': date(2026, 1, 1)}
+cas = {
+    'cheques du dossier + prime + double pecule (precompte saisi)': calculer_fiche_paie(
+        'Camille', 'Exemple', '00.00.00-000.00', *ID, date(1990, 1, 1), date(2020, 1, 1), *SOC, 'CP 200', 'Classe A', 13.71,
+        fonction='Employée', salaire_mensuel_fixe=2257.0, type_contrat='CDI', jours_prestes=22, heures_prestees=167.2,
+        cheques_repas=True, cheques_repas_calc=_crm_s('CP 200', 'employe', 2026, 12, 22, 167.2, date(2020, 1, 1), cfg_d),
+        prime_exceptionnelle=2257.0, double_pecule=2076.44, precompte_pecule_manuel=500.0, frais_nets=50.0,
+        categorie_employeur='010', periode_debut=date(2026, 12, 1), periode_fin=date(2026, 12, 31)),
+    'cheques sectoriels + RGPT + maladie + repas fournis': calculer_fiche_paie(
+        'Sacha', 'Exemple', '00.00.00-000.00', *ID, date(1990, 1, 1), date(2024, 1, 1), *SOC, 'CP 140.03',
+        'Personnel Roulant Niveau 1', 15.0, fonction='Chauffeur', heures_semaine=38.0, heures_jour=7.6, jours_semaine=5,
+        type_contrat='CDI', jours_prestes=15, heures_prestees=114.0, rgpt_actif=True, cheques_repas=True, repas_fournis=True,
+        incapacite={'regime': 'ouvrier', 'infos': ['Règle interne'], 'alertes': [], 'jours':
+                    [{'date': date(2026, 10, n), 'tranche': tr, 'heures': 7.6} for n, tr in ((1, 'MG'), (2, 'M2'), (5, 'MC'))]},
+        periode_debut=date(2026, 10, 1), periode_fin=date(2026, 10, 31)),
+    'etudiant': calculer_fiche_paie(
+        'Alex', 'Exemple', '00.00.00-000.00', *ID, date(2006, 1, 1), date(2026, 7, 1), *SOC, 'CP 200', 'Etudiant', 13.0,
+        fonction='Vendeur', type_contrat='STU', is_etudiant=True, jours_prestes=10, heures_prestees=76.0, cheques_repas=True,
+        periode_debut=date(2026, 7, 1), periode_fin=date(2026, 7, 31)),
+    'CP 121 (RGPT par jour, cheques par heures)': calculer_fiche_paie(
+        'Yan', 'Exemple', '00.00.00-000.00', *ID, date(1990, 1, 1), date(2025, 1, 1), *SOC, 'CP 121', 'Catégorie 1A', 16.5,
+        fonction='Nettoyeur', heures_semaine=37.0, heures_jour=7.4, jours_semaine=5, type_contrat='CDI', jours_prestes=20,
+        heures_prestees=148.0, rgpt_actif=True, cheques_repas=True, periode_debut=date(2026, 10, 1), periode_fin=date(2026, 10, 31)),
+}
+for nom_cas, donnees in cas.items():
+    check(f"Fiche « {nom_cas} »: aucune source ni note interne", interdits_dans(fiche_pdf(donnees, 'controle_fiche_client.pdf')), [])
+check("Le controle detecte bien une source glissee dans un libelle (temoin)",
+      interdits_dans('Indemnité RGPT 1,8175 €/h — Barème CSC-Transcom, Easypay'), ['easypay', 'csc', 'transcom'])
+
+# Documents de charges (ecran -> PDF) construits a partir de ces fiches
+def ligne_fiche(d, tid, debut):
+    return dict(_vf_s(d), periode_debut=debut, periode_fin=debut + _td_s(days=27), travailleur_id=tid, contrat_id=tid)
+fiches_c = [ligne_fiche(bilal, 1, date(2026, 7, 1)), ligne_fiche(ciwan, 2, date(2026, 10, 1))] + \
+           [ligne_fiche(d, 3 + i, d['periode_debut']) for i, d in enumerate(cas.values())]
+dos_c = {'id': 7, 'nom': 'Société Fictive SRL', 'bce': '0000.000.000', 'rsz': '000-0000000-00'}
+for nom_doc, document in (
+        ('compte individuel', _ci_s([fiches_c[0]], {'nom': 'Exemple', 'prenom': 'Bilal'}, dos_c, date(2026, 1, 1), date(2026, 12, 31),
+                                    contrat={'cp_key': 'CP 140.03', 'fonction': 'Chauffeur', 'type_contrat': 'CDD'})),
+        ('attestation salariale', _as_s(fiches_c, dos_c, date(2026, 1, 1), date(2026, 12, 31))),
+        ('liste de ventilation', _lv_s(fiches_c, dos_c, date(2026, 1, 1), date(2026, 12, 31)))):
+    check(f"Document de charges « {nom_doc} »: aucune source ni note interne", interdits_dans(texte_pdf(generer_pdf_charges(document))), [])
+
+# Contrats
+from contrats import generer_contrat_cdi, generer_contrat_cdd
+donnees_contrat = dict(nom_travailleur='Camille Exemple', adresse_travailleur='Rue Exemple 1, 1000 Bruxelles',
+    niss_travailleur='00.00.00-000.00', ddn_travailleur='01/01/1990', nom_societe='Société Fictive SRL',
+    adresse_societe='Rue Exemple 1, 1000 Bruxelles', bce_societe='0000.000.000', rsz_societe='000-0000000-00',
+    representant='Représentant Fictif', fonction='Chauffeur', categorie='Personnel Roulant Niveau 1', salaire_horaire=14.9255,
+    lieu_travail='Bruxelles', date_debut='01/10/2026', date_fin='31/12/2026', date_signature='01/10/2026',
+    lieu_signature='Bruxelles', motif_cdd='Surcroît temporaire de travail', heures_jour=7.6, jours_semaine=5, temps_plein=True)
+os.makedirs('outputs', exist_ok=True)
+for cp_c in ('CP 140.03', 'CP 200', 'CP 336', 'CP 121'):
+    for generer in (generer_contrat_cdi, generer_contrat_cdd):
+        chemin_c, _nom_c = generer(dict(donnees_contrat, cp_key=cp_c))
+        mots = interdits_dans(texte_pdf(chemin_c))
+        os.remove(chemin_c)
+        check(f"Contrat {'CDI' if generer is generer_contrat_cdi else 'CDD'} {cp_c}: aucune source ni note interne", mots, [])
+
+# Lettres ONSS et contrat etudiant: generes dans app.py (non importable sans base) -> lecture du code des fonctions
+source_app = lire(os.path.join(RACINE, 'app.py'))
+for fonction_pdf in ('generer_lettre_onss_pdf', 'generer_pdf_etudiant', 'generer_certificat_travail', 'generer_c4'):
+    debut_f = source_app.index(f'def {fonction_pdf}(')
+    corps = source_app[debut_f:source_app.index('\ndef ', debut_f + 10)]
+    textes = ' '.join(_re2.findall(r'"([^"\n]*)"', corps) + _re2.findall(r"'([^'\n]*)'", corps))
+    check(f"app.py, {fonction_pdf}: aucun nom de source dans les textes du document",
+          [m for m in interdits_dans(textes) if m not in ('.py', 'source')], [])
+
 print(); print("=" * 70)
 if ECHECS:
     print(f"❌ {len(ECHECS)} TEST(S) ECHOUE(S): {ECHECS}"); sys.exit(1)

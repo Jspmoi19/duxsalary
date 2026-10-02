@@ -140,7 +140,7 @@ def generer_fiche_paie_pdf(data, filepath):
     elems.append(Spacer(1, 0.2*cm))
     
     # ── TABLEAU ÉLÉMENTS DES SALAIRES ────────────────────────────
-    cols = [6.5*cm, 2.5*cm, 1.5*cm, 1.0*cm, 1.6*cm, 1.8*cm, 2.6*cm]
+    cols = [6.7*cm, 2.5*cm, 1.3*cm, 1.5*cm, 1.6*cm, 1.8*cm, 2.6*cm]   # colonne % assez large pour « 13.07 »
     
     def row_sal(libelle, base='', suppl='', pct='', jours='', heures='', montant='', bold=False):
         return [
@@ -173,11 +173,14 @@ def generer_fiche_paie_pdf(data, filepath):
     sal_rows.append(row_sal('BRUT SOUMIS A L\'ONSS:', '', '', '', '', '', '', bold=False))
     sal_rows[-1][6] = p(f"EUR  {data['brut_onss']:.2f}", bold=True, size=8, align=TA_RIGHT, color=DARK)
     
-    # ONSS travailleur
+    # ONSS travailleur: la base affichee est la VRAIE base de calcul (108 % du brut pour un
+    # ouvrier), avec le taux -- corrige le 02/10/2026 (la fiche affichait le brut a 100 %)
     onss_brut = abs(data['onss_travailleur'])
+    base_onss = data.get('brut_majore') or data['brut_onss']
+    taux_onss = data.get('onss_personnel_taux')
     sal_rows.append(row_sal(
-        f"ONSS TRAVAILLEUR (DEDUCTION): (Base calcul: {data['brut_onss']:.2f})",
-        '', '', '', '', '', -onss_brut
+        'ONSS TRAVAILLEUR' + (' (base : 108 % du brut)' if abs(base_onss - data['brut_onss']) > 0.005 else ''),
+        f"{base_onss:.2f}", '', f"{taux_onss * 100:.2f}" if taux_onss else '', '', '', -onss_brut
     ))
     if data.get('bonus_emploi_a', 0) > 0:
         sal_rows.append(row_sal(
@@ -203,12 +206,20 @@ def generer_fiche_paie_pdf(data, filepath):
     sal_rows.append(row_sal('IMPOSABLE:', '', '', '', '', '', '', bold=False))
     sal_rows[-1][6] = p(f"EUR  {data['brut_imposable']:.2f}", bold=True, size=8, align=TA_RIGHT)
     
-    # Précompte
+    # Précompte: detail comme sur les fiches des secretariats sociaux -- avant reduction,
+    # reduction liee au bonus a l'emploi, precompte retenu
     pc_val = abs(data['precompte'])
-    sal_rows.append(row_sal(
-        f"PRECOMPTE PROFESSIONNEL (DEDUCTION): (Imposable normal: {data['brut_imposable']:.2f})",
-        '', '', '', '', '', -pc_val
-    ))
+    pc_avant = abs(data.get('precompte_brut', data['precompte']))
+    red_pc = float(data.get('red_precompte_bonus') or 0)
+    if red_pc > 0:
+        sal_rows.append(row_sal('Précompte professionnel avant réduction', f"{data['brut_imposable']:.2f}",
+                                '', '', '', '', -pc_avant))
+        sal_rows.append(row_sal("Réduction du précompte liée au bonus à l'emploi", '', '', '', '', '', red_pc))
+        sal_rows.append(row_sal('PRECOMPTE PROFESSIONNEL RETENU', '', '', '', '', '', '', bold=False))
+        sal_rows[-1][6] = p(f"{-pc_val:.2f}", bold=True, size=8, align=TA_RIGHT)
+    else:
+        sal_rows.append(row_sal('PRECOMPTE PROFESSIONNEL RETENU', f"{data['brut_imposable']:.2f}", '', '', '', '',
+                                -pc_val if pc_val else 0.0))
     
     # Indemnités
     for indemn in data.get('lignes_indemn', []):
@@ -244,14 +255,14 @@ def generer_fiche_paie_pdf(data, filepath):
     # ── SECTION INFORMATION ───────────────────────────────────────
     info_data = [
         [p('INFORMATION:', bold=True, size=8), '', ''],
-        [p('ONSS patronale', size=8), '', p(f"{data['onss_patronal']:.2f}", size=8, align=TA_RIGHT)],
-        [p('Déd. cot. ONSS trav.', size=8), '', p(f"{data['ded_cot_onss_trav']:.2f}", size=8, align=TA_RIGHT)],
-        [p('ONSS bas salaires - Champ B', size=8), '', p(f"{data['onss_bas_salaires_champ_b']:.2f}", size=8, align=TA_RIGHT)],
+        [p('ONSS patronal après réductions', size=8), '', p(f"{data['onss_patronal']:.2f}", size=8, align=TA_RIGHT)],
+        [p("Bonus à l'emploi (réduction de l'ONSS travailleur)", size=8), '', p(f"{data['ded_cot_onss_trav']:.2f}", size=8, align=TA_RIGHT)],
+        [p('Réduction structurelle', size=8), '', p(f"{data['reduction_structurelle']:.2f}", size=8, align=TA_RIGHT)],
     ]
-    if data.get('cr_empl_total', 0) > 0:
-        info_data.append([p('Cheques-repas part empl (sans ONSS)', size=8), '', p(f"{data['cr_empl_total']:.2f}", size=8, align=TA_RIGHT)])
     if data.get('premier_engagement') and data.get('reduction_premier_engagement', 0) > 0:
-        info_data.append([p('Red. 1er engagement', size=8), '', p(f"{data['reduction_premier_engagement']:.2f}", size=8, align=TA_RIGHT)])
+        info_data.append([p('Réduction premier engagement', size=8), '', p(f"{data['reduction_premier_engagement']:.2f}", size=8, align=TA_RIGHT)])
+    if data.get('cr_empl_total', 0) > 0:
+        info_data.append([p('Chèques-repas – part employeur', size=8), '', p(f"{data['cr_empl_total']:.2f}", size=8, align=TA_RIGHT)])
     info_table = Table(info_data, colWidths=[8*cm, 7*cm, 3*cm])
     info_table.setStyle(TableStyle([
         ('TOPPADDING', (0,0), (-1,-1), 2),
@@ -304,20 +315,3 @@ def _fmt_date(d):
     if isinstance(d, (date, datetime)):
         return d.strftime('%d-%m-%Y')
     return str(d)
-
-if __name__ == '__main__':
-    from moteur_paie import calculer_fiche_paie
-    result = calculer_fiche_paie(
-        prenom='Akattof', nom='Bilal', niss='06.10.18-379.82',
-        adresse='Lidrusweg bâtiment 3/3.4 - 1130 Bruxelles', iban='BE75363178356651',
-        date_naissance=date(2006, 10, 18), date_entree=date(2026, 7, 9),
-        nom_societe="98'H BARBER", adresse_societe='Rue Marcel Marien/17 - 1030 Bruxelles',
-        bce_societe='0800.078.071', rsz_societe='51365632-19',
-        cp_key='CP 140.03', categorie='Personnel roulant — Niveau 1',
-        salaire_horaire=14.9255, heures_semaine=38.0,
-        jours_prestes=21, heures_prestees=159.6,
-        rgpt_actif=True, cheques_repas=True, vehicule_societe=True,
-        periode_debut=date(2026, 7, 1), periode_fin=date(2026, 7, 31),
-    )
-    generer_fiche_paie_pdf(result, '/home/claude/test_fiche_bilal.pdf')
-    print(f"PDF généré — Net: {result['salaire_net']:.2f} €")

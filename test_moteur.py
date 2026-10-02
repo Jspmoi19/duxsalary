@@ -369,7 +369,8 @@ r = calculer_fiche_paie('D','P','n','a','BE',date(2005,2,2),date(2026,1,5),'F','
     rgpt_actif=True, periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), **kw_rg)
 l_rg = next(l for l in r['lignes_indemn'] if 'RGPT' in l['libelle'])
 check("Aout 2026: 64 h x 1,8175 = 116,32 (fiche reelle Liantis)", l_rg['montant'], 116.32)
-check("... la source et la date d'effet sont affichees dans le detail", '01/01/2026' in l_rg['detail'] and 'CSC' in l_rg['detail'])
+check("... sur la fiche: le taux seul ; la source et la date d'effet restent internes (page « Calculer la paie »)",
+      (l_rg['detail'], '01/01/2026' in l_rg['source'] and 'CSC' in l_rg['source']), ('1.8175 €/h', True))
 r = calculer_fiche_paie('D','P','n','a','BE',date(2005,2,2),date(2026,1,5),'F','a','b','r','CP 140.03','Chauffeur - Niveau 1',17.5,
     rgpt_actif=False, periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), **kw_rg)
 check("Case RGPT decochee en CP 140.03: pas d'indemnite, mais une alerte « obligatoire »",
