@@ -196,6 +196,101 @@ def get_reduction_structurelle_params(reference_date):
 
 
 # ─────────────────────────────────────────────────────────────────
+# MALADIE / ACCIDENT DE DROIT COMMUN — SALAIRE GARANTI
+# ─────────────────────────────────────────────────────────────────
+# Sources:
+# - Loi du 3 juillet 1978 relative aux contrats de travail (Justel, version
+#   consolidee au 15/06/2026): art. 52 § 1er (ouvrier: 7 jours, un mois
+#   d'anciennete ininterrompue), art. 70 (employe: 30 jours), art. 71 (employe
+#   engage pour moins de trois mois: regime de l'art. 52 § 1er, puis 60 % de la
+#   partie sous plafond pendant les 7 jours suivants).
+# - Jour de carence supprime: alineas de l'art. 52 § 1er abroges par la loi du
+#   26/12/2013 (art. 62), en vigueur le 01/01/2014.
+# - CCT n° 13bis du CNT (employes, texte lu): complement de 26,93 % de la partie
+#   sous plafond et 86,93 % de la partie au-dessus, jusqu'au 30e jour.
+# - CCT n° 12bis du CNT (ouvriers): 85,88 % du 8e au 14e jour, puis 25,88 % sous
+#   plafond + 85,88 % au-dessus du 15e au 30e jour. Texte de la CCT NON LU:
+#   pourcentages concordants chez Securex, Acerta et Liantis (2026).
+# - Instructions administratives ONSS 2026/3: p.115 et p.506 (premiere semaine
+#   soumise aux cotisations ; indemnite de la 2e semaine et complement CCT
+#   12bis/13bis exclus de la remuneration), p.549 (codes prestation 10 et 11),
+#   p.450 (bonus a l'emploi: J/H = codes 1, 3, 4, 5, 20: les jours 8 a 30 n'y
+#   entrent pas).
+# Avant le 01/01/2026 les pourcentages n'ont pas ete verifies sur une source de
+# l'epoque ('a_confirmer_avant'): le moteur le signale.
+SALAIRE_GARANTI_VERSIONS = [
+    {'date_debut': date(2014, 1, 1), 'a_confirmer_avant': date(2026, 1, 1),
+     'regimes': {
+         # rang = numero du jour calendrier d'incapacite (1 = premier jour)
+         'employe': {'libelle': 'Employé (art. 70)', 'anciennete_mois': 0,
+                     'fin_100': 30, 'fin_2e_semaine': 30, 'fin_periode': 30,
+                     'pct_2e_semaine': None, 'pct_complement_sous_plafond': None, 'pct_au_dessus_plafond': None},
+         'employe_court': {'libelle': 'Employé engagé pour moins de trois mois (art. 71)', 'anciennete_mois': 1,
+                           'fin_100': 7, 'fin_2e_semaine': 14, 'fin_periode': 30,
+                           'pct_2e_semaine': 0.8693, 'pct_complement_sous_plafond': 0.2693,
+                           'pct_au_dessus_plafond': 0.8693},
+         'ouvrier': {'libelle': 'Ouvrier (art. 52)', 'anciennete_mois': 1,
+                     'fin_100': 7, 'fin_2e_semaine': 14, 'fin_periode': 30,
+                     'pct_2e_semaine': 0.8588, 'pct_complement_sous_plafond': 0.2588,
+                     'pct_au_dessus_plafond': 0.8588},
+     },
+     'source': 'Loi du 03/07/1978 art. 52, 70 et 71 (Justel, consolidée au 15/06/2026) ; CCT n° 12bis et 13bis du CNT'},
+]
+
+
+def get_salaire_garanti_params(reference_date):
+    """Regles du salaire garanti a la date du debut de l'incapacite (erreur si non chargees)."""
+    return _get_version(SALAIRE_GARANTI_VERSIONS, reference_date)
+
+
+# RECHUTE: pas de nouveau salaire garanti quand la nouvelle incapacite survient
+# dans le delai ci-dessous apres la fin de la precedente (sauf solde non utilise
+# de la periode, et sauf autre maladie ou autre accident prouve par certificat).
+# Source: loi du 03/07/1978 art. 52 § 2 et 73 § 1er: quatorze jours, portes aux
+# « huit premieres semaines » par la loi du 19/12/2025 (art. 37 et 38), en
+# vigueur le 01/01/2026 (Justel). Les Instructions ONSS 2026/3 p.518 citent
+# encore 14 jours: la loi prime (decision de Leo, 02/10/2026).
+# La version applicable est celle de la date de debut de la NOUVELLE incapacite.
+RECHUTE_VERSIONS = [
+    {'date_debut': date(2014, 1, 1), 'jours': 14, 'libelle': '14 jours',
+     'source': 'Loi du 03/07/1978 art. 52 § 2 et 73 § 1er (avant la loi du 19/12/2025)'},
+    {'date_debut': date(2026, 1, 1), 'jours': 56, 'libelle': '8 semaines',
+     'source': 'Loi du 03/07/1978 art. 52 § 2 et 73 § 1er, modifiés par la loi du 19/12/2025 art. 37 et 38 (Justel)'},
+]
+
+
+def get_delai_rechute(reference_date):
+    return _get_version(RECHUTE_VERSIONS, reference_date)
+
+
+# PLAFOND AMI (incapacite primaire), montant brut PAR JOUR en regime de 6 jours
+# par semaine, pour une incapacite debutee depuis le 01/01/2024.
+# Source: INAMI, page « Votre plafond salarial », PDF fourni par Leo dans sources/
+# (verifie le 02/10/2026): tableau 1 (a partir du 01-09-2026, incapacite primaire
+# 60 %: 189,3583) et tableau 2, ligne « a partir du 1-01-2024 » (183,1311 du 01-01
+# au 28-02-2026 ; 186,7916 du 01-03 au 31-08-2026). Une incapacite debutee avant le
+# 01/01/2024 a un plafond plus bas (autres lignes du tableau 2): non gere.
+# Conversion: par semaine = plafond x 6 ; par jour en regime de 5 jours =
+# plafond x 6/5 (219,7573 EUR) ; par mois = plafond x 26 (4 761,41 EUR, Liantis)
+# -- les deux conversions publiees concordent avec 183,1311 EUR.
+# Periodes anterieures: non chargees (ne pas deviner).
+PLAFOND_AMI_VERSIONS = [
+    {'date_debut': date(2026, 1, 1), 'plafond_jour_6j': 183.1311,
+     'source': 'INAMI, « Votre plafond salarial », tableaux 1 et 2 (sources/Votre plafond salarial _ INAMI.pdf)'},
+    {'date_debut': date(2026, 3, 1), 'plafond_jour_6j': 186.7916,
+     'source': 'INAMI, « Votre plafond salarial », tableaux 1 et 2 (sources/Votre plafond salarial _ INAMI.pdf)'},
+    {'date_debut': date(2026, 9, 1), 'plafond_jour_6j': 189.3583,
+     'source': 'INAMI, « Votre plafond salarial », tableaux 1 et 2 (sources/Votre plafond salarial _ INAMI.pdf)'},
+]
+
+
+def get_plafond_ami(reference_date):
+    """Plafond AMI en vigueur, ou None si aucune version ne couvre la date."""
+    applicables = [v for v in PLAFOND_AMI_VERSIONS if v['date_debut'] <= reference_date]
+    return max(applicables, key=lambda v: v['date_debut']) if applicables else None
+
+
+# ─────────────────────────────────────────────────────────────────
 # PRECOMPTE PROFESSIONNEL — versionne par ANNEE FISCALE
 # ─────────────────────────────────────────────────────────────────
 # Le SPF Finances publie en decembre la "formule-cle" de l'annee suivante

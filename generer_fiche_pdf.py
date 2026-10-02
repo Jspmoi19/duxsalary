@@ -196,6 +196,16 @@ def generer_fiche_paie_pdf(data, filepath):
             "Bonus a l'emploi - volet B",
             '', '', '', '', '', data.get('bonus_emploi_b', 0)
         ))
+    # Indemnites de maladie des jours 8 a 30: hors ONSS mais imposables
+    for ligne in data.get('lignes_hors_onss', []):
+        sal_rows.append(row_sal(
+            ligne['libelle'] + ' - hors ONSS',
+            f"{ligne['base']:.{ligne.get('base_decimales', 4)}f}" if ligne.get('base') else '',
+            '', '',
+            ligne.get('jours', '') if ligne.get('jours') else '',
+            f"{ligne['heures']:.2f}" if ligne.get('heures') else '',
+            ligne.get('montant', 0),
+        ))
     # Imposable
     sal_rows.append(row_sal('IMPOSABLE:', '', '', '', '', '', '', bold=False))
     sal_rows[-1][6] = p(f"EUR  {data['brut_imposable']:.2f}", bold=True, size=8, align=TA_RIGHT)

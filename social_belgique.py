@@ -57,7 +57,13 @@ CODES_JOURNALIERS = {
     'F':   {'label': 'Jour férié légal', 'couleur': '#d1ecf1', 'texte': '#0c5460', 'paye': True, 'prestation': False},
     'FM':  {'label': 'Férié compensatoire', 'couleur': '#bee5eb', 'texte': '#0c5460', 'paye': True, 'prestation': False},
     'PP':  {'label': 'Petit chômage', 'couleur': '#e2d9f3', 'texte': '#4a235a', 'paye': True, 'prestation': False},
-    'MA':  {'label': 'Maladie', 'couleur': '#f8d7da', 'texte': '#721c24', 'paye': True, 'prestation': False},
+    # Maladie / accident de droit commun: codes poses automatiquement depuis les episodes
+    # d'incapacite du travailleur (salaire_garanti.py) -- une tranche par jour
+    'MG':  {'label': 'Maladie – salaire garanti 100 %', 'couleur': '#f8d7da', 'texte': '#721c24', 'paye': True, 'prestation': False},
+    'M2':  {'label': 'Maladie – 2e semaine (hors ONSS)', 'couleur': '#f5c2c7', 'texte': '#721c24', 'paye': True, 'prestation': False},
+    'MC':  {'label': 'Maladie – complément jours 15 à 30', 'couleur': '#f1aeb5', 'texte': '#58151c', 'paye': True, 'prestation': False},
+    'MM':  {'label': 'Maladie – mutuelle', 'couleur': '#e2e3e5', 'texte': '#58151c', 'paye': False, 'prestation': False},
+    'MA':  {'label': 'Maladie sans épisode (non calculée)', 'couleur': '#f8d7da', 'texte': '#721c24', 'paye': True, 'prestation': False},
     'AC':  {'label': 'Accident du travail', 'couleur': '#f5c6cb', 'texte': '#721c24', 'paye': True, 'prestation': False},
     'MAT': {'label': 'Congé maternité', 'couleur': '#fce4ec', 'texte': '#880e4f', 'paye': True, 'prestation': False},
     'PAT': {'label': 'Congé paternité', 'couleur': '#e8eaf6', 'texte': '#283593', 'paye': True, 'prestation': False},

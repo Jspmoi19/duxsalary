@@ -458,6 +458,30 @@ def calendrier_prestations(dimona_id):
         WHERE travailleur_id = %s AND EXTRACT(YEAR FROM date_prestation) = %s
         AND EXTRACT(MONTH FROM date_prestation) = %s""",
         (travailleur['id'], annee, mois))
+    # Incapacites en cours ou touchant ce mois: le calendrier est complete jusqu'a la
+    # fin du mois affiche (episode sans date de fin), puis relu
+    incapacites_mois, incapacites_alertes = [], []
+    try:
+        fin_mois_aff = date(annee, mois, calendar.monthrange(annee, mois)[1])
+        ctx_inc = _contexte_incapacites(cur, travailleur['id'], fin_mois_aff)
+        incapacites_mois = [v for v in ctx_inc['ventilation']
+                            if v['debut'] <= fin_mois_aff and v['fin'] >= date(annee, mois, 1)]
+        if any(v['en_cours'] for v in incapacites_mois):
+            cur.execute("SELECT MAX(date_prestation) AS m FROM prestations WHERE travailleur_id = %s "
+                        "AND code_journee IN ('MG','M2','MC','MM')", (travailleur['id'],))
+            deja = cur.fetchone()['m']
+            if not deja or deja < fin_mois_aff:
+                _marquer_incapacites_au_calendrier(cur, travailleur['id'], dossier['id'], ctx_inc)
+                conn.commit()
+        incapacites_alertes = ctx_inc['alertes'] + [a for v in incapacites_mois for a in v['alertes']]
+    except Exception as ex_inc:
+        conn.rollback()
+        app.logger.warning(f"Incapacites (calendrier): {ex_inc}")
+        incapacites_alertes = [f"Incapacités non lues ({ex_inc}) : lancez python3 migrate_charges.py si la table n'existe pas."]
+    cur.execute("""SELECT date_prestation, code_journee, heures FROM prestations
+        WHERE travailleur_id = %s AND EXTRACT(YEAR FROM date_prestation) = %s
+        AND EXTRACT(MONTH FROM date_prestation) = %s""",
+        (travailleur['id'], annee, mois))
     prests_dict = {row['date_prestation']: dict(row) for row in cur.fetchall()}
     cur.close(); conn.close()
 
@@ -510,7 +534,7 @@ def calendrier_prestations(dimona_id):
         info = CODES_JOURNALIERS.get(code, CODES_JOURNALIERS['P'])
         if code == 'P': stats['jours_prestes'] += 1; stats['heures_prestees'] += heures
         elif code in ['CL','CE','VP']: stats['jours_conge'] += 1
-        elif code in ['MA','AC']: stats['jours_maladie'] += 1
+        elif code in ['MA','AC','MG','M2','MC','MM']: stats['jours_maladie'] += 1
         elif code in ['F','FM']: stats['jours_ferie'] += 1
         elif code in ['CT','CI']: stats['jours_chomage'] += 1
         elif code == 'CNP': stats['jours_cnp'] += 1
@@ -541,7 +565,8 @@ def calendrier_prestations(dimona_id):
                            jours=jours, stats=stats, calcul=calcul, annee=annee, mois=mois,
                            mois_nom=mois_noms[mois], premier_jour_semaine=premier_jour_semaine,
                            codes=CODES_JOURNALIERS, codes_json=jsonlib.dumps(CODES_JOURNALIERS),
-                           heures_jour=round(heures_jour, 2), **ctx)
+                           heures_jour=round(heures_jour, 2),
+                           incapacites_mois=incapacites_mois, incapacites_alertes=incapacites_alertes, **ctx)
 
 @app.route('/prestation/sauvegarder', methods=['POST'])
 @login_required
@@ -1431,6 +1456,156 @@ def download_echeance_document(echeance_id):
         return send_file(row[0], as_attachment=True, download_name=row[1])
     return "Document introuvable", 404
 
+# ── INCAPACITES DE TRAVAIL (maladie / accident de droit commun) ───────
+# Un enregistrement par episode (table incapacites, migrate_charges.py). Les
+# tranches de salaire garanti de chaque jour sont calculees par salaire_garanti.py
+# et posees dans le calendrier des prestations (codes MG, M2, MC, MM).
+
+def _contexte_incapacites(cur, travailleur_id, jusqu_au, contrat=None):
+    """Episodes du travailleur ventiles par tranche jusqu'a `jusqu_au`.
+    Le regime (ouvrier / employe / employe engage pour moins de trois mois) est
+    celui du contrat transmis, a defaut du contrat qui couvre `jusqu_au`, a
+    defaut du plus recent."""
+    from salaire_garanti import contexte_incapacites
+    from occupation import contrat_de_la_periode
+    from moteur_paie import CP_INDEMNITES
+    cur.execute('SELECT * FROM contrats WHERE travailleur_id = %s', (travailleur_id,))
+    tous = [dict(c) for c in cur.fetchall()]
+    cur.execute('SELECT * FROM incapacites WHERE travailleur_id = %s ORDER BY date_debut', (travailleur_id,))
+    episodes = [dict(e) for e in cur.fetchall()]
+    if contrat is None:
+        contrat = (contrat_de_la_periode(tous, jusqu_au, jusqu_au)
+                   or (max(tous, key=lambda c: c['date_debut']) if tous else None))
+    ouvrier = bool(contrat) and CP_INDEMNITES.get(contrat['cp_key'], {}).get('type_travailleur', 'ouvrier') == 'ouvrier'
+    return contexte_incapacites(episodes, tous, contrat, ouvrier, jusqu_au)
+
+
+def _marquer_incapacites_au_calendrier(cur, travailleur_id, dossier_id, ctx_inc):
+    """Pose dans le calendrier le code de tranche de chaque jour d'incapacite prevu
+    a l'horaire. Ne touche qu'aux jours vides, prestes (P), ou deja marques maladie:
+    un conge, un ferie ou un jour retire a la main sont laisses tels quels.
+    Retourne les messages a afficher."""
+    from salaire_garanti import jours_a_marquer, CODES_INCAPACITE
+    from occupation import contrat_de_la_periode
+    messages = []
+    cur.execute('SELECT id, date_debut, date_fin FROM dimona WHERE travailleur_id = %s ORDER BY date_debut', (travailleur_id,))
+    dimonas = [dict(d) for d in cur.fetchall()]
+    voulus = {}
+    for v in ctx_inc['ventilation']:
+        annees = {j['date'].year for j in v['jours']}
+        feries = set()
+        for a in annees:
+            feries |= set(get_jours_feries(a))
+        c_ep = contrat_de_la_periode(ctx_inc['contrats'], v['debut'], v['fin']) or ctx_inc['contrat'] or {}
+        jours_sem = int(c_ep.get('jours_semaine') or 5)
+        h_jour = float(c_ep.get('heures_jour') or 7.6)
+        a_marquer, feries_vus = jours_a_marquer(v, jours_sem, feries)
+        for j in a_marquer:
+            voulus[j['date']] = (j['tranche'], h_jour)
+        if feries_vus:
+            messages.append("Jour(s) férié(s) pendant l'incapacité du " + v['debut'].strftime('%d/%m/%Y') + " : "
+                            + ', '.join(d.strftime('%d/%m/%Y') for d in feries_vus)
+                            + " — non modifié(s) dans le calendrier, à encoder vous-même (férié payé ou mutuelle).")
+        if jours_sem < 5:
+            messages.append(f"Horaire de {jours_sem} jours par semaine : tous les jours du lundi au vendredi de l'incapacité "
+                            f"ont été marqués. Remettez en « WE » les jours où le travailleur ne devait pas travailler.")
+    # Jours marques maladie qui ne sont plus dans un episode: retires du calendrier
+    cur.execute("SELECT date_prestation FROM prestations WHERE travailleur_id = %s AND code_journee IN %s",
+                (travailleur_id, CODES_INCAPACITE))
+    for row in cur.fetchall():
+        if row['date_prestation'] not in voulus:
+            cur.execute("DELETE FROM prestations WHERE travailleur_id = %s AND date_prestation = %s",
+                        (travailleur_id, row['date_prestation']))
+    hors_dimona = 0
+    for d, (tranche, h_jour) in sorted(voulus.items()):
+        dim = next((x for x in dimonas if x['date_debut'] <= d and (not x['date_fin'] or x['date_fin'] >= d)), None)
+        if not dim:
+            hors_dimona += 1
+            continue
+        cur.execute("""INSERT INTO prestations (dimona_id, travailleur_id, dossier_id, date_prestation, code_journee, heures)
+            VALUES (%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (travailleur_id, date_prestation) DO UPDATE
+            SET code_journee = EXCLUDED.code_journee,
+                heures = CASE WHEN prestations.code_journee IN ('MG','M2','MC','MM') THEN prestations.heures ELSE EXCLUDED.heures END
+            WHERE prestations.code_journee IN ('MG','M2','MC','MM','MA','P')""",
+            (dim['id'], travailleur_id, dossier_id, d, tranche, h_jour))
+    if hors_dimona:
+        messages.append(f"{hors_dimona} jour(s) d'incapacité hors de toute Dimona : non inscrit(s) au calendrier.")
+    return messages
+
+
+def _fin_du_mois(d):
+    return date(d.year, d.month, calendar.monthrange(d.year, d.month)[1])
+
+
+@app.route('/travailleur/<int:travailleur_id>/incapacites', methods=['GET', 'POST'])
+@login_required
+def incapacites_travailleur(travailleur_id):
+    from psycopg2.extras import RealDictCursor
+    from salaire_garanti import TYPES_INCAPACITE
+    travailleur = get_travailleur(travailleur_id)
+    dossier = get_dossier(travailleur['dossier_id'])
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+    messages, erreur = [], None
+
+    def _date(nom):
+        v = (request.form.get(nom) or '').strip()
+        return datetime.strptime(v, '%Y-%m-%d').date() if v else None
+
+    def _horizon():
+        cur.execute("SELECT MAX(date_prestation) AS m FROM prestations WHERE travailleur_id = %s "
+                    "AND code_journee IN ('MG','M2','MC','MM')", (travailleur_id,))
+        deja = cur.fetchone()['m']
+        cur.execute("SELECT MAX(COALESCE(date_fin, date_debut)) AS m FROM incapacites WHERE travailleur_id = %s", (travailleur_id,))
+        dernier = cur.fetchone()['m']
+        return max(x for x in (_fin_du_mois(date.today()), deja, _fin_du_mois(dernier) if dernier else None) if x)
+
+    try:
+        if request.method == 'POST':
+            action = request.form.get('action')
+            type_inc = request.form.get('type_incapacite') if request.form.get('type_incapacite') in TYPES_INCAPACITE else 'maladie'
+            autre = request.form.get('autre_cause') == 'on'
+            debut, fin = _date('date_debut'), _date('date_fin')
+            if action in ('creer', 'modifier') and (not debut or (fin and fin < debut)):
+                erreur = "Dates invalides : la date de début est obligatoire et la date de fin ne peut pas la précéder."
+            elif action == 'creer':
+                cur.execute("""INSERT INTO incapacites (travailleur_id, dossier_id, date_debut, date_fin, type_incapacite, autre_cause, note)
+                               VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                            (travailleur_id, dossier['id'], debut, fin, type_inc, autre, request.form.get('note') or None))
+            elif action == 'modifier':
+                cur.execute("""UPDATE incapacites SET date_debut=%s, date_fin=%s, type_incapacite=%s, autre_cause=%s, note=%s
+                               WHERE id=%s AND travailleur_id=%s""",
+                            (debut, fin, type_inc, autre, request.form.get('note') or None,
+                             request.form.get('incapacite_id', type=int), travailleur_id))
+            elif action == 'supprimer':
+                cur.execute("DELETE FROM incapacites WHERE id=%s AND travailleur_id=%s",
+                            (request.form.get('incapacite_id', type=int), travailleur_id))
+            if not erreur:
+                ctx_inc = _contexte_incapacites(cur, travailleur_id, _horizon())
+                messages = _marquer_incapacites_au_calendrier(cur, travailleur_id, dossier['id'], ctx_inc)
+                messages.insert(0, "Incapacité enregistrée : le calendrier des prestations a été mis à jour "
+                                   "(un code par tranche de salaire garanti).")
+                conn.commit()
+        ctx_inc = _contexte_incapacites(cur, travailleur_id, _horizon())
+    except Exception as ex:
+        conn.rollback()
+        app.logger.warning(f"Incapacites: {ex}")
+        erreur = (f"Les incapacités ne peuvent pas être lues ou enregistrées ({ex}). "
+                  f"Si la table n'existe pas encore, lancez : python3 migrate_charges.py")
+        ctx_inc = {'episodes': [], 'ventilation': [], 'regime': None, 'contrat': None, 'alertes': [], 'regles': []}
+    try:
+        cur.execute('SELECT id, type_dimona, date_debut, date_fin FROM dimona WHERE travailleur_id = %s ORDER BY date_debut DESC',
+                    (travailleur_id,))
+        dimonas = [dict(d) for d in cur.fetchall()]
+    except Exception:
+        conn.rollback(); dimonas = []
+    cur.close(); conn.close()
+    ctx = get_context_base(); ctx['tenant'] = get_tenant()
+    return render_template('incapacites.html', travailleur=travailleur, dossier=dossier, dossier_actif=dossier,
+                           inc=ctx_inc, messages=messages, erreur=erreur, types=TYPES_INCAPACITE, dimonas=dimonas,
+                           aujourd_hui=date.today(), **ctx)
+
+
 # ── FICHE DE PAIE DEPUIS CALENDRIER ──────────────────────────────────
 
 @app.route('/dimona/<int:dimona_id>/generer-paie', methods=['GET', 'POST'])
@@ -1486,6 +1661,32 @@ def generer_fiche_depuis_calendrier(dimona_id):
                 ORDER BY created_at DESC LIMIT 1""", (dimona['travailleur_id'],))
             contrat = cur.fetchone()
 
+    # Incapacites de travail (maladie / accident de droit commun) touchant ce mois:
+    # tranches de salaire garanti, regles appliquees, suivi et alertes
+    debut_mois_p = date(annee, mois, 1)
+    fin_mois_p = date(annee, mois, _jours_du_mois(annee, mois)[1])
+    maladie_infos, maladie_alertes, ctx_inc = [], [], None
+    try:
+        ctx_inc = _contexte_incapacites(cur, dimona['travailleur_id'], fin_mois_p, contrat=dict(contrat) if contrat else None)
+        du_mois = [v for v in ctx_inc['ventilation'] if v['debut'] <= fin_mois_p and v['fin'] >= debut_mois_p]
+        maladie_alertes = list(ctx_inc['alertes']) if ctx_inc['episodes'] else []
+        for v in du_mois:
+            maladie_infos.append(
+                f"{v['libelle_type']} du {v['debut']:%d/%m/%Y} au {v['fin']:%d/%m/%Y}"
+                + (' (en cours)' if v['en_cours'] else '') + f" — {v['libelle_regime']}"
+                + (f", rechute : décompte repris au jour {v['rang_depart'] + 1}" if v['rechute_de'] else '') + " : "
+                + ' ; '.join(f"{p_['libelle']} du {p_['du']:%d/%m} au {p_['au']:%d/%m} ({p_['jours']} j"
+                             + (f", {p_['motif']}" if p_['motif'] else '') + ")" for p_ in v['periodes']))
+            maladie_infos += v['infos']
+            maladie_alertes += v['alertes']
+        if du_mois:
+            maladie_infos += ctx_inc['regles']
+    except Exception as ex_inc:
+        conn.rollback()
+        app.logger.warning(f"Incapacites (fiche): {ex_inc}")
+        maladie_alertes = [f"Incapacités non lues ({ex_inc}) : le salaire garanti n'est pas calculé. "
+                           f"Lancez python3 migrate_charges.py si la table n'existe pas."]
+
     if request.method == 'POST':
         form = request.form
 
@@ -1506,7 +1707,9 @@ def generer_fiche_depuis_calendrier(dimona_id):
         CODES_PRESTES = {'P', 'S', 'HS', 'PP'}
         CODES_FERIES = {'F', 'FM'}
         CODES_CONGE = {'CL', 'CE', 'VP'}
-        CODES_MALADIE = {'MA', 'AC', 'MAT', 'PAT'}
+        CODES_MALADIE = {'MA', 'AC', 'MAT', 'PAT', 'MG', 'M2', 'MC', 'MM'}
+        CODES_SALAIRE_GARANTI = {'MA', 'MG', 'M2', 'MC', 'MM'}   # maladie / accident de droit commun
+        heures_jour = float(contrat.get('heures_jour') or 7.6) if contrat else 7.6
         CODES_CHOMAGE = {'CT', 'CI', 'CNP'}
 
         jours_prestes = sum(1 for p in prestations if p['code_journee'] in CODES_PRESTES)
@@ -1525,7 +1728,26 @@ def generer_fiche_depuis_calendrier(dimona_id):
         km_domicile = int(form.get('km_domicile', dimona.get('km_domicile_travail', 0)) or 0)
         moyen_transport = form.get('moyen_transport', dimona.get('moyen_transport', 'voiture'))
 
-        if jours_prestes == 0 and jours_feries == 0:
+        # Jours de maladie du calendrier -> tranche de salaire garanti recalculee depuis
+        # les episodes (le code affiche dans le calendrier n'est qu'un rappel)
+        jours_incapacite, hors_episode = [], 0
+        for p in prestations:
+            if p['code_journee'] not in CODES_SALAIRE_GARANTI:
+                continue
+            j_inc = ctx_inc['par_date'].get(p['date_prestation']) if ctx_inc else None
+            if j_inc:
+                jours_incapacite.append({'date': p['date_prestation'], 'tranche': j_inc['tranche'],
+                                         'heures': float(p['heures'] or heures_jour)})
+            else:
+                hors_episode += 1
+        if hors_episode:
+            maladie_alertes.append(
+                f"{hors_episode} jour(s) codé(s) maladie dans le calendrier hors de tout épisode d'incapacité : rien n'est "
+                f"calculé pour ces jours. Encodez l'incapacité dans la fiche du travailleur (« Maladie »).")
+        incapacite = {'regime': ctx_inc['regime'] if ctx_inc else None, 'jours': jours_incapacite,
+                      'infos': maladie_infos, 'alertes': maladie_alertes}
+
+        if jours_prestes == 0 and jours_feries == 0 and not jours_incapacite:
             cur.close(); conn.close()
             return redirect(url_for('calendrier_prestations',
                 dimona_id=dimona_id, annee=annee, mois=mois,
@@ -1589,6 +1811,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
         bonus_cumul_annee = float(cur.fetchone()['cumul'] or 0)
 
         data = calculer_fiche_paie(
+            incapacite=incapacite,
             bonus_emploi_cumul_annee=bonus_cumul_annee,
             repas_fournis=repas_fournis,
             # Bareme par annees d'experience (alerte de salaire minimum)
@@ -1767,6 +1990,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
         cp_key=cp_key,
         vehicule_societe=dimona.get('vehicule_societe', False),
         km_domicile=dimona.get('km_domicile_travail', 0),
+        maladie_infos=maladie_infos, maladie_alertes=maladie_alertes,
         **ctx)
 
 # ── SUPPRESSION FICHE DE PAIE ─────────────────────────────────────────

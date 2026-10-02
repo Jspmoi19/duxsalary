@@ -8,6 +8,7 @@ import math
 import sys as _sys; _sys.path.insert(0, '/var/www/duxsalary')
 from profil_travailleur import construire_profil
 from parametres_dates import get_precompte_params, get_bonus_emploi_plafond_annuel, get_avantage_repas
+from salaire_garanti import LIBELLES_TRANCHES as LIBELLES_TRANCHES_SG
 
 # ── TAUX ONSS 2026 ────────────────────────────────────────────────────
 ONSS_PERSONNEL = 0.1307
@@ -196,6 +197,7 @@ def calculer_fiche_paie(
     bonus_emploi_cumul_annee=0.0,
     repas_fournis=False,
     annees_experience=None, date_debut_contrat=None,
+    incapacite=None,
 ):
     cp = CP_INDEMNITES.get(cp_key, {})
     # Override avec barèmes BDD si disponibles
@@ -255,6 +257,35 @@ def calculer_fiche_paie(
             'jours': jours_feries_payes, 'heures': heures_feries,
             'montant': round(salaire_horaire * heures_feries, 2), 'soumis_onss': True})
 
+    # ── MALADIE / ACCIDENT DE DROIT COMMUN: salaire garanti ───────────
+    # incapacite = {'regime', 'jours': [{'date','tranche','heures'}], 'infos', 'alertes'}
+    # (jours prevus a l'horaire, ventiles par salaire_garanti.py depuis les episodes
+    # du travailleur). Tranche MG: remuneration ordinaire soumise ONSS ; M2 et MC:
+    # hors ONSS mais imposables (Instructions ONSS 2026/3 p.115, 506) ; MM: mutuelle.
+    lignes_hors_onss = []
+    sg = None
+    jours_sg_mg, heures_sg_mg, jours_sg_non_garantis, indemn_maladie_hors_onss = 0, 0.0, 0, 0.0
+    if incapacite and incapacite.get('jours'):
+        if is_etudiant or not incapacite.get('regime'):
+            raise ValueError("Salaire garanti non géré pour ce contrat (étudiant) : ne pas deviner.")
+        from salaire_garanti import indemnites_du_mois
+        jours_ouvr_sg = None
+        if is_employe_fixe:
+            if not (periode_debut and periode_fin):
+                raise ValueError("Salaire garanti d'un employé au mois : période de paie requise.")
+            from datetime import timedelta as _td_sg
+            jours_ouvr_sg = sum(1 for n in range((periode_fin - periode_debut).days + 1)
+                                if (periode_debut + _td_sg(n)).weekday() < 5)
+        sg = indemnites_du_mois(incapacite['regime'], incapacite['jours'], salaire_horaire=salaire_horaire,
+                                salaire_mensuel=sal_mensuel_brut if is_employe_fixe else None,
+                                jours_ouvrables_mois=jours_ouvr_sg, heures_jour=heures_jour, jours_semaine=jours_semaine)
+        for l_sg in sg['lignes']:
+            (lignes_salaire if l_sg['soumis_onss'] else lignes_hors_onss).append(l_sg)
+        indemn_maladie_hors_onss = sg['hors_onss']
+        jours_sg_non_garantis = sg['jours_non_garantis']
+        if not is_employe_fixe:
+            jours_sg_mg, heures_sg_mg = sg['compte']['MG']['jours'], sg['compte']['MG']['heures']
+
     # Avantage de toute nature « repas »: UNIQUEMENT si l'employeur fournit des repas
     # (option du dossier, page « Chèques », desactivee par defaut). Ce n'est PAS une
     # consequence des cheques-repas: un cheque conforme est exonere. Corrige le
@@ -289,16 +320,19 @@ def calculer_fiche_paie(
         # Jours/heures declares (prestations, feries, conges payes par l'employeur ;
         # les vacances legales des ouvriers sont payees par la caisse: exclues)
         jours_conge_payes = 0 if is_ouvrier else (jours_conge or 0)
-        jours_bonus = (jours_prestes or 0) + (jours_feries_payes or 0) + jours_conge_payes
+        # + jours de salaire garanti a 100 % (code prestation 1) ; les jours 8 a 30
+        # (codes 10 et 11) et la mutuelle n'entrent pas dans J/H (Instructions p.450)
+        jours_bonus = (jours_prestes or 0) + (jours_feries_payes or 0) + jours_conge_payes + jours_sg_mg
         if is_employe_fixe and periode_debut and periode_fin:
             from datetime import timedelta as _td_b
             jours_bonus = max(0, sum(1 for n in range((periode_fin - periode_debut).days + 1)
-                                     if (periode_debut + _td_b(n)).weekday() < 5) - (jours_chomage or 0))
+                                     if (periode_debut + _td_b(n)).weekday() < 5) - (jours_chomage or 0)
+                              - jours_sg_non_garantis)
         if is_employe_fixe:
             heures_bonus = jours_bonus * float(heures_jour or 0)
         else:
             heures_bonus = float(heures_prestees or 0) + float(heures_feries or 0) + \
-                           jours_conge_payes * float(heures_jour or 0)
+                           jours_conge_payes * float(heures_jour or 0) + heures_sg_mg
         sal_ref_bonus, fraction_bonus = profil.reference_bonus_emploi(
             brut_onss, ref_date_params, jours=jours_bonus, heures=heures_bonus, temps_partiel=ratio_tp < 1.0)
         # Ecretement integre dans bonus_emploi(): volet B en premier, jusqu'a 0,
@@ -326,7 +360,8 @@ def calculer_fiche_paie(
                                     "(connu à partir du 01/07/2026) : non contrôlé.")
 
     onss_trav_net = round(max(0, onss_trav_brut - bonus_a - bonus_b), 2)
-    brut_imposable = round(brut_onss - onss_trav_net, 2)
+    # Indemnites de maladie des jours 8 a 30: hors ONSS mais imposables
+    brut_imposable = round(brut_onss - onss_trav_net + indemn_maladie_hors_onss, 2)
     # Plafond fiscal 500EUR/an sur indemnite km voiture (precompte uniquement,
     # PAS l'ONSS) -- source Securex + fin.belgium.be, annee de revenus 2026.
     ref_date_fiscale = periode_fin if periode_fin else date.today()
@@ -520,7 +555,7 @@ def calculer_fiche_paie(
     # Ouvriers: les vacances legales sont payees par la caisse de vacances (code
     # prestation 2), pas par l'employeur -> hors J/H (corrige le 01/10/2026).
     jours_conge_employeur = 0 if is_ouvrier else (jours_conge or 0)
-    jours_payes_onss = (jours_prestes or 0) + (jours_feries_payes or 0) + jours_conge_employeur
+    jours_payes_onss = (jours_prestes or 0) + (jours_feries_payes or 0) + jours_conge_employeur + jours_sg_mg
     if profil.salaire_est_mensuel_fixe and periode_debut and periode_fin:
         # Employe au mois: le salaire couvre TOUS les jours ouvrables du mois
         # (le calendrier peut etre incomplet en cours de mois). Seules les
@@ -528,9 +563,9 @@ def calculer_fiche_paie(
         from datetime import timedelta as _td
         jours_ouvr_mois = sum(1 for n in range((periode_fin - periode_debut).days + 1)
                               if (periode_debut + _td(n)).weekday() < 5)
-        jours_payes_onss = max(0, jours_ouvr_mois - (jours_chomage or 0))
+        jours_payes_onss = max(0, jours_ouvr_mois - (jours_chomage or 0) - jours_sg_non_garantis)
     heures_payees_onss = float(heures_prestees or 0) + float(heures_feries or 0) + \
-                         float(jours_conge_employeur) * float(heures_jour or 0)
+                         float(jours_conge_employeur) * float(heures_jour or 0) + heures_sg_mg
     red_struct = 0.0 if is_etudiant else profil.reduction_structurelle(
         onss_pat_reductible, reference_date=ref_date_struct, remuneration_mois=brut_onss,
         jours_payes=jours_payes_onss, heures_payees=heures_payees_onss)
@@ -561,7 +596,8 @@ def calculer_fiche_paie(
     # test_moteur.py: cout >= net + ONSS travailleur + precompte + CSS.
     cout_empl = round(brut_onss + onss_pat_net + montant_rgpt + montant_arab + montant_vet + montant_dep + montant_km + cr_empl_total
                       + montant_frais_nets + provision_vacances_annuelles + (prime_exceptionnelle or 0) + (double_pecule or 0)
-                      - montant_avantage, 2)   # avantage repas: compris dans le brut mais non verse
+                      - montant_avantage     # avantage repas: compris dans le brut mais non verse
+                      + indemn_maladie_hors_onss, 2)   # indemnites de maladie des jours 8 a 30
 
     # ── DETAIL COMPLET DU CALCUL (page "Calculer la paie") ─────────────
     onss_info = profil.onss_officiel
@@ -576,6 +612,15 @@ def calculer_fiche_paie(
             [L(l['libelle'], l['montant'], base=l.get('base'), source=f"{l.get('jours',0)} j / {l.get('heures',0)} h")
              for l in lignes_salaire] +
             [L('Brut soumis à l\'ONSS', brut_onss, total=True)]},
+        {'titre': 'Maladie et salaire garanti', 'lignes':
+            [L(txt, None, info=True) for txt in (incapacite or {}).get('infos', [])] +
+            ([L(f"{LIBELLES_TRANCHES_SG[t]} : {sg['compte'][t]['jours']} j / {sg['compte'][t]['heures']:g} h", None,
+                source='rémunération normale ' + f"{sg['compte'][t]['normal']:.2f} €", info=True)
+              for t in ('MG', 'M2', 'MC', 'MM') if sg['compte'][t]['jours']] if sg else []) +
+            [L(l['libelle'], l['montant'], base=l.get('base'), source=f"{l.get('jours',0)} j / {l.get('heures',0)} h — hors ONSS, imposable")
+             for l in lignes_hors_onss] +
+            ([L('Indemnités de maladie imposables, hors ONSS', indemn_maladie_hors_onss, total=True,
+                source='ajoutées à l\'imposable et au coût employeur')] if sg else [])},
         {'titre': 'ONSS travailleur', 'lignes': [
             L('Cotisation personnelle' + (' (base 108 %)' if profil.coeff_base_onss_patronal != 1.0 else ''),
               -onss_trav_brut, base=profil.base_onss_patronale(brut_onss), taux=onss_pers_taux,
@@ -619,6 +664,14 @@ def calculer_fiche_paie(
     for bloc_d in detail_calcul:
         bloc_d['lignes'] = [x for x in bloc_d['lignes'] if x]
     alertes_calcul = list(avertissements_onss)
+    # Maladie: alertes de l'episode (rechute, anciennete, fin du salaire garanti...)
+    # puis celles du calcul (plafond AMI)
+    alertes_calcul += [f"Maladie : {a}" for a in (incapacite or {}).get('alertes', [])]
+    if sg:
+        alertes_calcul += [f"Maladie : {a}" for a in sg['alertes']]
+        if indemn_maladie_hors_onss:
+            alertes_calcul.append("Maladie : les indemnités des jours 8 à 30 sont ajoutées à l'imposable du mois et "
+                                  "soumises au barème ordinaire du précompte (traitement non recoupé avec une fiche réelle).")
     if alerte_plafond_bonus:
         alertes_calcul.append(alerte_plafond_bonus)
     alertes_calcul += alertes_cheques
@@ -711,6 +764,10 @@ def calculer_fiche_paie(
         'jours_prestes': jours_prestes, 'heures_prestees': heures_prestees,
         'jours_feries_payes': jours_feries_payes, 'heures_feries': heures_feries,
         'jours_conge': jours_conge, 'jours_maladie': jours_maladie, 'jours_chomage': jours_chomage,
+        # Maladie: lignes hors ONSS (imposables) et decompte par tranche
+        'lignes_hors_onss': lignes_hors_onss,
+        'indemnites_maladie_hors_onss': indemn_maladie_hors_onss,
+        'incapacite': ({'regime': incapacite.get('regime'), 'compte': sg['compte']} if sg else None),
         'brut_majore': base_onss_pat,
         'css': css,
         'libelle_prime': libelle_prime,
@@ -720,7 +777,8 @@ def calculer_fiche_paie(
             ('Vêtements de travail', montant_vet),
             ('Déplacement domicile-travail', round(montant_dep + montant_km, 2)),
             ("Frais propres à l'employeur", montant_frais_nets),
-            ('Avantage repas reçu en nature (non versé)', -montant_avantage)) if mt],
+            ('Avantage repas reçu en nature (non versé)', -montant_avantage)) if mt]
+            + [{'libelle': l['libelle'] + ' – hors ONSS, imposable', 'montant': l['montant']} for l in lignes_hors_onss],
     }
 
 

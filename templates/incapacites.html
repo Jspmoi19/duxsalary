@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Maladie — {{ travailleur.prenom }} {{ travailleur.nom }}{% endblock %}
+{% block content %}
+<style>
+  .inc-table{width:100%;border-collapse:collapse;font-size:13px}
+  .inc-table th{background:#f5f7fa;text-align:left;padding:7px 10px;font-size:11px;color:#666;text-transform:uppercase;border-bottom:1px solid #e3e8ef}
+  .inc-table td{padding:7px 10px;border-bottom:1px solid #f0f2f5;vertical-align:top}
+  .inc-code{display:inline-block;min-width:30px;text-align:center;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700}
+  .inc-MG{background:#f8d7da;color:#721c24}.inc-M2{background:#f5c2c7;color:#721c24}
+  .inc-MC{background:#f1aeb5;color:#58151c}.inc-MM{background:#e2e3e5;color:#58151c}
+  .inc-regle{font-size:13px;padding:3px 0;color:#444}
+  .inc-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end}
+</style>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>Maladie et salaire garanti — {{ travailleur.prenom }} {{ travailleur.nom }}</h2>
+    <p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">
+      Maladie et accident de droit commun uniquement. Un enregistrement par incapacité : l'outil range chaque jour dans sa
+      tranche de salaire garanti et l'inscrit au calendrier des prestations.
+    </p>
+  </div>
+</div>
+
+{% if erreur %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #c0392b;background:#fff5f5">
+  <div class="card-body" style="padding:12px 16px;font-size:13px;color:#a93226">⛔ {{ erreur }}</div>
+</div>
+{% endif %}
+{% if messages %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #27ae60">
+  <div class="card-body" style="padding:12px 16px;font-size:13px;color:#1e7e34">
+    {% for m in messages %}<div style="padding:2px 0">{{ '✔' if loop.first else '⚠' }} {{ m }}</div>{% endfor %}
+  </div>
+</div>
+{% endif %}
+{% if inc.alertes %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #f39c12">
+  <div class="card-body" style="padding:12px 16px">
+    {% for a in inc.alertes %}<div style="font-size:13px;color:#8a5a00;padding:2px 0">⚠ {{ a }}</div>{% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Regles appliquees -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Règles appliquées à ce travailleur</h3></div>
+  <div class="card-body" style="padding:14px 16px">
+    {% if inc.contrat %}
+    <div style="font-size:13px;margin-bottom:8px">
+      Contrat : <b>{{ inc.contrat.type_contrat }}</b> · {{ inc.contrat.cp_key }} ·
+      du {{ inc.contrat.date_debut.strftime('%d/%m/%Y') }}{% if inc.contrat.date_fin %} au {{ inc.contrat.date_fin.strftime('%d/%m/%Y') }}{% endif %}
+      {% if inc.debut_anciennete %}· occupation ininterrompue depuis le <b>{{ inc.debut_anciennete.strftime('%d/%m/%Y') }}</b>{% endif %}
+    </div>
+    {% endif %}
+    {% for r in inc.regles %}<div class="inc-regle">• {{ r }}</div>{% endfor %}
+    <div style="font-size:12px;color:#888;margin-top:8px">
+      Codes du calendrier :
+      <span class="inc-code inc-MG">MG</span> garanti 100 % ·
+      <span class="inc-code inc-M2">M2</span> 2e semaine ·
+      <span class="inc-code inc-MC">MC</span> complément jours 15 à 30 ·
+      <span class="inc-code inc-MM">MM</span> mutuelle
+    </div>
+  </div>
+</div>
+
+<!-- Nouvelle incapacite -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Nouvelle incapacité</h3></div>
+  <div class="card-body" style="padding:14px 16px">
+    <form method="POST" class="inc-form">
+      <input type="hidden" name="action" value="creer">
+      <div class="form-group"><label>Premier jour d'incapacité</label>
+        <input type="date" name="date_debut" class="form-control" required></div>
+      <div class="form-group"><label>Dernier jour (vide = en cours)</label>
+        <input type="date" name="date_fin" class="form-control"></div>
+      <div class="form-group"><label>Type</label>
+        <select name="type_incapacite" class="form-control">
+          {% for code, lib in types.items() %}<option value="{{ code }}">{{ lib }}</option>{% endfor %}
+        </select></div>
+      <div class="form-group"><label>Note (certificat, remarque)</label>
+        <input type="text" name="note" class="form-control" maxlength="200"></div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400">
+          <input type="checkbox" name="autre_cause" style="width:16px;height:16px">
+          Autre maladie ou autre accident que l'incapacité précédente, attesté par certificat médical
+          (ouvre un nouveau salaire garanti même en cas de reprise récente)
+        </label>
+      </div>
+      <div><button type="submit" class="btn btn-primary">Enregistrer et mettre à jour le calendrier</button></div>
+    </form>
+    <div style="font-size:12px;color:#888;margin-top:10px">
+      Seuls les jours vides, prestés (P) ou déjà marqués maladie sont modifiés dans le calendrier : un congé, un jour férié
+      ou un jour corrigé à la main est laissé tel quel. Rien n'est payé tant que la fiche de paie n'est pas générée.
+    </div>
+  </div>
+</div>
+
+<!-- Suivi des incapacites -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Suivi des incapacités ({{ inc.episodes|length }})</h3></div>
+  {% if inc.ventilation %}
+  <table class="inc-table">
+    <thead><tr><th>Incapacité</th><th>Tranches de salaire garanti</th><th>Alertes et informations</th><th>Modifier</th></tr></thead>
+    <tbody>
+    {% for v in inc.ventilation|reverse %}
+    <tr>
+      <td style="white-space:nowrap">
+        <b>{{ v.debut.strftime('%d/%m/%Y') }}</b> → <b>{{ v.episode.date_fin.strftime('%d/%m/%Y') if v.episode.date_fin else 'en cours' }}</b><br>
+        {{ v.libelle_type }} · {{ v.jours|length }} jour(s) calendrier{% if v.en_cours %}<br><span style="color:#8a5a00">calculée jusqu'au {{ v.fin.strftime('%d/%m/%Y') }}</span>{% endif %}
+        {% if v.rechute_de %}<br><span style="color:#c0392b;font-weight:600">Rechute — reprise au jour {{ v.rang_depart + 1 }}</span>{% endif %}
+        {% if v.episode.autre_cause %}<br><span style="color:#555">Autre cause (certificat)</span>{% endif %}
+        {% if v.episode.note %}<br><span style="color:#888">{{ v.episode.note }}</span>{% endif %}
+      </td>
+      <td>
+        {% for p in v.periodes %}
+        <div style="padding:2px 0">
+          <span class="inc-code inc-{{ p.tranche }}">{{ p.tranche }}</span>
+          {{ p.du.strftime('%d/%m') }}{% if p.au != p.du %} → {{ p.au.strftime('%d/%m') }}{% endif %}
+          · {{ p.jours }} j · {{ p.libelle }}{% if p.motif %} <span style="color:#888">({{ p.motif }})</span>{% endif %}
+        </div>
+        {% endfor %}
+      </td>
+      <td>
+        {% for a in v.alertes %}<div style="color:#8a5a00;padding:2px 0">⚠ {{ a }}</div>{% endfor %}
+        {% for i in v.infos %}<div style="color:#555;padding:2px 0">ℹ {{ i }}</div>{% endfor %}
+        {% if not v.alertes and not v.infos %}<span style="color:#aaa">—</span>{% endif %}
+      </td>
+      <td style="min-width:210px">
+        <form method="POST" style="display:grid;gap:6px">
+          <input type="hidden" name="action" value="modifier">
+          <input type="hidden" name="incapacite_id" value="{{ v.id }}">
+          <input type="hidden" name="note" value="{{ v.episode.note or '' }}">
+          <input type="date" name="date_debut" value="{{ v.debut.isoformat() }}" class="form-control" required>
+          <input type="date" name="date_fin" value="{{ v.episode.date_fin.isoformat() if v.episode.date_fin else '' }}" class="form-control">
+          <select name="type_incapacite" class="form-control">
+            {% for code, lib in types.items() %}<option value="{{ code }}" {% if v.episode.type_incapacite == code %}selected{% endif %}>{{ lib }}</option>{% endfor %}
+          </select>
+          <label style="font-size:12px;font-weight:400;display:flex;gap:6px;align-items:center">
+            <input type="checkbox" name="autre_cause" {% if v.episode.autre_cause %}checked{% endif %}> Autre cause (certificat)</label>
+          <button type="submit" class="btn btn-secondary btn-xs">Enregistrer</button>
+        </form>
+        <form method="POST" style="margin-top:6px" onsubmit="return confirm('Supprimer cette incapacité ? Ses jours seront retirés du calendrier.')">
+          <input type="hidden" name="action" value="supprimer">
+          <input type="hidden" name="incapacite_id" value="{{ v.id }}">
+          <button type="submit" class="btn btn-danger btn-xs">Supprimer</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">
+    {% if inc.episodes %}{{ inc.episodes|length }} incapacité(s) enregistrée(s), non calculée(s) (voir l'alerte ci-dessus).{% else %}Aucune incapacité enregistrée.{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if dimonas %}
+<div class="card">
+  <div class="card-header"><h3>Calendriers des prestations</h3></div>
+  <div class="card-body" style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap">
+    {% for d in dimonas %}
+    <a href="/dimona/{{ d.id }}/prestations?annee={{ aujourd_hui.year }}&mois={{ aujourd_hui.month }}" class="btn btn-secondary btn-sm">
+      Dimona {{ d.type_dimona }} · {{ d.date_debut.strftime('%d/%m/%Y') }} → {{ d.date_fin.strftime('%d/%m/%Y') if d.date_fin else 'en cours' }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

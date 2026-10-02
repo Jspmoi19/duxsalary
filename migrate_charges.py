@@ -69,9 +69,30 @@ COLONNES = {
 }
 
 
+# Episodes d'incapacite de travail (maladie / accident de droit commun), tache 5:
+# un enregistrement par episode, lie au travailleur. Les tranches de salaire
+# garanti de chaque jour sont recalculees par salaire_garanti.py (jamais stockees).
+TABLES = [
+    """CREATE TABLE IF NOT EXISTS incapacites (
+        id SERIAL PRIMARY KEY,
+        travailleur_id INTEGER NOT NULL REFERENCES travailleurs(id) ON DELETE CASCADE,
+        dossier_id INTEGER NOT NULL,
+        date_debut DATE NOT NULL,
+        date_fin DATE,                                   -- NULL = incapacite en cours
+        type_incapacite VARCHAR(20) NOT NULL DEFAULT 'maladie',   -- maladie | accident (droit commun)
+        autre_cause BOOLEAN NOT NULL DEFAULT FALSE,      -- autre maladie/accident atteste par certificat (pas une rechute)
+        note TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_incapacites_travailleur ON incapacites (travailleur_id, date_debut)",
+]
+
+
 def migrate():
     conn = get_conn()
     cur = conn.cursor()
+    for sql in TABLES:
+        cur.execute(sql)
     for table, colonnes in COLONNES.items():
         for nom, type_sql in colonnes:
             # IF EXISTS: une table creee par un autre script (ex. cheques_config) peut manquer sur une base neuve

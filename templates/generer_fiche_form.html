@@ -9,6 +9,17 @@
   </div>
 </div>
 
+{% if maladie_infos or maladie_alertes %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #f39c12">
+  <div class="card-header"><h3>Maladie et salaire garanti ce mois-ci</h3></div>
+  <div class="card-body" style="padding:12px 16px;font-size:13px">
+    {% for a in maladie_alertes %}<div style="color:#8a5a00;padding:2px 0">⚠ {{ a }}</div>{% endfor %}
+    {% for i in maladie_infos %}<div style="color:#444;padding:2px 0">• {{ i }}</div>{% endfor %}
+    <div style="margin-top:6px"><a href="/travailleur/{{ dimona.travailleur_id }}/incapacites" style="color:var(--accent)">Gérer les incapacités</a></div>
+  </div>
+</div>
+{% endif %}
+
 <form method="POST" action="/dimona/{{ dimona.id }}/generer-paie?annee={{ annee }}&mois={{ mois }}">
 <div class="two-col">
 
