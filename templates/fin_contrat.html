@@ -1,11 +1,156 @@
 {% extends "base.html" %}
 {% block title %}Fin de contrat — {{ contrat.prenom }} {{ contrat.nom }}{% endblock %}
 {% block content %}
+<style>
+  .fc-table{width:100%;border-collapse:collapse;font-size:13px}
+  .fc-table th{background:#f5f7fa;text-align:left;padding:6px 10px;font-size:11px;color:#666;text-transform:uppercase;border-bottom:1px solid #e3e8ef}
+  .fc-table td{padding:6px 10px;border-bottom:1px solid #f0f2f5;vertical-align:top}
+  .fc-table td.num,.fc-table th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .fc-table tr.total td{font-weight:700;background:#fafbfc}
+  .fc-grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;align-items:end}
+  .fc-regle{font-size:12px;color:#555;padding:2px 0}
+</style>
 <div class="page-header">
   <div class="page-header-left">
-    <h2>Documents fin de contrat</h2>
+    <h2>Fin de contrat — {{ contrat.prenom }} {{ contrat.nom }}</h2>
+    <p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">
+      {{ contrat.type_contrat }} · {{ contrat.cp_key }} · depuis le {{ contrat.date_debut.strftime('%d/%m/%Y') }}{% if contrat.date_fin %} jusqu'au {{ contrat.date_fin.strftime('%d/%m/%Y') }}{% endif %}
+    </p>
   </div>
 </div>
+
+{% if fc.erreur %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #c0392b;background:#fff5f5">
+  <div class="card-body" style="padding:12px 16px;font-size:13px;color:#a93226">⛔ {{ fc.erreur }}</div>
+</div>
+{% endif %}
+
+<!-- DECOMPTE DE SORTIE -->
+{% if fc.propositions %}
+{% set p = fc.propositions %}
+{% set f = formulaire %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Décompte de sortie — préavis, indemnité de rupture, pécule de sortie</h3></div>
+  <div class="card-body" style="padding:14px 16px">
+    <form method="POST">
+      <input type="hidden" name="doc_type" value="decompte">
+      <div class="fc-grille">
+        <div class="form-group"><label>Motif</label>
+          <select name="motif" class="form-control">
+            {% for cle, lib in fc.motifs.items() %}<option value="{{ cle }}" {% if f.get('motif') == cle %}selected{% endif %}>{{ lib }}</option>{% endfor %}
+          </select></div>
+        <div class="form-group"><label>Date de notification du congé (ou de fin)</label>
+          <input type="date" name="date_notification" class="form-control" value="{{ f.get('date_notification', '') }}" required></div>
+        <div class="form-group"><label>Mode de notification</label>
+          <select name="mode_notification" class="form-control">
+            {% for cle, lib in [('recommande', 'Lettre recommandée (effet le 3e jour ouvrable)'), ('huissier', 'Exploit d\'huissier'), ('remise', 'Remise d\'un écrit (travailleur uniquement)')] %}
+            <option value="{{ cle }}" {% if f.get('mode_notification') == cle %}selected{% endif %}>{{ lib }}</option>{% endfor %}
+          </select></div>
+        <div class="form-group"><label>Dernier jour du contrat (si le préavis n'est pas presté jusqu'au bout)</label>
+          <input type="date" name="date_fin_effective" class="form-control" value="{{ f.get('date_fin_effective', '') }}"></div>
+      </div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px;margin:10px 0">
+        <label style="display:flex;gap:8px;align-items:center;font-weight:400">
+          <input type="checkbox" name="preavis_preste" {% if not f or f.get('preavis_preste') == 'on' %}checked{% endif %}> Préavis presté jusqu'à son terme</label>
+        {% if not p.paye_au_mois %}
+        <label style="display:flex;gap:8px;align-items:center;font-weight:400">
+          <input type="checkbox" name="horaire_variable" {% if f.get('horaire_variable') == 'on' %}checked{% endif %}> Horaire variable (moyenne des 12 derniers mois d'après les fiches)</label>
+        {% endif %}
+      </div>
+      <div style="font-size:13px;margin-bottom:6px">
+        Rémunération hebdomadaire proposée : <b>{{ "%.2f"|format(p.hebdo) }} €</b>
+        {% if p.paye_au_mois %}({{ "%.2f"|format(p.salaire_mensuel) }} € × 3 / 13){% else %}({{ "%g"|format(p.heures_semaine) }} h × {{ "%.4f"|format(p.salaire_horaire) }} €){% endif %}
+      </div>
+
+      <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin:12px 0 6px">Avantages compris dans l'indemnité (montants annuels à charge de l'employeur, modifiables)</div>
+      <div class="fc-grille">
+        {% for cle, lib in fc.avantages %}
+        <div class="form-group"><label>{{ lib }}</label>
+          <input type="number" step="0.01" min="0" name="av_{{ cle }}" class="form-control" value="{{ f.get('av_' ~ cle, '%.2f'|format(p.avantages[cle])) }}"></div>
+        {% endfor %}
+      </div>
+
+      {% if fc.statut == 'employe' %}
+      <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin:12px 0 6px">Pécule de vacances de sortie (employé)</div>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px;margin-bottom:8px">
+        <input type="checkbox" name="inclure_pecule" {% if not f or f.get('inclure_pecule') == 'on' %}checked{% endif %}> Calculer le pécule de sortie</label>
+      <div class="fc-grille">
+        <div class="form-group"><label>Rémunération brute de l'année en cours</label>
+          <input type="number" step="0.01" min="0" name="brut_annee_en_cours" class="form-control" value="{{ f.get('brut_annee_en_cours', '%.2f'|format(p.brut_annee_en_cours)) }}"></div>
+        <div class="form-group"><label>Rémunération brute de l'année précédente</label>
+          <input type="number" step="0.01" min="0" name="brut_annee_precedente" class="form-control" value="{{ f.get('brut_annee_precedente', '%.2f'|format(p.brut_annee_precedente)) }}"></div>
+        <div class="form-group"><label>Jours de vacances déjà pris cette année (sur 20)</label>
+          <input type="number" step="0.5" min="0" name="jours_vacances_pris" class="form-control" value="{{ f.get('jours_vacances_pris', p.jours_vacances_pris) }}"></div>
+        <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px">
+          <input type="checkbox" name="double_deja_paye" {% if (f and f.get('double_deja_paye') == 'on') or (not f and p.double_deja_paye) %}checked{% endif %}> Double pécule de cette année déjà payé</label>
+      </div>
+      <div style="font-size:12px;color:#888;margin-top:4px">Bases proposées à partir des fiches de paie enregistrées, à valider.</div>
+      {% endif %}
+
+      {% if fc.decompte and fc.decompte.indemnite and fc.decompte.indemnite.due_par == 'travailleur' %}
+      {% set it = fc.decompte.indemnite %}
+      <div style="background:#fff8e1;border:1px solid #f0d58c;border-radius:6px;padding:10px 14px;font-size:13px;margin-top:12px">
+        Indemnité de rupture due <b>par le travailleur</b> : <b>{{ "%.2f"|format(it.brut) }} €</b>. Elle n'est pas retenue d'office.
+        <div class="form-group" style="margin:8px 0 0;max-width:340px">
+          <label>Retenue convenue avec le travailleur (facultatif)</label>
+          <input type="number" step="0.01" min="0" name="retenue_travailleur" class="form-control" value="{{ f.get('retenue_travailleur', '0.00') }}">
+        </div>
+        <div style="font-size:12px;color:#8a5a00;margin-top:4px">Un cinquième du net de ce décompte = {{ "%.2f"|format(it.cinquieme_net) }} €
+          (limite des retenues permises par la loi du 12/04/1965, art. 23, dont cette indemnité ne fait pas partie).</div>
+      </div>
+      {% endif %}
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button type="submit" name="action" value="calculer" class="btn btn-primary">Calculer le décompte</button>
+        {% if fc.decompte %}<button type="submit" name="action" value="pdf" class="btn btn-secondary" formtarget="_blank" data-pdf="Décompte de sortie">Générer le décompte PDF et l'enregistrer</button>{% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if fc.decompte %}
+{% set d = fc.decompte %}
+{% if d.alertes %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #f39c12">
+  <div class="card-body" style="padding:12px 16px">
+    {% for a in d.alertes %}<div style="font-size:13px;color:#8a5a00;padding:2px 0">⚠ {{ a }}</div>{% endfor %}
+  </div>
+</div>
+{% endif %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Résultat — {{ d.libelle_motif }}</h3></div>
+  {% if d.preavis %}
+  <div style="padding:10px 16px;font-size:13px;border-bottom:1px solid #f0f2f5">
+    Préavis : <b>{{ d.preavis.semaines }} semaine(s)</b> · ancienneté {{ d.preavis.anciennete_mois }} mois · {{ d.preavis.version }}
+    {% if d.preavis.dates %}<br>Notification effective le {{ d.preavis.dates.effet.strftime('%d/%m/%Y') }} · préavis du
+    <b>{{ d.preavis.dates.debut.strftime('%d/%m/%Y') }}</b> au <b>{{ d.preavis.dates.fin.strftime('%d/%m/%Y') }}</b>{% endif %}
+  </div>
+  {% endif %}
+  <table class="fc-table">
+    <thead><tr><th>Élément</th><th class="num">Base</th><th class="num">Taux / nombre</th><th class="num">Montant</th></tr></thead>
+    <tbody>
+    {% for l in d.lignes %}
+      <tr><td>{{ l.libelle }}</td><td class="num">{% if l.base is not none %}{{ "%.2f"|format(l.base) }}{% endif %}</td>
+          <td class="num">{{ l.nombre or '' }}</td><td class="num">{{ "%.2f"|format(l.montant) }} €</td></tr>
+    {% else %}
+      <tr><td colspan="4" style="color:var(--text-muted)">Aucune indemnité de rupture ni pécule de sortie à payer.</td></tr>
+    {% endfor %}
+      <tr class="total"><td>Total brut</td><td></td><td></td><td class="num">{{ "%.2f"|format(d.totaux.brut) }} €</td></tr>
+      <tr><td>Retenues ONSS</td><td></td><td></td><td class="num">{{ "%.2f"|format(-d.totaux.onss) }} €</td></tr>
+      <tr><td>Précompte professionnel</td><td></td><td></td><td class="num">{{ "%.2f"|format(-d.totaux.precompte) }} €</td></tr>
+      <tr class="total"><td>NET À PAYER</td><td></td><td></td><td class="num">{{ "%.2f"|format(d.totaux.net) }} €</td></tr>
+      <tr><td style="color:#888">ONSS patronal{% if d.totaux.cotisation_812 %} + cotisation spéciale 812{% endif %} (interne)</td><td></td><td></td>
+          <td class="num" style="color:#888">{{ "%.2f"|format(d.totaux.onss_patronal + d.totaux.cotisation_812) }} €</td></tr>
+      <tr><td style="color:#888">Coût pour l'employeur (interne)</td><td></td><td></td><td class="num" style="color:#888">{{ "%.2f"|format(d.cout_employeur) }} €</td></tr>
+    </tbody>
+  </table>
+  {% for m in d.mentions %}<div style="padding:8px 16px;font-size:13px;border-top:1px solid #f0f2f5">{{ m }}</div>{% endfor %}
+  <div style="padding:10px 16px;border-top:1px solid #f0f2f5">
+    <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:4px">Règles appliquées et sources (usage interne, jamais imprimées sur le décompte)</div>
+    {% for r in d.regles %}<div class="fc-regle">• {{ r }}</div>{% endfor %}
+  </div>
+</div>
+{% endif %}
 
 <div class="two-col">
 

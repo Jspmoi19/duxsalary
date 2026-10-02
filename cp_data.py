@@ -201,9 +201,11 @@ def get_salaire_min(cp_key, categorie=None):
         return list(baremes.values())[0]
     return None
 
-def calcul_preavis_semaines(anciennete_mois, est_employeur=True):
-    if int(anciennete_mois or 0) < 3: return 1 if est_employeur else 1
-    semaines_emp = min(anciennete_mois // 3 * 1, 62)
-    if anciennete_mois > 24:
-        semaines_emp = 8 + ((anciennete_mois // 12) - 2) * 6
-    return semaines_emp if est_employeur else min(semaines_emp // 2, 13)
+def calcul_preavis_semaines(anciennete_mois, est_employeur=True, date_debut_contrat=None):
+    """Delai de preavis legal en semaines (loi du 03/07/1978, art. 37/2): table de
+    parametres_dates.PREAVIS_VERSIONS selon la date de debut du contrat (a defaut: un
+    contrat qui debute aujourd'hui). Remplace le 02/10/2026 une formule sans source."""
+    from datetime import date as _date
+    from fin_contrat import semaines_preavis
+    return semaines_preavis('employeur' if est_employeur else 'travailleur', int(anciennete_mois or 0),
+                            date_debut_contrat or _date.today())[0]

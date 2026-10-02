@@ -478,3 +478,122 @@ CSS_VERSIONS = [
 
 def get_css_params(reference_date):
     return _get_version(CSS_VERSIONS, reference_date)
+
+
+# ─────────────────────────────────────────────────────────────────
+# FIN DE CONTRAT — PREAVIS, INDEMNITE DE RUPTURE, PECULE DE SORTIE (tache 6)
+# ─────────────────────────────────────────────────────────────────
+# DELAIS DE PREAVIS d'un contrat a duree indeterminee (statut unique: memes delais
+# pour un ouvrier et un employe ; aucune derogation sectorielle: art. 37/3).
+# Sources:
+# - Loi du 3 juillet 1978, art. 37/2 (Justel, consolide au 15/06/2026): § 1er conge
+#   donne par l'employeur, § 1er/1 plafond de 52 semaines, § 2 conge donne par le
+#   travailleur, § 3 contre-preavis. Notes: L 2018-03-26 (en vigueur 01/05/2018),
+#   L 2026-05-18 art. 24 (01/06/2026), L 2026-06-03 art. 2 a 4 (01/08/2026).
+# - SPF Emploi, « Délais de préavis - contrats ayant débuté à partir du 01/01/2014 -
+#   licenciement » et « Délais de préavis - démission » (lus le 02/10/2026): les deux
+#   tables, et le critere de version.
+# LE CRITERE DE VERSION EST LA DATE DE DEBUT D'EXECUTION DU CONTRAT (pas la date de
+# notification du conge): un contrat debute avant le 01/08/2026 garde l'ancienne table.
+# Chaque palier: (anciennete minimale en mois, semaines). A partir de 5 ans, le conge
+# donne par l'employeur suit la formule de 'apres_5_ans'.
+# Contrats debutes avant le 01/01/2014: calcul en deux parties (loi du 26/12/2013),
+# NON GERE -- aucune version ne les couvre (erreur claire).
+_PREAVIS_EMPLOYEUR_COMMUN = [(6, 6), (9, 7), (12, 8), (15, 9), (18, 10), (21, 11), (24, 12), (36, 13), (48, 15)]
+_PREAVIS_TRAVAILLEUR_COMMUN = [(6, 3), (12, 4), (18, 5), (24, 6), (48, 7), (60, 9), (72, 10), (84, 12), (96, 13)]
+PREAVIS_VERSIONS = [
+    {'date_debut': date(2014, 1, 1), 'libelle': "contrat débuté du 01/01/2014 au 31/07/2026",
+     'employeur': [(0, 1), (3, 3), (4, 4), (5, 5)] + _PREAVIS_EMPLOYEUR_COMMUN,
+     'travailleur': [(0, 1), (3, 2)] + _PREAVIS_TRAVAILLEUR_COMMUN,
+     'contre_preavis': [(0, 1), (3, 2), (6, 3), (12, 4)],
+     'source': 'Loi du 03/07/1978 art. 37/2 (version du 01/05/2018) ; SPF Emploi, délais de préavis'},
+    {'date_debut': date(2026, 8, 1), 'libelle': "contrat débuté à partir du 01/08/2026",
+     'employeur': [(0, 1)] + _PREAVIS_EMPLOYEUR_COMMUN,
+     'travailleur': [(0, 1)] + _PREAVIS_TRAVAILLEUR_COMMUN,
+     'contre_preavis': [(0, 1), (6, 3), (12, 4)],
+     'source': 'Loi du 03/07/1978 art. 37/2, modifié par la loi du 03/06/2026 (en vigueur le 01/08/2026) ; SPF Emploi'},
+]
+# Conge donne par l'employeur a partir de 5 ans d'anciennete (art. 37/2 § 1er): + 3
+# semaines par annee entamee, + 2 la 20e annee, + 1 par annee a partir de 21 ans.
+# n = annees completes: 18 + 3 x (n - 5) jusqu'a 19 ans ; 62 a 20 ans ; 63 + (n - 21) ensuite.
+# Plafond (§ 1er/1): 52 semaines des 17 ans, pour les contrats dont l'execution debute a
+# partir du 01/06/2026.
+PREAVIS_PLAFOND_VERSIONS = [
+    {'date_debut': date(2026, 6, 1), 'anciennete_annees': 17, 'semaines': 52,
+     'source': 'Loi du 03/07/1978 art. 37/2 § 1er/1 (loi du 18/05/2026, en vigueur le 01/06/2026)'},
+]
+# Reclassement professionnel: obligatoire quand le preavis atteint ce seuil (rappele par
+# une alerte ; l'imputation de 4 semaines sur l'indemnite n'est PAS calculee -- texte non lu).
+PREAVIS_SEUIL_RECLASSEMENT_SEMAINES = 30
+
+
+def get_preavis_params(date_debut_contrat):
+    """Tables de preavis selon la date de debut d'execution du contrat."""
+    if date_debut_contrat < PREAVIS_VERSIONS[0]['date_debut']:
+        raise ValueError("Contrat débuté avant le 01/01/2014 : le calcul du préavis en deux parties (loi du 26/12/2013) "
+                         "n'est pas géré par l'outil.")
+    return _get_version(PREAVIS_VERSIONS, date_debut_contrat)
+
+
+def get_preavis_plafond(date_debut_contrat):
+    applicables = [v for v in PREAVIS_PLAFOND_VERSIONS if v['date_debut'] <= date_debut_contrat]
+    return max(applicables, key=lambda v: v['date_debut']) if applicables else None
+
+
+# PRECOMPTE DES INDEMNITES DE DEDIT (indemnite de rupture). Source: annexe III AR/CIR 92,
+# arrete royal du 11/12/2025 (sources/Annexe-III-AR-CIR-2026.pdf), revenus 2026:
+# - n° 62: regles des n° 58 a 60, la remuneration de reference etant « celle qui a servi
+#   de base à la fixation de l'indemnité » ;
+# - n° 58: taux unique lu sur la remuneration de reference ANNUELLE, applique a toute
+#   l'indemnite (tableau ci-dessous: plafond de la tranche, taux) ;
+# - n° 60 et 54: exoneration pour enfants a charge a concurrence de (montant limite -
+#   remuneration de reference) ;
+# - n° 61: aucun precompte si le douzieme de la remuneration de reference n'en donne pas
+#   au bareme mensuel.
+# Le pecule de vacances de sortie suit le n° 53 (allocations exceptionnelles, colonne
+# « pécules de vacances »): tableau deja charge dans PRECOMPTE_VERSIONS, identique a l'annexe.
+INDEMNITES_DEDIT_VERSIONS = [
+    {'date_debut': date(2026, 1, 1),
+     'tranches': [(11860, 0.0), (14235, 0.0268), (15810, 0.0657), (18980, 0.1077), (20565, 0.1355), (22935, 0.1655),
+                  (26885, 0.1917), (34790, 0.2492), (42695, 0.2993), (55355, 0.3130), (62465, 0.3690), (71160, 0.3896),
+                  (83020, 0.4093), (99630, 0.4292), (124925, 0.4499), (143905, 0.4647), (169205, 0.4748),
+                  (float('inf'), 0.4800)],
+     'limites_enfants': {1: 18858, 2: 22470, 3: 28960, 4: 36200, 5: 43440, 6: 50680, 7: 57920, 8: 65160, 9: 72400,
+                         10: 79640, 11: 86880, 12: 94120},
+     'source': 'Annexe III AR/CIR 92, arrêté royal du 11/12/2025, n° 54, 58 à 62 (revenus 2026)'},
+]
+
+
+def get_indemnites_dedit_params(reference_date):
+    return _get_version(INDEMNITES_DEDIT_VERSIONS, reference_date)
+
+
+# PECULE DE VACANCES DE SORTIE DES EMPLOYES. Source: Instructions administratives ONSS
+# 2026/3 (p.73-75 et chapitre du double pecule): 15,34 % de la remuneration brute =
+# pecule simple de sortie 7,67 % (code remuneration 7, cotisations ordinaires) + double
+# pecule de sortie 7,67 % (code 870: retenue de 13,07 % calculee sur 6,80 % de la
+# remuneration brute, pas de cotisation patronale). Ouvriers: rien a charge de
+# l'employeur (caisse de vacances).
+PECULE_SORTIE_VERSIONS = [
+    {'date_debut': date(2014, 1, 1), 'taux_simple': 0.0767, 'taux_double': 0.0767, 'taux_base_retenue_double': 0.0680,
+     'retenue_double': 0.1307, 'jours_vacances_temps_plein': 20,
+     'source': 'Instructions administratives ONSS 2026/3, pécule de sortie des employés'},
+]
+
+
+def get_pecule_sortie_params(reference_date):
+    return _get_version(PECULE_SORTIE_VERSIONS, reference_date)
+
+
+# COTISATION SPECIALE SUR LES INDEMNITES DE RUPTURE (code 812, a charge de l'employeur).
+# Source: Instructions administratives ONSS 2026/3: 1 %, 2 % ou 3 % selon le salaire
+# annuel de reference, plafonds applicables depuis le 01/01/2023. (salaire minimal, taux)
+COTISATION_RUPTURE_VERSIONS = [
+    {'date_debut': date(2023, 1, 1), 'paliers': [(72707, 0.03), (61437, 0.02), (50166, 0.01)],
+     'source': 'Instructions administratives ONSS 2026/3, cotisation spéciale sur les indemnités de rupture (code 812)'},
+]
+
+
+def get_cotisation_rupture_params(reference_date):
+    applicables = [v for v in COTISATION_RUPTURE_VERSIONS if v['date_debut'] <= reference_date]
+    return max(applicables, key=lambda v: v['date_debut']) if applicables else None

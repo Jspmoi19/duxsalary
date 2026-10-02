@@ -106,6 +106,19 @@ TABLES = [
         created_at TIMESTAMP DEFAULT NOW()
     )""",
     "CREATE INDEX IF NOT EXISTS idx_incapacites_travailleur ON incapacites (travailleur_id, date_debut)",
+    # Decomptes de sortie (tache 6): un enregistrement par decompte genere (fin_contrat.py).
+    # 'donnees' = resultat complet du calcul ; 'dmfa' = lignes a reprendre dans l'aide DmfA.
+    """CREATE TABLE IF NOT EXISTS decomptes_sortie (
+        id SERIAL PRIMARY KEY,
+        dossier_id INTEGER NOT NULL,
+        travailleur_id INTEGER NOT NULL REFERENCES travailleurs(id) ON DELETE CASCADE,
+        contrat_id INTEGER,
+        date_fin DATE NOT NULL,
+        motif VARCHAR(30) NOT NULL,
+        brut DECIMAL(10,2) DEFAULT 0, net DECIMAL(10,2) DEFAULT 0,
+        dmfa JSONB, donnees JSONB, pdf_path VARCHAR(500),
+        created_at TIMESTAMP DEFAULT NOW()
+    )""",
 ]
 
 

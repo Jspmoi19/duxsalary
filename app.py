@@ -2340,12 +2340,92 @@ def fin_contrat(contrat_id):
         WHERE c.id = %s
     """, (contrat_id,))
     contrat = cur.fetchone()
-    cur.close(); conn.close()
     if not contrat:
+        cur.close(); conn.close()
         return "Introuvable", 404
+
+    # ── Decompte de sortie (preavis, indemnite de rupture, pecule de sortie): fin_contrat.py ──
+    from fin_contrat import propositions, decompte_depuis_formulaire, MOTIFS, AVANTAGES
+    from moteur_paie import CP_INDEMNITES
+    from profil_travailleur import construire_profil
+    fc = {'erreur': None, 'decompte': None, 'saisie': None, 'propositions': None, 'motifs': MOTIFS, 'avantages': AVANTAGES}
+    profil_fc = contrats_fc = fiches_fc = trav_fc = None
+    try:
+        cur.execute('SELECT * FROM contrats WHERE travailleur_id = %s', (contrat['travailleur_id'],))
+        contrats_fc = [dict(x) for x in cur.fetchall()]
+        cur.execute("SELECT * FROM fiches_paie WHERE travailleur_id = %s AND remplacee_par IS NULL ORDER BY periode_debut",
+                    (contrat['travailleur_id'],))
+        fiches_fc = [dict(x) for x in cur.fetchall()]
+        cur.execute('SELECT * FROM travailleurs WHERE id = %s', (contrat['travailleur_id'],))
+        trav_fc = dict(cur.fetchone())
+        statut_fc = 'etudiant' if contrat['type_contrat'] == 'STU' else \
+            CP_INDEMNITES.get(contrat['cp_key'], {}).get('type_travailleur', 'ouvrier')
+        date_fc = contrat.get('date_fin') or date.today()
+        cur.execute('SELECT categorie_employeur FROM dossiers WHERE id = %s', (contrat['dossier_id'],))
+        categorie_fc = (cur.fetchone() or {}).get('categorie_employeur') or '000'
+        profil_fc = construire_profil(contrat['cp_key'], statut_fc, type_contrat=contrat['type_contrat'],
+                                      heures_semaine=float(contrat.get('heures_semaine') or 38),
+                                      jours_semaine=int(contrat.get('jours_semaine') or 5),
+                                      reference_date=min(date_fc, date.today()), categorie_employeur=categorie_fc)
+        part_cr = 0.0
+        try:
+            cfg_fc = _config_cheques(cur, contrat['dossier_id'])
+            part_cr = float(cfg_fc['part_patronale'] or 0) if cfg_fc['actif'] else 0.0
+        except Exception:
+            conn.rollback()
+        from regles_cp import get_regles_cp
+        a_prime = bool((get_regles_cp(contrat['cp_key']).get('prime_fin_annee') or {}).get('applicable'))
+        fc['propositions'] = propositions(dict(contrat), fiches_fc, statut_fc, date_fc, part_cr, a_prime)
+        fc['statut'] = statut_fc
+        fc['nb_enfants'] = int(trav_fc.get('nb_enfants_sans_handicap') or 0) + 2 * int(trav_fc.get('nb_enfants_avec_handicap') or 0)
+    except Exception as ex_fc:
+        conn.rollback()
+        app.logger.warning(f"Fin de contrat: {ex_fc}")
+        fc['erreur'] = f"Le décompte de sortie ne peut pas être préparé : {ex_fc}"
 
     ctx = get_context_base()
     ctx['tenant'] = get_tenant()
+
+    if request.method == 'POST' and request.form.get('doc_type') == 'decompte':
+        try:
+            if profil_fc is None:
+                raise ValueError(fc['erreur'] or "Données du contrat illisibles.")
+            decompte, saisie = decompte_depuis_formulaire(request.form, profil_fc, dict(contrat), contrats_fc, fiches_fc,
+                                                          nb_enfants=fc.get('nb_enfants', 0))
+            fc['decompte'], fc['saisie'] = decompte, saisie
+            if request.form.get('action') == 'pdf':
+                from pdf_fin_contrat import generer_pdf_decompte
+                from fiches_remplacees import chemin_pdf_libre
+                pdf = generer_pdf_decompte(decompte, {
+                    'employeur': contrat['dossier_nom'], 'adresse_employeur': contrat.get('dossier_adresse'), 'bce': contrat.get('bce'),
+                    'travailleur': f"{contrat['prenom']} {contrat['nom']}", 'niss': contrat.get('niss'),
+                    'fonction': contrat.get('fonction'), 'type_contrat': contrat['type_contrat'],
+                    'date_entree': saisie['debut_anciennete'], 'date_fin': decompte['date_fin'], 'iban': contrat.get('iban')},
+                    ctx['tenant'])
+                chemin = chemin_pdf_libre(os.path.join(OUTPUT_DIR, f"decompte_sortie_{contrat['nom']}_{contrat['prenom']}_"
+                                                                   f"{decompte['date_fin']:%Y%m%d}.pdf"))
+                with open(chemin, 'wb') as f_pdf:
+                    f_pdf.write(pdf)
+                cur.execute("""INSERT INTO decomptes_sortie (dossier_id, travailleur_id, contrat_id, date_fin, motif, brut, net,
+                                                             dmfa, donnees, pdf_path)
+                               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                            (contrat['dossier_id'], contrat['travailleur_id'], contrat_id, decompte['date_fin'], decompte['motif'],
+                             decompte['totaux']['brut'], decompte['totaux']['net'],
+                             jsonlib.dumps(decompte['dmfa'], default=str, ensure_ascii=False),
+                             jsonlib.dumps({k: v for k, v in decompte.items() if k != 'dmfa'}, default=str, ensure_ascii=False),
+                             chemin))
+                conn.commit()
+                cur.close(); conn.close()
+                from io import BytesIO
+                return send_file(BytesIO(pdf), mimetype='application/pdf', as_attachment=False,
+                                 download_name=os.path.basename(chemin))
+        except ValueError as ex_d:
+            conn.rollback()
+            fc['erreur'] = str(ex_d)
+        cur.close(); conn.close()
+        return render_template('fin_contrat.html', contrat=contrat, fc=fc, formulaire=request.form,
+                               dossier_actif={'id': contrat['dossier_id'], 'nom': contrat['dossier_nom']}, **ctx)
+    cur.close(); conn.close()
 
     if request.method == 'POST':
         doc_type = request.form.get('doc_type', 'certificat')
@@ -2362,7 +2442,7 @@ def fin_contrat(contrat_id):
                 return send_file(fp, as_attachment=False, download_name=fn, mimetype='application/pdf')
             return generer_c4(dict(contrat), request.form)
 
-    return render_template('fin_contrat.html', contrat=contrat,
+    return render_template('fin_contrat.html', contrat=contrat, fc=fc, formulaire={},
                            dossier_actif={'id': contrat['dossier_id'], 'nom': contrat['dossier_nom']},
                            **ctx)
 
@@ -2974,8 +3054,17 @@ def aide_dmfa_dossier(dossier_id):
             if not alertes_lecture:
                 alertes_lecture.append(f"Incapacités non lues ({ex_inc}) : les jours de maladie sont à déterminer. "
                                        f"Lancez python3 migrate_charges.py si la table n'existe pas.")
+        sorties = []
+        try:
+            cur.execute("""SELECT DISTINCT ON (contrat_id) date_fin, motif, dmfa FROM decomptes_sortie
+                           WHERE travailleur_id = %s AND date_fin BETWEEN %s AND %s
+                           ORDER BY contrat_id, created_at DESC""", (trav['id'], debut_t, fin_t))
+            sorties = [dict(r) for r in cur.fetchall()]
+        except Exception as ex_s:
+            conn.rollback()
+            app.logger.warning(f"Decomptes de sortie non lus: {ex_s}")
         travailleurs.append({'travailleur': trav, 'contrats': contrats, 'fiches': fiches,
-                             'jours': jours_du_calendrier(lignes, par_date)})
+                             'jours': jours_du_calendrier(lignes, par_date), 'sorties': sorties})
     cur.close(); conn.close()
     document = aide_dmfa(dossier, annee, trimestre, travailleurs)
     document['alertes'] = alertes_lecture + document['alertes']

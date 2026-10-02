@@ -495,6 +495,22 @@ def aide_dmfa(dossier, annee, trimestre, travailleurs):
             tot['s_fiches'] += o['reductions_fiches']['3000']; tot['g_fiches'] += o['reductions_fiches']['3315']
             if not o['etudiant']:
                 tot['s_recalcul'] += o['reductions']['Ps']; tot['g_recalcul'] += o['reductions']['Pg']
+        # Fin de contrat: lignes des decomptes de sortie generes dans le trimestre (fin_contrat.py)
+        for sortie in t.get('sorties') or []:
+            lignes_s = []
+            for x in _lire_json(sortie.get('dmfa')) or []:
+                periode = ''
+                if x.get('du') and x.get('au'):
+                    periode = ' au '.join('/'.join(reversed(str(v)[:10].split('-'))) for v in (x['du'], x['au']))
+                lignes_s.append([str(x['code_remuneration']), x['libelle'], periode, montant(_n(x['montant']))])
+            if lignes_s:
+                fin_s = '/'.join(reversed(str(sortie['date_fin'])[:10].split('-')))
+                tableaux.append(_tableau(
+                    f"Fin de contrat le {fin_s} — à déclarer en plus des lignes ci-dessus",
+                    ['Code', 'Élément', 'Période couverte', 'Montant'], lignes_s,
+                    note="Code 3 : indemnité de rupture, sur une ligne d'occupation séparée, avec les dates de la période "
+                         "couverte (à scinder par trimestre et par année) ; ni réduction structurelle ni bonus à l'emploi. "
+                         "Code 7 : pécule simple de sortie. Code 870 : double pécule de sortie, au niveau de l'employeur."))
         resultat.append({'nom': f"{trav.get('nom') or ''} {trav.get('prenom') or ''}".strip(), 'niss': trav.get('niss') or '',
                          'id': trav.get('id'), 'occupations': occupations, 'tableaux': tableaux,
                          'alertes': alertes_t + [a for o in occupations for a in o['alertes']]})
