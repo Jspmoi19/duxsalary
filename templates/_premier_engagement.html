@@ -1,0 +1,17 @@
+<!-- Reduction ONSS « premier engagement »: un seul travailleur par dossier -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Réduction ONSS « premier engagement »</h3></div>
+  <div class="card-body" style="padding:14px 16px;font-size:13px">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400">
+      <input type="checkbox" name="premier_engagement_travailleur" style="width:16px;height:16px"
+             {% if travailleur is defined and travailleur and travailleur.premier_engagement %}checked{% endif %}>
+      Ce travailleur ouvre le droit à la réduction « premier engagement » (1er travailleur, code DmfA 3315)
+    </label>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:6px">
+      Un seul travailleur par dossier : cocher la case ici la retire aux autres. La réduction n'est appliquée (fiches de paie
+      et aide DmfA) que si le dossier a aussi la case « premier engagement » et sa date de début.
+      {% if titulaire_premier_engagement %}<br><b style="color:#8a5a00">Actuellement désigné dans ce dossier : {{ titulaire_premier_engagement }}.</b>{% endif %}
+      {% if not dossier.premier_engagement %}<br><span style="color:#8a5a00">La case « premier engagement » du dossier n'est pas cochée.</span>{% endif %}
+    </div>
+  </div>
+</div>

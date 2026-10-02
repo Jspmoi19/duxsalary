@@ -553,7 +553,8 @@ def calculer_fiche_paie(
     # Jours / heures payes du mois (codes prestation ONSS 1, 3, 4, 5...):
     # prestations + jours feries payes + conges payes par l'employeur
     # Ouvriers: les vacances legales sont payees par la caisse de vacances (code
-    # prestation 2), pas par l'employeur -> hors J/H (corrige le 01/10/2026).
+    # prestation 2), pas par l'employeur -> hors J/H du salaire de reference S
+    # (corrige le 01/10/2026) ; elles comptent en revanche dans µ (voir plus bas).
     jours_conge_employeur = 0 if is_ouvrier else (jours_conge or 0)
     jours_payes_onss = (jours_prestes or 0) + (jours_feries_payes or 0) + jours_conge_employeur + jours_sg_mg
     if profil.salaire_est_mensuel_fixe and periode_debut and periode_fin:
@@ -566,9 +567,16 @@ def calculer_fiche_paie(
         jours_payes_onss = max(0, jours_ouvr_mois - (jours_chomage or 0) - jours_sg_non_garantis)
     heures_payees_onss = float(heures_prestees or 0) + float(heures_feries or 0) + \
                          float(jours_conge_employeur) * float(heures_jour or 0) + heures_sg_mg
+    # Fraction de prestation µ: les vacances legales des ouvriers (code prestation 2) y
+    # comptent, alors qu'elles sont exclues du J/H du salaire de reference S
+    # (Instructions ONSS 2026/3 p.375-376) -- corrige le 02/10/2026.
+    jours_vacances_ouvrier = (jours_conge or 0) if is_ouvrier else 0
+    jours_mu_onss = jours_payes_onss + jours_vacances_ouvrier
+    heures_mu_onss = heures_payees_onss + jours_vacances_ouvrier * float(heures_jour or 0)
     red_struct = 0.0 if is_etudiant else profil.reduction_structurelle(
         onss_pat_reductible, reference_date=ref_date_struct, remuneration_mois=brut_onss,
-        jours_payes=jours_payes_onss, heures_payees=heures_payees_onss)
+        jours_payes=jours_payes_onss, heures_payees=heures_payees_onss,
+        jours_mu=jours_mu_onss, heures_mu=heures_mu_onss)
 
     # Premier engagement (plafonne a la part reductible restante)
     red_pe = 0.0
@@ -576,7 +584,8 @@ def calculer_fiche_paie(
         reste_apres_struct = round(max(0, onss_pat_reductible - red_struct), 2)
         red_pe = profil.reduction_premier_engagement(
             reste_apres_struct, ratio_tp, reference_date=ref_date_struct,
-            jours_payes=jours_payes_onss, heures_payees=heures_payees_onss)
+            jours_payes=jours_payes_onss, heures_payees=heures_payees_onss,
+            jours_mu=jours_mu_onss, heures_mu=heures_mu_onss)
 
     onss_pat_net = round(max(0, onss_pat_reductible - red_struct - red_pe)
                          + onss_vacances_253 + total_compl, 2)

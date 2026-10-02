@@ -81,10 +81,16 @@ r = calculer_fiche_paie('M','N','n','a','BE',date(2005,10,31),date(2026,5,27),'S
     jours_prestes=22, heures_prestees=44.0, periode_debut=date(2026,6,1), periode_fin=date(2026,6,30), **kw_i)
 check("Juin: bonus emploi A, table du 01/04/2026 (fiche 35,11)", r['bonus_emploi_a'], 35.11)
 check("Juin: bonus emploi B, table du 01/04/2026 (fiche 25,55)", r['bonus_emploi_b'], 25.55)
-# Vacances legales d'un ouvrier: payees par la caisse -> hors heures payees (mu)
+# Vacances legales d'un ouvrier (code prestation 2), Instructions ONSS 2026/3 p.375-376:
+# hors du H du salaire de reference S, mais DANS la fraction de prestation µ.
+# Juin: S = 669,23 x 11,23 = 7.515,45 ; R = 552,04 + 325,08 = 877,12
+#  sans conge: µ = 44 / 164,67 = 0,27 -> 877,12 x 0,27 x 1,18 / 3 = 93,15
+#  5 jours de vacances (10 h): µ = 54 / 164,67 = 0,33 -> 877,12 x 0,33 x 1,18 / 3 = 113,85
 rc = calculer_fiche_paie('M','N','n','a','BE',date(2005,10,31),date(2026,5,27),'S','a','b','r','CP 140.03','Nettoyeur',15.2097,
     jours_prestes=22, heures_prestees=44.0, jours_conge=5, periode_debut=date(2026,6,1), periode_fin=date(2026,6,30), **kw_i)
-check("Conges ouvrier sans effet sur la reduction structurelle", rc['reduction_structurelle'], r['reduction_structurelle'])
+check("Sans conge: reduction structurelle 93,15", r['reduction_structurelle'], 93.15)
+check("Vacances d'un ouvrier comptees dans µ (pas dans S): reduction structurelle 113,85", rc['reduction_structurelle'], 113.85)
+check("... brut, ONSS personnel et net inchanges", (rc['brut_onss'], rc['onss_net'], rc['salaire_net']), (r['brut_onss'], r['onss_net'], r['salaire_net']))
 check("Conges ouvrier sans effet sur le bonus emploi", rc['bonus_emploi'], r['bonus_emploi'])
 
 print(); print("=" * 70); print("PLAFOND ANNUEL DU BONUS EMPLOI -- 3.594,36 EUR (Instructions ONSS 2026/3 p.453)"); print("=" * 70)

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}{{ document.titre }}{% endblock %}
+{% block content %}
+<style>
+  .dm-table{width:100%;border-collapse:collapse;font-size:13px}
+  .dm-table th{background:#f5f7fa;text-align:left;padding:6px 10px;font-size:11px;color:#666;text-transform:uppercase;border-bottom:1px solid #e3e8ef}
+  .dm-table td{padding:6px 10px;border-bottom:1px solid #f0f2f5;vertical-align:top}
+  .dm-table td.num,.dm-table th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .dm-table tr.total td{font-weight:700;background:#fafbfc}
+  .dm-code{font-weight:700;white-space:nowrap}
+  .dm-note{font-size:11px;color:#888;padding:6px 10px}
+  .dm-bloc{margin:0 0 14px}
+  .dm-bloc h4{font-size:13px;margin:0;padding:8px 10px;color:{{ marque.couleur_primaire }}}
+</style>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h2>{{ document.titre }}</h2>
+    <p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">
+      Données à recopier dans la DmfA web, dans l'ordre de ses écrans. Ce document additionne les fiches de paie
+      enregistrées et relit le calendrier : il n'envoie rien à l'ONSS.
+    </p>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <div class="card-body" style="padding:16px">
+    <form method="GET" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Année</label>
+        <input type="number" name="annee" value="{{ document.annee }}" min="2024" max="2100" class="form-control" style="width:110px">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Trimestre</label>
+        <select name="trimestre" class="form-control">
+          {% for q in [1, 2, 3, 4] %}<option value="{{ q }}" {% if q == document.trimestre %}selected{% endif %}>T{{ q }}</option>{% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">Actualiser</button>
+      <button type="submit" name="format" value="pdf" class="btn btn-secondary" formtarget="_blank" data-pdf="{{ document.titre }}">Exporter en PDF</button>
+    </form>
+  </div>
+</div>
+
+{% if document.alertes %}
+<div class="card" style="margin-bottom:16px;border-left:4px solid #f39c12">
+  <div class="card-body" style="padding:12px 16px">
+    {% for a in document.alertes %}<div style="font-size:13px;color:#8a5a00;padding:2px 0">⚠ {{ a }}</div>{% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3>Employeur</h3></div>
+  <div class="card-body" style="padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 18px;font-size:13px">
+    {% for libelle, valeur in document.entete %}
+      <div><span style="color:#888">{{ libelle }} :</span> <strong>{{ valeur or '—' }}</strong></div>
+    {% endfor %}
+  </div>
+</div>
+
+{% macro tableau(t) %}
+<div class="dm-bloc">
+  <h4>{{ t.titre }}</h4>
+  <table class="dm-table">
+    <thead><tr>{% for c in t.colonnes %}<th class="{{ 'num' if loop.index0 >= (2 if t.colonnes[0] == 'Code' else 1) and t.colonnes|length > 2 else '' }}">{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for l in t.lignes %}
+      <tr class="{{ 'total' if l[0].startswith('MONTANT NET') or (l|length > 1 and l[1].startswith('TOTAL')) else '' }}">
+        {% for v in l %}<td class="{{ 'num' if loop.index0 >= (2 if t.colonnes[0] == 'Code' else 1) and t.colonnes|length > 2 else '' }} {{ 'dm-code' if loop.first and t.colonnes[0] == 'Code' else '' }}">{{ v }}</td>{% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if t.note %}<div class="dm-note">{{ t.note }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{% for t in document.travailleurs %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header">
+    <h3>{{ t.nom }} <span style="font-weight:400;color:var(--text-muted);font-size:13px">— NISS : {{ t.niss or 'non renseigné' }}</span></h3>
+    {% if t.id %}<a href="/travailleur/{{ t.id }}" class="btn btn-secondary btn-xs">Fiche du travailleur</a>{% endif %}
+  </div>
+  {% if t.alertes %}
+  <div style="padding:10px 16px;border-bottom:1px solid #f0f2f5">
+    {% for a in t.alertes %}<div style="font-size:13px;color:#8a5a00;padding:2px 0">⚠ {{ a }}</div>{% endfor %}
+  </div>
+  {% endif %}
+  {% for x in t.tableaux %}{{ tableau(x) }}{% endfor %}
+</div>
+{% endfor %}
+
+<div class="card" style="margin-bottom:16px">
+  {{ tableau(document.totaux) }}
+</div>
+<div style="font-size:11px;color:#888;margin-bottom:30px">{{ document.source }}</div>
+{% endblock %}

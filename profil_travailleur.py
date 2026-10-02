@@ -257,8 +257,15 @@ class ProfilTravailleur:
         from decimal import Decimal, ROUND_HALF_UP
         return float(Decimal(str(x)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
-    def _prestation(self, jours_payes=None, heures_payees=None):
+    def _prestation(self, jours_payes=None, heures_payees=None, jours_mu=None, heures_mu=None):
         """Retourne (facteur_S, mu) pour la periode de la fiche.
+        Deux decomptes DIFFERENTS (Instructions ONSS 2026/3):
+        - p.375, salaire de reference S: J / H = codes prestation 1, 3, 4, 5, 20 et 38,
+          « sans les vacances annuelles pour ouvriers » (jours_payes / heures_payees) ;
+        - p.376, fraction de prestation µ: X / Z = codes 1, 2, 3, 4, 5, 12, 16, 17, 20,
+          38 et 72 -- les vacances legales des ouvriers (code 2) Y SONT (jours_mu /
+          heures_mu ; a defaut, les memes valeurs que pour S).
+        Corrige le 02/10/2026: les vacances des ouvriers etaient exclues des deux.
         - declaration en jours (employe a salaire fixe): S = W x (13 x D / J),
           mu = J / (13 x D)
         - declaration en heures (ouvrier, temps partiel): S = W x (13 x U / H),
@@ -268,11 +275,11 @@ class ProfilTravailleur:
         if self.salaire_est_mensuel_fixe and jours_payes:
             D = self.jours_semaine or 5
             facteur = self._r2(13 * D / jours_payes)
-            mu = self._r2(jours_payes / (13 * D / 3))
+            mu = self._r2((jours_mu if jours_mu is not None else jours_payes) / (13 * D / 3))
         elif heures_payees:
             U = self.heures_semaine or 38.0
             facteur = self._r2(13 * U / heures_payees)
-            mu = self._r2(heures_payees / (13 * U / 3))
+            mu = self._r2((heures_mu if heures_mu is not None else heures_payees) / (13 * U / 3))
         else:
             return None, None
         return facteur, mu
@@ -289,7 +296,7 @@ class ProfilTravailleur:
 
     def reduction_structurelle(self, onss_patronal_brut, base_salariale_mensuelle=None,
                                 reference_date=None, remuneration_mois=None,
-                                jours_payes=None, heures_payees=None):
+                                jours_payes=None, heures_payees=None, jours_mu=None, heures_mu=None):
         """Reduction structurelle mensuelle: Ps = R x mu x beta_s, R calcule
         sur le salaire de reference S (W a 100%, ramene temps plein).
         Plafonnee aux cotisations patronales sur lesquelles elle s'applique.
@@ -297,7 +304,7 @@ class ProfilTravailleur:
         if not self.reduction_structurelle_applicable:
             return 0.0
         ref = reference_date or self.reference_date or _date.today()
-        facteur, mu = (self._prestation(jours_payes, heures_payees)
+        facteur, mu = (self._prestation(jours_payes, heures_payees, jours_mu, heures_mu)
                        if remuneration_mois is not None else (None, None))
         if facteur is None:
             if base_salariale_mensuelle is None:
@@ -317,7 +324,8 @@ class ProfilTravailleur:
         return round(min(onss_patronal_brut, ps_mensuel), 2)
 
     def reduction_premier_engagement(self, onss_patronal_apres_struct, ratio_temps_partiel=1.0,
-                                      reference_date=None, jours_payes=None, heures_payees=None):
+                                      reference_date=None, jours_payes=None, heures_payees=None,
+                                      jours_mu=None, heures_mu=None):
         """Premier engagement (1er travailleur): Pg = G x mu x beta_g par
         trimestre, G = 2.000EUR depuis le 01/07/2026 (3.100EUR avant).
         Jamais pour un etudiant. Sans jours/heures: ancien calcul (deprecated)."""
@@ -325,7 +333,7 @@ class ProfilTravailleur:
             return 0.0
         ref = reference_date or self.reference_date or _date.today()
         G = get_premier_engagement_params(ref)['forfait_1er_trimestriel']
-        _, mu = self._prestation(jours_payes, heures_payees)
+        _, mu = self._prestation(jours_payes, heures_payees, jours_mu, heures_mu)
         if mu is None:
             pg = self._r2(G / 3 * ratio_temps_partiel)
         else:

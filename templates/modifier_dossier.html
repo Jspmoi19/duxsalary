@@ -32,6 +32,15 @@
             <input type="text" name="rsz" class="form-control" value="{{ dossier.rsz or '' }}">
           </div>
         </div>
+        <div>
+          <div class="form-group">
+            <label class="form-label">N° d'unité d'établissement (BCE)</label>
+            <input type="text" name="numero_unite_etablissement" class="form-control" placeholder="2.xxx.xxx.xxx"
+                   pattern="[2-8][0-9. ]{9,12}" maxlength="13"
+                   value="{{ (request.form.get('numero_unite_etablissement') if erreur_onss else dossier.numero_unite_etablissement) or '' }}">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Demandé sur chaque ligne d'occupation de la DmfA.</div>
+          </div>
+        </div>
         <div class="full">
           <div class="form-group">
             <label class="form-label">Adresse</label>

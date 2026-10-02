@@ -51,6 +51,24 @@ def charges_famille_du_formulaire(form):
     }
 
 
+def premier_engagement_du_travailleur(dossier_coche, travailleur_coche, nb_designes):
+    """Reduction « premier engagement » (1er travailleur, code 3315): le dossier ouvre le
+    droit (case et date de debut), la reduction ne vise que LE travailleur designe dans sa
+    fiche -- un seul par dossier. Retourne (appliquer, alerte ou None)."""
+    if not dossier_coche:
+        if travailleur_coche:
+            return False, ("Premier engagement : ce travailleur est désigné, mais la case « premier engagement » du dossier "
+                           "n'est pas cochée — réduction non appliquée.")
+        return False, None
+    if nb_designes == 0:
+        return False, ("Premier engagement : le dossier ouvre le droit, mais aucun travailleur n'est désigné — réduction non "
+                       "appliquée. Cochez la case dans la fiche du travailleur qui ouvre le droit.")
+    if nb_designes > 1:
+        return bool(travailleur_coche), ("Premier engagement : plusieurs travailleurs du dossier sont désignés, un seul peut "
+                                         "l'être (les 2e à 6e travailleurs ne sont pas gérés).")
+    return bool(travailleur_coche), None
+
+
 def commune_de_l_adresse(adresse):
     """Commune d'une adresse belge (« Rue X 2, 1853 Grimbergen » -> « Grimbergen »),
     pour le lieu de signature des contrats. Chaine vide si elle n'est pas reconnue."""

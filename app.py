@@ -174,13 +174,16 @@ def modifier_dossier(dossier_id):
             erreur = f"Code d'importance « {imp} » invalide (0 à 9)."
         elif ffe and ffe not in dict(CODES_FFE):
             erreur = f"Code FFE « {ffe} » invalide (C, B, N ou O)."
+        from dmfa import normaliser_unite_etablissement
+        unite, erreur_unite = normaliser_unite_etablissement(request.form.get('numero_unite_etablissement'))
+        erreur = erreur or erreur_unite
         if erreur:
             return render_template('modifier_dossier.html', dossier=dossier, dossier_actif=dossier,
                                    erreur_onss=erreur, **listes, **ctx)
         update_dossier(dossier_id, request.form)
         conn_c = get_conn(); cur_c = conn_c.cursor()
-        cur_c.execute("UPDATE dossiers SET categorie_employeur=%s, code_importance=%s, code_ffe=%s WHERE id=%s",
-                      (cat, imp or None, ffe or None, dossier_id))
+        cur_c.execute("UPDATE dossiers SET categorie_employeur=%s, code_importance=%s, code_ffe=%s, "
+                      "numero_unite_etablissement=%s WHERE id=%s", (cat, imp or None, ffe or None, unite, dossier_id))
         conn_c.commit(); cur_c.close(); conn_c.close()
         return redirect(url_for('dossier_dashboard', dossier_id=dossier_id))
     return render_template('modifier_dossier.html', dossier=dossier, dossier_actif=dossier, **listes, **ctx)
@@ -205,6 +208,30 @@ def supprimer_dossier(dossier_id):
     return redirect(url_for('dossiers'))
 
 # ── TRAVAILLEURS ──────────────────────────────────────────────────────
+def _enregistrer_premier_engagement(cur, travailleur_id, dossier_id, form):
+    """Case « ce travailleur ouvre le droit au premier engagement » (code 3315): un seul
+    travailleur par dossier -- la cocher ici la retire aux autres travailleurs du dossier."""
+    coche = form.get('premier_engagement_travailleur') == 'on'
+    if coche:
+        cur.execute("UPDATE travailleurs SET premier_engagement = FALSE WHERE dossier_id = %s AND id <> %s",
+                    (dossier_id, travailleur_id))
+    cur.execute("UPDATE travailleurs SET premier_engagement = %s WHERE id = %s", (coche, travailleur_id))
+
+
+def _titulaire_premier_engagement(dossier_id, sauf_id=None):
+    """Nom de l'autre travailleur du dossier deja designe pour le premier engagement (ou None)."""
+    try:
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute("SELECT prenom, nom FROM travailleurs WHERE dossier_id = %s AND premier_engagement = TRUE AND id <> %s LIMIT 1",
+                    (dossier_id, sauf_id or 0))
+        row = cur.fetchone()
+        cur.close(); conn.close()
+        return f"{row[0]} {row[1]}" if row else None
+    except Exception as ex:
+        app.logger.warning(f"Premier engagement (titulaire): {ex}")
+        return None
+
+
 def _enregistrer_charges_famille(cur, travailleur_id, form):
     """Situation familiale et charges de famille (gabarit _charges_famille.html):
     memes colonnes pour la creation et la modification d'un travailleur."""
@@ -232,9 +259,11 @@ def nouveau_travailleur(dossier_id):
         tid = create_travailleur(data)
         conn = get_conn(); cur = conn.cursor()
         _enregistrer_charges_famille(cur, tid, request.form)
+        _enregistrer_premier_engagement(cur, tid, dossier_id, request.form)
         conn.commit(); cur.close(); conn.close()
         return redirect(url_for('fiche_travailleur', travailleur_id=tid))
-    return render_template('nouveau_travailleur.html', dossier=dossier, dossier_actif=dossier, cp_keys=list(CP_DATABASE.keys()), **ctx)
+    return render_template('nouveau_travailleur.html', dossier=dossier, dossier_actif=dossier, cp_keys=list(CP_DATABASE.keys()),
+                           titulaire_premier_engagement=_titulaire_premier_engagement(dossier_id), **ctx)
 
 @app.route('/travailleur/<int:travailleur_id>')
 @login_required
@@ -279,9 +308,11 @@ def modifier_travailleur(travailleur_id):
              request.form.get('caisse_allocations_familiales') or None,
              travailleur_id))
         _enregistrer_charges_famille(cur, travailleur_id, request.form)
+        _enregistrer_premier_engagement(cur, travailleur_id, travailleur['dossier_id'], request.form)
         conn.commit(); cur.close(); conn.close()
         return redirect(url_for('fiche_travailleur', travailleur_id=travailleur_id))
-    return render_template('modifier_travailleur.html', travailleur=travailleur, dossier=dossier, dossier_actif=dossier, cp_keys=list(CP_DATABASE.keys()), **ctx)
+    return render_template('modifier_travailleur.html', travailleur=travailleur, dossier=dossier, dossier_actif=dossier, cp_keys=list(CP_DATABASE.keys()),
+                           titulaire_premier_engagement=_titulaire_premier_engagement(travailleur['dossier_id'], travailleur_id), **ctx)
 
 @app.route('/travailleur/<int:travailleur_id>/supprimer', methods=['POST'])
 @login_required
@@ -1624,6 +1655,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
     # Récupérer dimona + travailleur + contrat + dossier
     cur.execute("""
         SELECT d.*, t.prenom, t.nom, t.niss, t.adresse, t.iban, t.statut_travailleur,
+               t.premier_engagement AS premier_engagement_travailleur,
                t.date_naissance, t.etat_civil, t.nb_enfants_charge,
                t.km_domicile_travail, t.moyen_transport, t.vehicule_societe,
                dos.nom as dossier_nom, dos.adresse as dossier_adresse,
@@ -1780,7 +1812,13 @@ def generer_fiche_depuis_calendrier(dimona_id):
         from generer_fiche_pdf import generer_fiche_paie_pdf
 
         # Premier engagement
-        premier_engagement = bool(dimona.get('premier_engagement', False))
+        # Premier engagement (code 3315): le dossier ouvre le droit (case + date de debut),
+        # mais la reduction ne vise que LE travailleur designe (case de sa fiche)
+        from occupation import premier_engagement_du_travailleur
+        cur.execute("SELECT COUNT(*) AS n FROM travailleurs WHERE dossier_id = %s AND premier_engagement = TRUE",
+                    (dimona['dossier_id'],))
+        premier_engagement, alerte_pe = premier_engagement_du_travailleur(
+            dimona.get('premier_engagement'), dimona.get('premier_engagement_travailleur'), cur.fetchone()['n'])
         cp_key = contrat['cp_key'] if contrat else dimona.get('cp_key', 'CP 140.03')
         salaire_h = float(contrat['salaire_horaire']) if contrat else 14.9255
         heures_sem = float(contrat['heures_semaine']) if contrat else 38.0
@@ -1891,6 +1929,20 @@ def generer_fiche_depuis_calendrier(dimona_id):
             taux_km=float(form.get('taux_km', 0.4444) or 0.4444),
             periode_debut=periode_debut, periode_fin=periode_fin,
         )
+
+        if alerte_pe:
+            data['alertes_calcul'].append(alerte_pe)
+
+        # Aide a la DmfA: jours et heures par code prestation ONSS, enregistres avec la fiche
+        # (meme calcul que la page « Aide DmfA », qui compare ensuite avec le calendrier)
+        if contrat:
+            try:
+                from dmfa import jours_du_calendrier, prestations_occupation, prestations_json
+                data['prestations_dmfa'] = prestations_json(prestations_occupation(
+                    dict(contrat), jours_du_calendrier(prestations, ctx_inc['par_date'] if ctx_inc else None),
+                    periode_debut, periode_fin))
+            except Exception as ex_dmfa:
+                app.logger.warning(f"Detail DmfA non enregistre: {ex_dmfa}")
 
         # ── ETAPE 1 : "Calculer la paie" -> page de detail, RIEN n'est ecrit ──
         # Le PDF et l'enregistrement en base ne se font qu'apres validation
@@ -2832,6 +2884,55 @@ def resume_charge(dossier_id):
 @login_required
 def liste_ventilation_dossier(dossier_id):
     return _document_dossier(dossier_id, 'ventilation')
+
+
+# ── AIDE A LA DmfA (regroupement trimestriel a recopier dans la DmfA web) ─────
+@app.route('/dossier/<int:dossier_id>/aide-dmfa')
+@login_required
+def aide_dmfa_dossier(dossier_id):
+    from psycopg2.extras import RealDictCursor
+    from dmfa import aide_dmfa, bornes_trimestre, jours_du_calendrier, trimestre_de
+    dossier = get_dossier(dossier_id)
+    # Par defaut: le dernier trimestre termine
+    a_def, q_def = trimestre_de(date.today())
+    a_def, q_def = (a_def, q_def - 1) if q_def > 1 else (a_def - 1, 4)
+    annee = request.args.get('annee', type=int) or a_def
+    trimestre = request.args.get('trimestre', type=int) or q_def
+    trimestre = min(4, max(1, trimestre))
+    debut_t, fin_t = bornes_trimestre(annee, trimestre)
+    conn = get_conn(); cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute('SELECT * FROM travailleurs WHERE dossier_id = %s ORDER BY nom, prenom', (dossier_id,))
+    travailleurs, alertes_lecture = [], []
+    for trav in [dict(r) for r in cur.fetchall()]:
+        cur.execute('SELECT * FROM contrats WHERE travailleur_id = %s', (trav['id'],))
+        contrats = [dict(r) for r in cur.fetchall()]
+        cur.execute("""SELECT * FROM fiches_paie WHERE travailleur_id = %s AND periode_debut >= %s AND periode_debut <= %s
+                       ORDER BY periode_debut""", (trav['id'], debut_t, fin_t))
+        fiches = [dict(r) for r in cur.fetchall()]
+        cur.execute("""SELECT date_prestation, code_journee, heures FROM prestations
+                       WHERE travailleur_id = %s AND date_prestation BETWEEN %s AND %s""", (trav['id'], debut_t, fin_t))
+        lignes = [dict(r) for r in cur.fetchall()]
+        par_date = None
+        try:
+            par_date = _contexte_incapacites(cur, trav['id'], fin_t)['par_date']
+        except Exception as ex_inc:
+            conn.rollback()
+            if not alertes_lecture:
+                alertes_lecture.append(f"Incapacités non lues ({ex_inc}) : les jours de maladie sont à déterminer. "
+                                       f"Lancez python3 migrate_charges.py si la table n'existe pas.")
+        travailleurs.append({'travailleur': trav, 'contrats': contrats, 'fiches': fiches,
+                             'jours': jours_du_calendrier(lignes, par_date)})
+    cur.close(); conn.close()
+    document = aide_dmfa(dossier, annee, trimestre, travailleurs)
+    document['alertes'] = alertes_lecture + document['alertes']
+    tenant = get_tenant()
+    if request.args.get('format') == 'pdf':
+        from io import BytesIO
+        from pdf_dmfa import generer_pdf_dmfa
+        return send_file(BytesIO(generer_pdf_dmfa(document, tenant)), mimetype='application/pdf', as_attachment=False,
+                         download_name=f"aide_dmfa_{annee}_T{trimestre}.pdf")
+    ctx = get_context_base(); ctx['tenant'] = tenant
+    return render_template('aide_dmfa.html', document=document, dossier=dossier, dossier_actif=dossier, **ctx)
 
 
 @app.route('/travailleur/<int:travailleur_id>/compte-individuel')

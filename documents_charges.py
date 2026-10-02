@@ -87,6 +87,9 @@ def valeurs_fiche(data):
         'provision_vacances_ouvrier': data.get('provision_vacances_annuelles', 0),
         'onss_trimestre': data.get('onss_trimestre_utilise'),
         'categorie_employeur': data.get('onss_categorie_employeur'),
+        # Jours et heures par code prestation ONSS (aide a la DmfA), calcules a la generation
+        # par dmfa.prestations_occupation ; None pour un calcul hors calendrier
+        'prestations_dmfa': data.get('prestations_dmfa'),
     }
 
 

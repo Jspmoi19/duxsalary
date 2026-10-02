@@ -40,6 +40,8 @@ COLONNES = {
         ('onss_patronal_prime', 'DECIMAL(10,2) DEFAULT 0'),
         ('provision_vacances_ouvrier', 'DECIMAL(10,2) DEFAULT 0'),
         ('onss_trimestre', 'VARCHAR(8)'), ('categorie_employeur', 'VARCHAR(3)'),
+        # Aide a la DmfA: {codes: {code prestation: {jours, heures}}, a_determiner: {code journalier: jours}}
+        ('prestations_dmfa', 'JSONB'),
     ],
     'travailleurs': [
         ('sexe', 'VARCHAR(1)'), ('date_sortie', 'DATE'), ('caisse_allocations_familiales', 'VARCHAR(200)'),
@@ -51,6 +53,9 @@ COLONNES = {
         ('nb_personnes_charge_66', 'INTEGER DEFAULT 0'), ('nb_autres_personnes_charge', 'INTEGER DEFAULT 0'),
         ('parent_isole', 'BOOLEAN DEFAULT FALSE'), ('handicape', 'BOOLEAN DEFAULT FALSE'),
         ('conjoint_handicape', 'BOOLEAN DEFAULT FALSE'),
+        # Travailleur qui ouvre le droit a la reduction « premier engagement » (code 3315):
+        # un seul par dossier ; le dossier garde la case generale et la date de debut du droit
+        ('premier_engagement', 'BOOLEAN DEFAULT FALSE'),
     ],
     # Option « l'employeur fournit des repas » (avantage de toute nature), page « Chèques »
     'cheques_config': [
@@ -65,6 +70,8 @@ COLONNES = {
         # Provision ESTIMEE du pecule de vacances des employes (convention comptable,
         # pas un parametre legal): modifiable par dossier
         ('taux_provision_pecule_employes', 'DECIMAL(5,2) DEFAULT 18.80'),
+        # Numero d'unite d'etablissement BCE (2.xxx.xxx.xxx), demande sur la ligne d'occupation de la DmfA
+        ('numero_unite_etablissement', 'VARCHAR(13)'),
     ],
 }
 
