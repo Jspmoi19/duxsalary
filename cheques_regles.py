@@ -112,11 +112,66 @@ def jours_ouvrables(annee, mois):
     return sum(1 for j in range(1, n + 1) if date(annee, mois, j).weekday() < 5)
 
 
+def periode_couverte(debut_periode, date_debut=None, date_fin=None):
+    """La configuration du dossier s'applique aux fiches dont la PERIODE COMMENCE a partir de
+    date_debut, et au plus tard a date_fin si elle est renseignee. Sans date de debut
+    (configuration anterieure a ce champ): aucune limite de debut."""
+    return (date_debut is None or debut_periode >= date_debut) and (date_fin is None or debut_periode <= date_fin)
+
+
+def valider_config(repas_actif, repas_date_debut, repas_date_fin, eco_actif, eco_date_debut, eco_date_fin):
+    """Erreurs de saisie de la page « Chèques » (liste vide = configuration acceptee)."""
+    erreurs = []
+    for nom, actif, debut, fin in (('chèques-repas', repas_actif, repas_date_debut, repas_date_fin),
+                                   ('écochèques', eco_actif, eco_date_debut, eco_date_fin)):
+        if actif and not debut:
+            erreurs.append(f"Date de début obligatoire pour activer les {nom}.")
+        if debut and fin and fin < debut:
+            erreurs.append(f"La date de fin des {nom} précède leur date de début.")
+    return erreurs
+
+
+def mois_eco_couverts(contrats, p_deb, p_fin, date_debut=None, date_fin=None):
+    """Nombre de mois de la periode de reference des ecocheques [p_deb, p_fin] couverts par
+    un contrat non etudiant, en ne gardant que les mois qui commencent dans la periode de
+    validite fixee par le dossier (date_debut / date_fin de la page « Chèques »)."""
+    mois = set()
+    for c in contrats or []:
+        if c.get('type_contrat') == 'STU' or not c.get('date_debut'):
+            continue
+        d0, d1 = max(c['date_debut'], p_deb), min(c.get('date_fin') or p_fin, p_fin)
+        y, m = d0.year, d0.month
+        while (y, m) <= (d1.year, d1.month):
+            if periode_couverte(date(y, m, 1), date_debut, date_fin):
+                mois.add((y, m))
+            m += 1
+            if m > 12:
+                m, y = 1, y + 1
+    return len(mois)
+
+
 def cheques_repas_du_mois(cp_key, statut, annee, mois, jours_prestes, heures_prestees,
                            date_anciennete, config):
     """Calcule les cheques-repas d'un travailleur pour un mois.
     config: parametres du dossier (actif, valeur, part_patronale, part_travailleur,
-            octroi_avant_2025). Retourne un dict avec la regle et le calcul."""
+            octroi_avant_2025, date_debut, date_fin, inclure_etudiants). La configuration
+            du dossier ne joue que pour les periodes qui commencent dans [date_debut,
+            date_fin], et pour les etudiants seulement si inclure_etudiants est coche ;
+            hors de ce cadre, seule l'obligation sectorielle s'applique.
+    Retourne un dict avec la regle et le calcul."""
+    jj = lambda d: d.strftime('%d/%m/%Y')
+    exclusion = None
+    if config.get('actif'):
+        if not periode_couverte(date(annee, mois, 1), config.get('date_debut'), config.get('date_fin')):
+            exclusion = ("Chèques-repas du dossier octroyés "
+                         + (f"à partir du {jj(config['date_debut'])}" if config.get('date_debut') else '')
+                         + (f" jusqu'au {jj(config['date_fin'])}" if config.get('date_fin') else '')
+                         + f" : aucun chèque pour la période de {mois:02d}/{annee}.").replace('octroyés  ', 'octroyés ')
+        elif statut == 'etudiant' and not config.get('inclure_etudiants'):
+            exclusion = ("Étudiant : non compris dans les chèques-repas du dossier "
+                         "(case « inclure les étudiants » non cochée).")
+        if exclusion:
+            config = dict(config, actif=False)
     fin_mois = date(annee, mois, 28)
     regle = regles_pour(cp_key, fin_mois)['repas']
     res = {'obligatoire': False, 'eligible': True, 'motif': '', 'regle': regle,
@@ -147,6 +202,9 @@ def cheques_repas_du_mois(cp_key, statut, annee, mois, jours_prestes, heures_pre
                         valeur, pp, pt = (regle['valeur_introduction'], regle['part_patronale_introduction'],
                                           regle['part_travailleur'])
 
+    if exclusion and not res['obligatoire']:
+        res.update(eligible=False, motif=exclusion, exclusion=exclusion)
+        return res
     if not config.get('actif') and not res['obligatoire']:
         return res
     if not res['eligible'] and not config.get('actif'):

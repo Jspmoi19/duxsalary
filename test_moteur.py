@@ -233,6 +233,83 @@ check("Personnes de 65 ans et plus dependantes: -166 EUR/mois chacune (2 personn
 check("Cumul: parent isole + handicap + 1 autre personne + 1 personne 65+ = -322 EUR/mois",
       round(pp() - pp(parent_isole=True, handicape=True, nb_autres_personnes_charge=1, nb_personnes_charge_dependance=1), 2), 322.0)
 
+print(); print("=" * 70); print("CHEQUES DU DOSSIER -- date de debut, date de fin, etudiants (page « Chèques »)"); print("=" * 70)
+from cheques_regles import cheques_repas_du_mois as _crm, periode_couverte, valider_config, mois_eco_couverts
+# Cas reel: dossier en CP 200, cheques-repas de 8,00 EUR (6,91 + 1,09) a partir du 01/10/2026
+EYSEL = {'actif': True, 'valeur': 8.0, 'part_patronale': 6.91, 'part_travailleur': 1.09,
+         'date_debut': date(2026,10,1), 'date_fin': None, 'inclure_etudiants': False}
+def cr(statut, mois, cfg=EYSEL, cp='CP 200', annee=2026):
+    return _crm(cp, statut, annee, mois, 20, 152.0, date(2026,7,1), cfg)
+check("Juillet 2026 (etudiant, avant la date de debut): aucun cheque", cr('etudiant', 7)['nombre'], 0)
+check("Septembre 2026 (etudiant, avant la date de debut): aucun cheque, avec la raison",
+      (cr('etudiant', 9)['nombre'], 'à partir du 01/10/2026' in cr('etudiant', 9)['motif']), (0, True))
+check("Septembre 2026 (employe): aucun cheque non plus, la periode commence avant le 01/10", cr('employe', 9)['nombre'], 0)
+check("Octobre 2026 (employe): 20 cheques de 8,00 (6,91 + 1,09)",
+      (cr('employe', 10)['nombre'], cr('employe', 10)['part_patronale'], cr('employe', 10)['part_travailleur']), (20, 6.91, 1.09))
+check("Octobre 2026 (etudiant): exclu tant que « inclure les étudiants » n'est pas coche",
+      (cr('etudiant', 10)['nombre'], 'inclure les étudiants' in cr('etudiant', 10)['motif']), (0, True))
+check("... et inclus quand la case est cochee", cr('etudiant', 10, dict(EYSEL, inclure_etudiants=True))['nombre'], 20)
+FIN = dict(EYSEL, date_fin=date(2026,12,31))
+check("Date de fin au 31/12/2026: decembre a des cheques, janvier 2027 n'en a plus",
+      (cr('employe', 12, FIN)['nombre'], cr('employe', 1, FIN, annee=2027)['nombre']), (20, 0))
+check("La periode doit COMMENCER a partir de la date: debut le 15/10 -> octobre exclu, novembre inclus",
+      (cr('employe', 10, dict(EYSEL, date_debut=date(2026,10,15)))['nombre'], cr('employe', 11, dict(EYSEL, date_debut=date(2026,10,15)))['nombre']),
+      (0, 20))
+check("Configuration ancienne sans date de debut: s'applique comme avant", cr('employe', 7, dict(EYSEL, date_debut=None))['nombre'], 20)
+ob = _crm('CP 140.03', 'ouvrier', 2026, 9, 20, 152.0, date(2025,1,1), dict(EYSEL, valeur=None, part_patronale=None, part_travailleur=None))
+check("Obligation sectorielle (CP 140.03) avant la date de debut du dossier: les cheques restent dus", (ob['obligatoire'], ob['nombre']), (True, 20))
+check("periode_couverte: bornes comprises", [periode_couverte(date(2026,10,1), date(2026,10,1), date(2026,10,1)),
+      periode_couverte(date(2026,9,1), date(2026,10,1)), periode_couverte(date(2026,11,1), None, date(2026,10,31))], [True, False, False])
+check("Activer les cheques-repas sans date de debut: refuse", valider_config(True, None, None, False, None, None),
+      ["Date de début obligatoire pour activer les chèques-repas."])
+check("Activer les ecocheques sans date de debut: refuse", valider_config(False, None, None, True, None, None),
+      ["Date de début obligatoire pour activer les écochèques."])
+check("Date de fin avant la date de debut: refuse", len(valider_config(True, date(2026,10,1), date(2026,9,1), False, None, None)), 1)
+check("Configuration complete ou cheques desactives: acceptee",
+      (valider_config(True, date(2026,10,1), None, True, date(2026,10,1), date(2027,5,31)), valider_config(False, None, None, False, None, None)), ([], []))
+ctr = [{'type_contrat': 'STU', 'date_debut': date(2026,7,1), 'date_fin': date(2026,9,30)},
+       {'type_contrat': 'CDI', 'date_debut': date(2026,10,1), 'date_fin': None}]
+check("Ecocheques, periode 06/2026 - 05/2027: 8 mois de CDI (octobre a mai), les mois d'etudiant ne comptent pas",
+      mois_eco_couverts(ctr, date(2026,6,1), date(2027,5,31)), 8)
+check("... a partir du 01/01/2027: 5 mois ; jusqu'au 31/03/2027: 3 mois",
+      (mois_eco_couverts(ctr, date(2026,6,1), date(2027,5,31), date(2027,1,1)),
+       mois_eco_couverts(ctr, date(2026,6,1), date(2027,5,31), date(2027,1,1), date(2027,3,31))), (5, 3))
+# De bout en bout: la fiche de septembre n'a aucun cheque et l'explique ; celle d'octobre en a
+def fiche_eysel(mois, statut_contrat, statut):
+    c = cr(statut, mois)
+    calc = c if c['nombre'] else (dict(c, alertes=[c['exclusion']]) if c.get('exclusion') else None)
+    return calculer_fiche_paie('C','I','n','a','BE',date(2004,1,1),date(2026,7,1),'E','a','b','r','CP 200','Classe A',13.71,
+        salaire_mensuel_fixe=2257.0, type_contrat=statut_contrat, is_etudiant=statut == 'etudiant', jours_prestes=20,
+        heures_prestees=152.0, cheques_repas=True, cheques_repas_calc=calc, categorie_employeur='010',
+        periode_debut=date(2026,mois,1), periode_fin=date(2026,mois,30))
+f9, f10 = fiche_eysel(9, 'STU', 'etudiant'), fiche_eysel(10, 'CDI', 'employe')
+check("Fiche de septembre (etudiant): aucune retenue ni part patronale de cheques, et l'alerte dit pourquoi",
+      (f9['cr_empl_total'], f9['cr_part_travailleur'], any('à partir du 01/10/2026' in a for a in f9['alertes_calcul'])), (0.0, 0.0, True))
+check("Fiche d'octobre (CDI): 20 cheques, 138,20 a charge de l'employeur, 21,80 retenus",
+      (f10['cr_empl_total'], f10['cr_part_travailleur']), (138.2, 21.8))
+from jinja2 import Environment as _E_cq, FileSystemLoader as _F_cq
+import branding as _b_cq
+_d_cq = {'id': 7, 'nom': 'Société Fictive SRL', 'cp_principale': 'CP 200'}
+class _R_cq:
+    path = '/dossier/7/cheques'; form = {}; args = {}
+def _page_cheques(config, erreur=None):
+    cfg = dict({'actif': False, 'valeur': None, 'part_patronale': None, 'part_travailleur': None, 'octroi_avant_2025': False,
+                'repas_fournis': False, 'date_debut': None, 'date_fin': None, 'inclure_etudiants': False, 'eco_date_debut': None,
+                'eco_date_fin': None, 'eco_actif': False, 'eco_convertis': False, 'emetteur': '', 'notes': ''}, **config)
+    return _E_cq(loader=_F_cq('templates')).get_template('cheques_dossier.html').render(
+        request=_R_cq(), marque=_b_cq.get_branding(), statique=_b_cq.url_statique, session={'user_id': 1, 'user_nom': 'U'}, tenant={},
+        tous_les_dossiers=[_d_cq], dossiers_archives=[], dossier=_d_cq, dossier_actif=_d_cq, config=cfg, lignes=[], regles={},
+        tot={'nombre': 0, 'valeur': 0, 'patronal': 0, 'travailleur': 0}, annee=2026, mois=10, mois_nom='Octobre',
+        obligatoire_non_active=False, suggestion=None, cadre=__import__('cheques_regles').CADRE_LEGAL, erreur_config=erreur)
+h_cq = _page_cheques({'actif': True, 'date_debut': date(2026,10,1)})
+check("Page « Chèques »: dates de debut et de fin, case des etudiants decochee par defaut",
+      ('name="repas_date_debut" value="2026-10-01"' in h_cq, 'name="repas_date_fin"' in h_cq, 'name="eco_date_debut"' in h_cq,
+       'checked' in h_cq.split('name="repas_inclure_etudiants"')[1].split('>')[0]), (True, True, True, False))
+check("Page « Chèques »: avertissement quand les cheques sont actifs sans date de debut, erreur de saisie affichee",
+      ('sans date de début' in _page_cheques({'actif': True}), 'sans date de début' in h_cq,
+       'Date de début obligatoire' in _page_cheques({}, erreur='Date de début obligatoire pour activer les chèques-repas.')),
+      (True, False, True))
+
 print(); print("=" * 70); print("RGPT CP 140.03 -- 1,8175 EUR/h au 01/01/2026, versionne par date (parametres_dates)"); print("=" * 70)
 from parametres_dates import get_rgpt, RGPT_VERSIONS
 check("RGPT CP 140.03 au 01/01/2026: 1,8175 EUR/h, obligatoire pour le personnel roulant",

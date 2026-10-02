@@ -69,6 +69,11 @@ COLONNES = {
     # Option « l'employeur fournit des repas » (avantage de toute nature), page « Chèques »
     'cheques_config': [
         ('repas_fournis', 'BOOLEAN DEFAULT FALSE'),
+        # Periode de validite des cheques du dossier: ils ne s'appliquent qu'aux fiches dont
+        # la periode commence a partir de la date de debut (et au plus tard a la date de fin)
+        ('repas_date_debut', 'DATE'), ('repas_date_fin', 'DATE'),
+        ('repas_inclure_etudiants', 'BOOLEAN DEFAULT FALSE'),
+        ('eco_date_debut', 'DATE'), ('eco_date_fin', 'DATE'),
     ],
     # Annees d'experience professionnelle a la date du contrat (bareme par experience, tache 4)
     'contrats': [

@@ -1869,6 +1869,10 @@ def generer_fiche_depuis_calendrier(dimona_id):
             calc_cr = _calcul_cheques_travailleur(cur, dict(cur.fetchone()), annee, mois, cfg_cr)
             if calc_cr and (cfg_cr['actif'] or calc_cr['repas']['obligatoire']) and calc_cr['repas']['nombre']:
                 cr_calc = calc_cr['repas']
+            elif calc_cr and calc_cr['repas'].get('exclusion'):
+                # Hors de la periode de validite du dossier, ou etudiant non inclus: aucun cheque,
+                # et la raison est affichee dans les alertes du calcul
+                cr_calc = dict(calc_cr['repas'], alertes=[calc_cr['repas']['exclusion']])
         except Exception as ex_cr:
             app.logger.warning(f"Suivi cheques non applique: {ex_cr}")
             conn.rollback()
@@ -3018,6 +3022,9 @@ def _config_cheques(cur, dossier_id):
             'part_patronale': r.get('repas_part_patronale'), 'part_travailleur': r.get('repas_part_travailleur'),
             'octroi_avant_2025': bool(r.get('repas_octroi_avant_2025')),
             'repas_fournis': bool(r.get('repas_fournis')),
+            'date_debut': r.get('repas_date_debut'), 'date_fin': r.get('repas_date_fin'),
+            'inclure_etudiants': bool(r.get('repas_inclure_etudiants')),
+            'eco_date_debut': r.get('eco_date_debut'), 'eco_date_fin': r.get('eco_date_fin'),
             'eco_actif': bool(r.get('eco_actif')), 'eco_convertis': bool(r.get('eco_convertis')),
             'emetteur': r.get('emetteur') or '', 'notes': r.get('notes') or ''}
 
@@ -3062,21 +3069,19 @@ def _calcul_cheques_travailleur(cur, t, annee, mois, config):
             p_deb, p_fin = date(n - 1, 6, 1), date(n, 5, 31)
         else:         # paiement annuel: annee civile N
             p_deb, p_fin = date(n, 1, 1), date(n, 12, 31)
-        mois_couverts = set()
-        for c in contrats:
-            if c.get('type_contrat') == 'STU' or not c['date_debut']:
-                continue
-            d0, d1 = max(c['date_debut'], p_deb), min(c['date_fin'] or p_fin, p_fin)
-            y, m = d0.year, d0.month
-            while (y, m) <= (d1.year, d1.month):
-                mois_couverts.add((y, m)); m += 1
-                if m > 12: m, y = 1, y + 1
+        # Seuls comptent les mois qui commencent dans la periode de validite fixee par le dossier
+        from cheques_regles import mois_eco_couverts
+        nb_mois_eco = mois_eco_couverts(contrats, p_deb, p_fin, config.get('eco_date_debut'), config.get('eco_date_fin'))
         hs = float(contrat.get('heures_semaine') or 38) or 38.0
         fraction = min(1.0, float(contrat.get('heures_jour') or 7.6) * int(contrat.get('jours_semaine') or 5) / hs)
-        eco = ecocheques_annuels(cp_key, statut, n, fraction, len(mois_couverts),
+        eco = ecocheques_annuels(cp_key, statut, n, fraction, nb_mois_eco,
                                  t.get('categorie_personnel'))
         eco.update(annee_paiement=n, periode=f"{p_deb:%m/%Y} – {p_fin:%m/%Y}", fraction_regime=round(fraction, 2),
-                   mois_couverts=len(mois_couverts))
+                   mois_couverts=nb_mois_eco)
+        if config.get('eco_date_debut') or config.get('eco_date_fin'):
+            eco['motif'] = (eco.get('motif') or '') + " Mois comptés : ceux qui commencent " + (
+                f"à partir du {config['eco_date_debut']:%d/%m/%Y}" if config.get('eco_date_debut') else '') + (
+                f" jusqu'au {config['eco_date_fin']:%d/%m/%Y}" if config.get('eco_date_fin') else '') + "." 
     return {'travailleur': t, 'contrat': contrat, 'cp_key': cp_key, 'statut': statut,
             'jours': jours, 'heures': heures, 'date_anciennete': date_anc, 'repas': repas, 'eco': eco}
 
@@ -3097,11 +3102,25 @@ def suivi_cheques(dossier_id):
         def num(k):
             try: return float((f.get(k) or '').replace(',', '.')) if f.get(k) else None
             except ValueError: return None
+        def jour(k):
+            try: return date.fromisoformat(f.get(k) or '')
+            except ValueError: return None
+        from cheques_regles import valider_config
+        erreurs_cfg = valider_config(f.get('repas_actif') == 'on', jour('repas_date_debut'), jour('repas_date_fin'),
+                                     f.get('eco_actif') == 'on', jour('eco_date_debut'), jour('eco_date_fin'))
+        if erreurs_cfg:
+            cur.close(); conn.close()
+            return redirect(url_for('suivi_cheques', dossier_id=dossier_id, annee=annee, mois=mois,
+                                    erreur=' '.join(erreurs_cfg) + " Rien n'a été enregistré."))
         cur.execute("""INSERT INTO cheques_config (dossier_id, repas_actif, repas_valeur, repas_part_patronale,
                 repas_part_travailleur, repas_octroi_avant_2025, eco_actif, eco_convertis, emetteur, notes,
-                repas_fournis, updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                repas_fournis, repas_date_debut, repas_date_fin, repas_inclure_etudiants, eco_date_debut, eco_date_fin,
+                updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
             ON CONFLICT (dossier_id) DO UPDATE SET repas_actif=EXCLUDED.repas_actif, repas_valeur=EXCLUDED.repas_valeur,
+                repas_date_debut=EXCLUDED.repas_date_debut, repas_date_fin=EXCLUDED.repas_date_fin,
+                repas_inclure_etudiants=EXCLUDED.repas_inclure_etudiants,
+                eco_date_debut=EXCLUDED.eco_date_debut, eco_date_fin=EXCLUDED.eco_date_fin,
                 repas_part_patronale=EXCLUDED.repas_part_patronale, repas_part_travailleur=EXCLUDED.repas_part_travailleur,
                 repas_octroi_avant_2025=EXCLUDED.repas_octroi_avant_2025, eco_actif=EXCLUDED.eco_actif,
                 eco_convertis=EXCLUDED.eco_convertis, emetteur=EXCLUDED.emetteur, notes=EXCLUDED.notes,
@@ -3109,7 +3128,8 @@ def suivi_cheques(dossier_id):
             (dossier_id, f.get('repas_actif') == 'on', num('repas_valeur'), num('repas_part_patronale'),
              num('repas_part_travailleur'), f.get('repas_octroi_avant_2025') == 'on', f.get('eco_actif') == 'on',
              f.get('eco_convertis') == 'on', f.get('emetteur', '')[:100], f.get('notes', ''),
-             f.get('repas_fournis') == 'on'))
+             f.get('repas_fournis') == 'on', jour('repas_date_debut'), jour('repas_date_fin'),
+             f.get('repas_inclure_etudiants') == 'on', jour('eco_date_debut'), jour('eco_date_fin')))
         for k, v in f.items():
             if k.startswith('categorie_personnel_') and k[20:].isdigit():
                 cur.execute("UPDATE travailleurs SET categorie_personnel=%s WHERE id=%s AND dossier_id=%s",
@@ -3135,4 +3155,4 @@ def suivi_cheques(dossier_id):
     return render_template('cheques_dossier.html', dossier=dossier, dossier_actif=dossier, config=config,
                            lignes=lignes, regles=regles, tot=tot, annee=annee, mois=mois, mois_nom=mois_noms[mois],
                            obligatoire_non_active=obligatoire_non_active, suggestion=suggestion,
-                           cadre=CADRE_LEGAL, **ctx)
+                           cadre=CADRE_LEGAL, erreur_config=request.args.get('erreur'), **ctx)
