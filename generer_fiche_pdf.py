@@ -38,16 +38,6 @@ def style(name, font=None, size=8, bold=False, align=TA_LEFT, color=BLACK):
 def p(text, **kw):
     return Paragraph(str(text) if text is not None else '', style('x', **kw))
 
-def _libelle_categorie(categorie):
-    """Categorie telle que saisie, sauf « etudiant » ecrit sans accent ni majuscule."""
-    import unicodedata
-    texte = (categorie or '—').strip()
-    sans_accent = unicodedata.normalize('NFD', texte).encode('ascii', 'ignore').decode().lower()
-    if sans_accent in ('etudiant', 'etudiante', 'etudiant(e)'):
-        return 'Étudiant'
-    return texte
-
-
 def generer_fiche_paie_pdf(data, filepath):
     """Génère le PDF de la fiche de paie."""
     doc = SimpleDocTemplate(filepath, pagesize=A4,
@@ -86,18 +76,21 @@ def generer_fiche_paie_pdf(data, filepath):
     h_sem_reel = data.get('heures_semaine_reel', data['heures_semaine'])
     genre = 'Temps partiel' if h_sem_reel < 36 else 'Temps plein'
     heures_txt = f"{h_sem_reel:.2f}/{data['heures_semaine']:.2f}"
-    categorie = _libelle_categorie(data.get('categorie'))
-    statut = categorie
+    # « Statut/Profession » = statut + fonction du contrat ; « Catégorie prof. » = categorie
+    # du bareme (libelle generique complete par la CP) -- corrige le 02/10/2026: le statut
+    # affichait la categorie du bareme
+    from occupation import libelle_statut_profession, libelle_categorie_bareme
+    categorie = libelle_categorie_bareme(data.get('categorie'), data.get('cp_key'))
+    statut = libelle_statut_profession(data.get('is_ouvrier'), data.get('is_etudiant'), data.get('fonction'))
     if data.get('is_etudiant'):
         # Etudiant paye a l'heure: pas de regime « temps plein 38/38 », les heures reelles du mois
-        statut = 'Étudiant'
         genre = "Contrat d'occupation d'étudiant"
         heures_mois = float(data.get('heures_prestees') or 0) + float(data.get('heures_feries') or 0)
         heures_txt = f"{heures_mois:.2f} h prestées ce mois"
 
     left_data = [
         ['Travailleur :', f"{data['prenom']} {data['nom']}"],
-        ['Statut/Profession :', statut[:30]],
+        ['Statut/Profession :', statut[:60]],
         ['Régime/Système :', f"{jours_sem}j/sem · {heures_j}h/j"],
         ['Salaire mensuel :' if not data.get('is_ouvrier') and not data.get('is_etudiant') else 'Salaire horaire :',
             f"{data.get('salaire_mensuel_fixe', round(data['salaire_horaire'] * data.get('heures_semaine', 38) * 52 / 12, 2)):.2f} €"
@@ -107,7 +100,7 @@ def generer_fiche_paie_pdf(data, filepath):
         ['Heures :', heures_txt],
         ['Commission Paritaire :', f"{data['cp_key']}"],
         ['N° NISS :', data.get('niss', '—')],
-        ['Catégorie prof. :', categorie[:20]],
+        ['Catégorie prof. :', categorie[:60]],
         ['Date d\'entrée :', f"{date_entree_fmt}  Anc.: {data.get('anciennete', '0a')}"],
         ['', ''],
         ['Etat civil :', libelle_etat_civil(data.get('etat_civil'))],

@@ -198,6 +198,7 @@ def calculer_fiche_paie(
     repas_fournis=False,
     annees_experience=None, date_debut_contrat=None,
     incapacite=None,
+    fonction=None,
 ):
     cp = CP_INDEMNITES.get(cp_key, {})
     # Override avec barèmes BDD si disponibles
@@ -738,7 +739,7 @@ def calculer_fiche_paie(
         'date_naissance': date_naissance, 'date_entree': date_entree,
         'anciennete': f"{anc//12}a , {anc%12}m",
         'etat_civil': etat_civil, 'nb_enfants': nb_enfants,
-        'cp_key': cp_key, 'categorie': categorie, 'salaire_horaire': salaire_horaire,
+        'cp_key': cp_key, 'categorie': categorie, 'fonction': fonction, 'salaire_horaire': salaire_horaire,
         'heures_semaine': heures_semaine, 'heures_semaine_reel': heures_sem_reel,
         'heures_jour': heures_jour, 'jours_semaine': jours_semaine,
         'regime_str': f"{jours_semaine}j/sem · {heures_jour}h/j",

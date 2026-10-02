@@ -51,6 +51,31 @@ def charges_famille_du_formulaire(form):
     }
 
 
+def libelle_statut_profession(is_ouvrier, is_etudiant, fonction=None):
+    """« Statut/Profession » de la fiche de paie: statut du travailleur et fonction du
+    contrat (« Employé — Comptable »), jamais la categorie du bareme."""
+    statut = 'Étudiant' if is_etudiant else ('Ouvrier' if is_ouvrier else 'Employé')
+    fonction = (fonction or '').strip()
+    return f"{statut} — {fonction}" if fonction and fonction != '—' else statut
+
+
+# Libelles de categorie trop generiques pour etre lus seuls sur une fiche de paie
+CATEGORIES_GENERIQUES = ('minimum sectoriel',)
+
+
+def libelle_categorie_bareme(categorie, cp_key=None):
+    """« Catégorie prof. »: la categorie du bareme telle qu'elle est enregistree ; un
+    libelle officiel generique (« Minimum sectoriel ») est complete par la CP."""
+    import unicodedata
+    texte = (categorie or '').strip() or '—'
+    simple = unicodedata.normalize('NFD', texte).encode('ascii', 'ignore').decode().lower()
+    if simple in ('etudiant', 'etudiante', 'etudiant(e)'):
+        return 'Étudiant'
+    if simple in CATEGORIES_GENERIQUES and cp_key and cp_key.lower() not in simple:
+        return f"{texte} {cp_key}"
+    return texte
+
+
 def premier_engagement_du_travailleur(dossier_coche, travailleur_coche, nb_designes):
     """Reduction « premier engagement » (1er travailleur, code 3315): le dossier ouvre le
     droit (case et date de debut), la reduction ne vise que LE travailleur designe dans sa

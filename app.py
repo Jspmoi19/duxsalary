@@ -1896,6 +1896,7 @@ def generer_fiche_depuis_calendrier(dimona_id):
             bce_societe=dimona['bce'] or '—',
             rsz_societe=dimona['rsz'] or '—',
             cp_key=cp_key, categorie=contrat['categorie'] if contrat else '—',
+            fonction=contrat.get('fonction') if contrat else None,
             salaire_horaire=salaire_h,
             salaire_mensuel_fixe=float(contrat.get('salaire_mensuel') or 0) if contrat else 0.0,
             etat_civil=dimona.get('etat_civil', 'celibataire') or 'celibataire',

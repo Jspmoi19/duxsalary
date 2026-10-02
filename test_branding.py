@@ -245,7 +245,8 @@ from moteur_paie import calculer_fiche_paie
 from generer_fiche_pdf import generer_fiche_paie_pdf
 data = calculer_fiche_paie('Camille', 'Exemple', '00.00.00-000.00', 'Rue Exemple 1, 1000 Bruxelles', 'BE00 0000 0000 0000',
     date(1990, 1, 1), date(2026, 1, 1), 'Société Fictive SRL', 'Rue Exemple 1, 1000 Bruxelles', '0000.000.000', '000-0000000-00',
-    'CP 200', 'Comptable', 13.71, salaire_mensuel_fixe=2257.0, heures_semaine=38.0, heures_jour=7.6, jours_semaine=5,
+    'CP 200', 'Classe A — Sans qualification', 13.71, fonction='Comptable',
+    salaire_mensuel_fixe=2257.0, heures_semaine=38.0, heures_jour=7.6, jours_semaine=5,
     type_contrat='CDI', jours_prestes=22, heures_prestees=167.2, rgpt_actif=False, cheques_repas=False,
     categorie_employeur='010', code_ffe='C', code_importance='1', periode_debut=date(2026, 9, 1), periode_fin=date(2026, 9, 30))
 chemin_pdf = os.path.join(SORTIE or tempfile.gettempdir(), 'exemple_fiche_de_paie.pdf')
@@ -257,6 +258,31 @@ check("Fiche de paie: employeur toujours en tete du document", 'Société Fictiv
 check("Fiche de paie: nom commercial non repete en texte", 'DUXSALARY' in texte.upper(), False)
 check("Fiche de paie: logo", len(page.images) >= 1)
 check("Fiche de paie: une seule page", len(PdfReader(chemin_pdf).pages), 1)
+import re as _re2
+aplat = _re2.sub(r'\s+', ' ', texte)
+check("Fiche de paie: « Statut/Profession » = statut et fonction du contrat (Employé — Comptable)",
+      'Statut/Profession : Employé — Comptable' in aplat)
+check("Fiche de paie: « Catégorie prof. » = categorie du bareme, en entier", 'Catégorie prof. : Classe A — Sans qualification' in aplat)
+from occupation import libelle_statut_profession, libelle_categorie_bareme
+check("Statut sans fonction renseignee: le statut seul", libelle_statut_profession(True, False, ''), 'Ouvrier')
+check("Etudiant avec fonction", libelle_statut_profession(False, True, 'Vendeur'), 'Étudiant — Vendeur')
+check("Categorie generique completee par la CP", libelle_categorie_bareme('Minimum sectoriel', 'CP 336'), 'Minimum sectoriel CP 336')
+check("Categorie precise: inchangee", libelle_categorie_bareme('Chauffeur - Niveau 1', 'CP 140.03'), 'Chauffeur - Niveau 1')
+check("Categorie deja completee: pas de doublon", libelle_categorie_bareme('Minimum sectoriel CP 336', 'CP 336'), 'Minimum sectoriel CP 336')
+check("Categorie vide: tiret", libelle_categorie_bareme(None, 'CP 200'), '—')
+data336 = calculer_fiche_paie('Camille', 'Exemple', '00.00.00-000.00', 'Rue Exemple 1, 1000 Bruxelles', 'BE00 0000 0000 0000',
+    date(1990, 1, 1), date(2026, 1, 1), 'Société Fictive SRL', 'Rue Exemple 1, 1000 Bruxelles', '0000.000.000', '000-0000000-00',
+    'CP 336', 'Minimum sectoriel', 13.71, fonction='Assistante administrative', salaire_mensuel_fixe=2300.0, heures_semaine=38.0,
+    heures_jour=7.6, jours_semaine=5, type_contrat='CDI', jours_prestes=22, heures_prestees=167.2, cheques_repas=False,
+    categorie_employeur='010', periode_debut=date(2026, 9, 1), periode_fin=date(2026, 9, 30))
+chemin_336 = os.path.join(tempfile.gettempdir(), 'exemple_fiche_cp336.pdf')
+generer_fiche_paie_pdf(data336, chemin_336)
+pages336 = PdfReader(chemin_336).pages
+aplat336 = _re2.sub(r'\s+', ' ', pages336[0].extract_text())
+os.remove(chemin_336)
+check("Fiche CP 336: « Employé — Assistante administrative » et « Minimum sectoriel CP 336 », toujours sur une page",
+      ('Statut/Profession : Employé — Assistante administrative' in aplat336, 'Catégorie prof. : Minimum sectoriel CP 336' in aplat336,
+       len(pages336)), (True, True, 1))
 
 from pdf_charges import generer_pdf_charges
 pdf = generer_pdf_charges(doc)
