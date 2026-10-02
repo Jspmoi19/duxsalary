@@ -573,10 +573,15 @@ def calculer_fiche_paie(
     jours_vacances_ouvrier = (jours_conge or 0) if is_ouvrier else 0
     jours_mu_onss = jours_payes_onss + jours_vacances_ouvrier
     heures_mu_onss = heures_payees_onss + jours_vacances_ouvrier * float(heures_jour or 0)
+    # Plancher de 27,5 % (Instructions p.377): sans contrat au moins a mi-temps, aucune
+    # reduction quand µ < 0,275. Le µ(glob) officiel est TRIMESTRIEL: ici c'est celui du mois.
+    contrat_mi_temps = ratio_tp >= 0.5
+    mu_sous_plancher = None if is_etudiant else profil.plancher_prestations(
+        jours_payes_onss, heures_payees_onss, jours_mu_onss, heures_mu_onss, contrat_mi_temps)
     red_struct = 0.0 if is_etudiant else profil.reduction_structurelle(
         onss_pat_reductible, reference_date=ref_date_struct, remuneration_mois=brut_onss,
         jours_payes=jours_payes_onss, heures_payees=heures_payees_onss,
-        jours_mu=jours_mu_onss, heures_mu=heures_mu_onss)
+        jours_mu=jours_mu_onss, heures_mu=heures_mu_onss, mi_temps=contrat_mi_temps)
 
     # Premier engagement (plafonne a la part reductible restante)
     red_pe = 0.0
@@ -585,7 +590,7 @@ def calculer_fiche_paie(
         red_pe = profil.reduction_premier_engagement(
             reste_apres_struct, ratio_tp, reference_date=ref_date_struct,
             jours_payes=jours_payes_onss, heures_payees=heures_payees_onss,
-            jours_mu=jours_mu_onss, heures_mu=heures_mu_onss)
+            jours_mu=jours_mu_onss, heures_mu=heures_mu_onss, mi_temps=contrat_mi_temps)
 
     onss_pat_net = round(max(0, onss_pat_reductible - red_struct - red_pe)
                          + onss_vacances_253 + total_compl, 2)
@@ -663,6 +668,8 @@ def calculer_fiche_paie(
             [L(f"{cc['code']} – {cc['libelle'][:80]}", cc['montant'], base=cc['base'], taux=cc['taux'],
                source=cc['source'] + (' — à vérifier' if cc['a_verifier'] else '')) for cc in cotis_compl] +
             ([L('Réduction structurelle', -red_struct, source='Ps = R × µ × ß (Instructions ONSS 2026/3 p.382)')] if red_struct else []) +
+            ([L('Réductions : plancher de 27,5 % non atteint (µ = ' + f"{mu_sous_plancher:.2f}".replace('.', ',') + ', contrat de moins d\'un mi-temps)',
+                0.0, source='ß = 0 (Instructions ONSS 2026/3 p.377)', info=True)] if mu_sous_plancher is not None else []) +
             ([L('Réduction premier engagement', -red_pe, source='Pg = G × µ × ß, G = forfait daté')] if red_pe else []) +
             [L('ONSS patronal net', onss_pat_net, total=True)]},
         {'titre': 'Coût employeur', 'lignes': [
@@ -686,6 +693,12 @@ def calculer_fiche_paie(
     alertes_calcul += alertes_cheques
     if alerte_repas_fournis:
         alertes_calcul.append(alerte_repas_fournis)
+    if mu_sous_plancher is not None:
+        alertes_calcul.append(
+            f"Réductions patronales à 0 : prestations du mois à {mu_sous_plancher * 100:.0f} % d'un temps plein, sous le "
+            f"plancher de 27,5 %, et contrat de moins d'un mi-temps (Instructions ONSS 2026/3 p.377). Le plancher officiel "
+            f"se juge sur le trimestre entier : si le trimestre atteint 27,5 %, la DmfA accordera la réduction "
+            f"(voir l'aide DmfA, recalcul trimestriel).")
     # Salaire sous le minimum de la CP a la date de la periode (etudiants compris):
     # simple alerte, les montants restent ceux saisis (minimums_cp.py)
     from minimums_cp import alerte_minimum

@@ -23,6 +23,10 @@ from onss_taux import get_taux_onss
 STATUTS_VALIDES = ('ouvrier', 'etudiant', 'employe')
 
 
+# Plancher de prestations des reductions patronales: Instructions ONSS 2026/3 p.377
+PLANCHER_MU = 0.275
+
+
 @dataclass
 class ProfilTravailleur:
     cp_key: str
@@ -251,6 +255,11 @@ class ProfilTravailleur:
     # ── Reductions ONSS patronales: formules OFFICIELLES (Instructions ONSS
     #    2026/3, p.375-383 et 404-405), verifiees le 30/09/2026 ──────────────
 
+    def plancher_prestations(self, jours_payes=None, heures_payees=None, jours_mu=None, heures_mu=None, mi_temps=True):
+        """µ du mois quand le plancher de 27,5 % supprime les reductions, sinon None."""
+        _, mu = self._prestation(jours_payes, heures_payees, jours_mu, heures_mu)
+        return mu if (mu is not None and mu < PLANCHER_MU and not mi_temps) else None
+
     @staticmethod
     def _r2(x):
         """Arrondi officiel ONSS a l'eurocent: 0,005 arrondi vers le haut."""
@@ -285,8 +294,14 @@ class ProfilTravailleur:
         return facteur, mu
 
     @staticmethod
-    def _beta(mu, structurelle=True):
-        """Facteur de multiplication (jamais arrondi). Instructions p.377."""
+    def _beta(mu, structurelle=True, mi_temps=True):
+        """Facteur de multiplication (jamais arrondi). Instructions p.376-377.
+        Plancher (p.377): « Pour un µ (glob) < 0,275 les facteurs fixes de multiplication
+        ßs et ßg = 0 », sauf pour les travailleurs occupes sous un contrat au moins a
+        mi-temps (mi_temps=True). Applique aux fiches mensuelles le 02/10/2026, comme
+        dans le recalcul trimestriel de l'aide DmfA (dmfa.beta)."""
+        if mu < PLANCHER_MU and not mi_temps:
+            return 0.0
         base, pente = (1.18, 0.28) if structurelle else (1.0, 1.0)
         if mu < 0.55:
             return base
@@ -296,7 +311,8 @@ class ProfilTravailleur:
 
     def reduction_structurelle(self, onss_patronal_brut, base_salariale_mensuelle=None,
                                 reference_date=None, remuneration_mois=None,
-                                jours_payes=None, heures_payees=None, jours_mu=None, heures_mu=None):
+                                jours_payes=None, heures_payees=None, jours_mu=None, heures_mu=None,
+                                mi_temps=True):
         """Reduction structurelle mensuelle: Ps = R x mu x beta_s, R calcule
         sur le salaire de reference S (W a 100%, ramene temps plein).
         Plafonnee aux cotisations patronales sur lesquelles elle s'applique.
@@ -320,12 +336,12 @@ class ProfilTravailleur:
         S = self._r2(remuneration_mois * facteur)
         R = max(0.0, self._r2(p['coeff_bas'] * (p['seuil_bas'] - S))) + \
             max(0.0, self._r2(p['coeff_tres_bas'] * (p['seuil_tres_bas'] - S)))
-        ps_mensuel = self._r2(R * mu * self._beta(mu, True) / 3)
+        ps_mensuel = self._r2(R * mu * self._beta(mu, True, mi_temps) / 3)
         return round(min(onss_patronal_brut, ps_mensuel), 2)
 
     def reduction_premier_engagement(self, onss_patronal_apres_struct, ratio_temps_partiel=1.0,
                                       reference_date=None, jours_payes=None, heures_payees=None,
-                                      jours_mu=None, heures_mu=None):
+                                      jours_mu=None, heures_mu=None, mi_temps=True):
         """Premier engagement (1er travailleur): Pg = G x mu x beta_g par
         trimestre, G = 2.000EUR depuis le 01/07/2026 (3.100EUR avant).
         Jamais pour un etudiant. Sans jours/heures: ancien calcul (deprecated)."""
@@ -337,7 +353,7 @@ class ProfilTravailleur:
         if mu is None:
             pg = self._r2(G / 3 * ratio_temps_partiel)
         else:
-            pg = self._r2(G * mu * self._beta(mu, False) / 3)
+            pg = self._r2(G * mu * self._beta(mu, False, mi_temps) / 3)
         return round(min(pg, max(0.0, onss_patronal_apres_struct)), 2)
 
     @staticmethod

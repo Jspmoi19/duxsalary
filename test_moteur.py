@@ -88,8 +88,20 @@ check("Juin: bonus emploi B, table du 01/04/2026 (fiche 25,55)", r['bonus_emploi
 #  5 jours de vacances (10 h): µ = 54 / 164,67 = 0,33 -> 877,12 x 0,33 x 1,18 / 3 = 113,85
 rc = calculer_fiche_paie('M','N','n','a','BE',date(2005,10,31),date(2026,5,27),'S','a','b','r','CP 140.03','Nettoyeur',15.2097,
     jours_prestes=22, heures_prestees=44.0, jours_conge=5, periode_debut=date(2026,6,1), periode_fin=date(2026,6,30), **kw_i)
-check("Sans conge: reduction structurelle 93,15", r['reduction_structurelle'], 93.15)
-check("Vacances d'un ouvrier comptees dans µ (pas dans S): reduction structurelle 113,85", rc['reduction_structurelle'], 113.85)
+# Plancher de 27,5 % (p.377): contrat de 10 h / 38 h (moins d'un mi-temps) et µ = 0,27 -> ß = 0
+check("Sans conge: µ = 0,27 sous le plancher, contrat de moins d'un mi-temps -> reduction structurelle 0", r['reduction_structurelle'], 0.0)
+check("... alerte et ligne d'explication dans le detail du calcul",
+      (any('plancher de 27,5 %' in a and '27 %' in a for a in r['alertes_calcul']),
+       any('plancher de 27,5 %' in l['libelle'] for b in r['detail_calcul'] for l in b['lignes'])), (True, True))
+check("... le patronal net reprend toute la cotisation reductible", r['onss_patronal'] > r['onss_patronal_reductible'], True)
+rm = calculer_fiche_paie('M','N','n','a','BE',date(2005,10,31),date(2026,5,27),'S','a','b','r','CP 140.03','Nettoyeur',15.2097,
+    jours_prestes=8, heures_prestees=32.0, periode_debut=date(2026,6,1), periode_fin=date(2026,6,30),
+    **dict(kw_i, heures_jour=4.0))
+# contrat de 20 h / 38 h = au moins un mi-temps: pas de plancher, meme avec µ = 32 / 164,67 = 0,19
+check("Contrat au moins a mi-temps (20 h / 38 h) avec µ = 0,19: pas de plancher, reduction accordee sans alerte",
+      (rm['reduction_structurelle'] > 0, any('plancher' in a for a in rm['alertes_calcul'])), (True, False))
+check("Vacances d'un ouvrier comptees dans µ (pas dans S): µ = 0,33 au-dessus du plancher, reduction structurelle 113,85",
+      (rc['reduction_structurelle'], any('plancher' in a for a in rc['alertes_calcul'])), (113.85, False))
 check("... brut, ONSS personnel et net inchanges", (rc['brut_onss'], rc['onss_net'], rc['salaire_net']), (r['brut_onss'], r['onss_net'], r['salaire_net']))
 check("Conges ouvrier sans effet sur le bonus emploi", rc['bonus_emploi'], r['bonus_emploi'])
 
