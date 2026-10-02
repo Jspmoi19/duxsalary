@@ -27,9 +27,9 @@ DATES_BAREMES = {
     'CP 121':    (date(2026, 7, 1), "salairesminimums.be PC 1210000, barème du 01/07/2026 (à recouper)"),
 }
 # Bareme propre aux etudiants, quand la CP en prevoit un dans cp_data.py
-CATEGORIE_ETUDIANT = {'CP 336': 'Étudiant (95%)'}
-# Montant mensuel non fiable dans cp_data.py (calcule sur 38 h alors que la CP est a 36,5 h):
-# seul le minimum HORAIRE est controle
+CATEGORIE_ETUDIANT = {'CP 336': 'Étudiants et formation en alternance'}
+# CP d'ouvriers payes a l'heure dont le bareme officiel ne donne qu'un taux horaire: pour une
+# periode sans bareme officiel charge, seul le minimum HORAIRE est controle
 SANS_MINIMUM_MENSUEL = {'CP 121'}
 
 
@@ -55,9 +55,14 @@ def minimum_cp(cp_key, reference_date, categorie=None, is_etudiant=False, lignes
        grille s'applique -- annees_experience, anciennete_mois dans l'entreprise
        (bareme I / II) et age (bareme des etudiants) ;
     2) sinon minimum par categorie: lignes_db (table baremes_cp) puis cp_data.py."""
-    from baremes_experience import minimum_experience
+    from baremes_experience import minimum_experience, minimum_categorie
     minimum, raison = minimum_experience(cp_key, reference_date, categorie, annees_experience,
                                          anciennete_mois, is_etudiant, age)
+    if minimum is not None or raison is not None:
+        return minimum, raison
+    # Bareme officiel par categorie (salairesminimums.be), s'il couvre la date: il prime
+    # sur la page « Barèmes CP » et sur cp_data.py
+    minimum, raison = minimum_categorie(cp_key, reference_date, categorie, is_etudiant)
     if minimum is not None or raison is not None:
         return minimum, raison
     baremes, depuis, source = {}, None, None

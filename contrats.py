@@ -291,7 +291,7 @@ def generer_contrat_cdi(data):
         articles.append((
             "Article 14 – Dispositions spécifiques nettoyage (CP 121)",
             f"En application des CCT de la CP 121 : "
-            f"(1) Durée hebdomadaire : 36h30 (et non 38h). "
+            f"(1) Durée hebdomadaire : 37 heures (et non 38h). "
             f"(2) Prime de fin d'année : 9% des salaires bruts déclarés, versée par le Fonds Social Nettoyage. "
             f"(3) Vêtements de travail fournis et entretenus par l'employeur. "
             f"(4) Indexation semestrielle (01/01 et 01/07) — l'employeur s'engage à appliquer "
@@ -438,7 +438,7 @@ def generer_contrat_cdd(data):
     if "121" in cp_key:
         articles.append((
             "Article 13 – Dispositions CP 121 Nettoyage",
-            f"Durée : 36h30/semaine. Prime fin d'année 9% (Fonds Social Nettoyage). "
+            f"Durée : 37 heures/semaine. Prime fin d'année 9% (Fonds Social Nettoyage). "
             f"Indexation semestrielle applicable. Vêtements fournis par l'employeur."
         ))
 

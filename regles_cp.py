@@ -271,7 +271,11 @@ REGLES_CP = {
     'CP 121': {
         'nom': 'Commission paritaire pour le nettoyage',
         'type_travailleur_defaut': 'ouvrier',
-        'heures_semaine_defaut': 36.5,   # ATTENTION: différent des autres CP (pas 38h)
+        # ATTENTION: différent des autres CP (pas 38h). 37 h par semaine: salairesminimums.be,
+        # CP 1210000 au 01/07/2026 (« REGIME (sur base hebdomadaire) : 37h », heures
+        # supplémentaires au-delà de 37 h) -- corrigé le 02/10/2026 (était 36,5 h, sans source).
+        # Cohérent avec le calcul sectoriel des chèques-repas (heures / 7,4 = 37 / 5).
+        'heures_semaine_defaut': 37,
         'onss_patronal_taux_base': 0.27,   # ⚠️ NON VALIDÉ — taux ouvrier standard par défaut, à confirmer avant Yassin
         'rgpt': {
             'applicable': True,

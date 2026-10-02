@@ -97,7 +97,9 @@ CP_DATABASE = {
             'secteurs': ['Nettoyage de bâtiments', 'Nettoyage industriel',
                         'Nettoyage de vitres', 'Ramassage immondices', 'Car-wash'],
         },
-        'duree_travail': {'heures_semaine': 36.5, 'heures_jour': 7.3},
+        # 37 h par semaine: salairesminimums.be, CP 1210000 au 01/07/2026 (« REGIME (sur base
+        # hebdomadaire) : 37h ») -- corrige le 02/10/2026 (etait 36,5 h, sans source)
+        'duree_travail': {'heures_semaine': 37, 'heures_jour': 7.4},
         'baremes': {
             'Cat 1A — Nettoyage habituel': {'horaire': 17.166, 'mensuel': 2826.29},
             'Cat 1B — Nettoyage avec difficulté': {'horaire': 17.701, 'mensuel': 2914.42},
@@ -151,6 +153,30 @@ CP_DATABASE = {
         'cct_applicables': ['Loi du 3 juillet 1978', 'CCT SCP 140.03', 'AR du 22/01/2010'],
     },
 }
+
+
+def _appliquer_baremes_officiels():
+    """Les baremes des CP qui ont un bareme officiel charge (baremes_experience.py:
+    salairesminimums.be) remplacent ceux ecrits ci-dessus -- une seule source pour les
+    montants. Les montants ci-dessus ne servent plus que pour les CP sans bareme officiel."""
+    from datetime import date
+    from baremes_experience import (baremes_pour_formulaires, classe_de_categorie, grille_en_vigueur,
+                                    horaire_de_mensuel)
+    for cp_key, cp in CP_DATABASE.items():
+        officiels = baremes_pour_formulaires(cp_key, date.today())
+        if officiels:
+            cp['baremes'] = officiels
+        # CP avec grille par experience (CP 200): chaque classe prend le montant officiel a 0 an
+        grille = grille_en_vigueur(cp_key, date.today())
+        if grille:
+            for libelle, valeurs in cp['baremes'].items():
+                classe = classe_de_categorie(libelle, grille['classes'])
+                if classe:
+                    mensuel = grille['bareme_I'][0][grille['classes'].index(classe)]
+                    valeurs.update(mensuel=mensuel, horaire=horaire_de_mensuel(mensuel, grille['heures_semaine']))
+
+
+_appliquer_baremes_officiels()
 
 
 def get_heures_semaine(cp_key):

@@ -153,7 +153,7 @@ from cheques_regles import cheques_repas_du_mois
 cr = cheques_repas_du_mois('CP 121', 'ouvrier', 2026, 10, 16, 64.0, date(2026, 3, 1), {'actif': False})
 check("Nombre de cheques (heures / 7,4 arrondi sup.)", cr['nombre'], 9)
 r = calculer_fiche_paie('Nadia','Test','n','a','BE',date(1990,1,1),date(2026,3,1),'Test','a','b','r',
-    'CP 121','Nettoyeuse',17.17, heures_semaine=36.5, heures_jour=4.0, jours_semaine=5, type_contrat='CDI',
+    'CP 121','Nettoyeuse',17.17, heures_semaine=37.0, heures_jour=4.0, jours_semaine=5, type_contrat='CDI',
     jours_prestes=16, heures_prestees=64.0, rgpt_actif=False, cheques_repas=False, cheques_repas_calc=cr,
     periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
 ligne = next((l for l in r['lignes_indemn'] if 'Chèques-repas' in l['libelle']), None)
@@ -203,7 +203,7 @@ check("2 enfants (dont 1 handicape transmis comme 2 = 3): reduction annexe 3", r
 
 print(); print("=" * 70); print("RGPT CP 121 -- par JOUR (1,63 EUR)"); print("=" * 70)
 r = calculer_fiche_paie('N','T','n','a','BE',date(1990,1,1),date(2026,3,1),'X','a','b','r','CP 121','Nettoyeuse',17.17,
-    heures_semaine=36.5, heures_jour=4.0, jours_semaine=5, type_contrat='CDI', jours_prestes=16, heures_prestees=64.0,
+    heures_semaine=37.0, heures_jour=4.0, jours_semaine=5, type_contrat='CDI', jours_prestes=16, heures_prestees=64.0,
     rgpt_actif=True, cheques_repas=False, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
 rg = next((l['montant'] for l in r['lignes_indemn'] if 'RGPT' in l['libelle']), 0)
 check("RGPT = 16 jours x 1,63 (et non 64 h x 1,63)", rg, 26.08)
@@ -226,7 +226,7 @@ e, t, a = fiche_cr('CP 140.03', 'Chauffeur', 15.50, date(2025,1,1), date(2026,6,
 check("CP 140.03 avant le 01/07/2026 (entree en vigueur): aucun cheque, alerte", (e, t, len(a)), (0.0, 0.0, 1))
 e, t, a = fiche_cr('CP 140.03', 'Chauffeur', 15.50, date(2026,8,1), *OCT, 22, 167.2)
 check("CP 140.03, moins de 6 mois d'anciennete: aucun cheque, alerte", (e, t, len(a)), (0.0, 0.0, 1))
-e, t, a = fiche_cr('CP 121', 'Nettoyeuse', 17.17, date(2026,9,1), *OCT, 16, 64.0, heures_semaine=36.5, heures_jour=4.0)
+e, t, a = fiche_cr('CP 121', 'Nettoyeuse', 17.17, date(2026,9,1), *OCT, 16, 64.0, heures_semaine=37.0, heures_jour=4.0)
 check("CP 121: heures / 7,4 arrondi superieur = 9 cheques x 2,00 (et non 16 jours)", e, 18.00)
 check("CP 121: 9 x 1,09 retenus", t, 9.81)
 e, t, a = fiche_cr('CP 200', 'Employe', 13.71, date(2020,1,1), *OCT, 22, 167.2, salaire_mensuel_fixe=2257.0)
@@ -299,15 +299,53 @@ check("Periode anterieure au bareme connu (juin 2026, CP 336): minimum non dispo
       1.0 if 'non disponible pour cette période' in alerte_min(r) else 0.0, 1.0)
 r = calculer_fiche_paie('A','B','n','a','BE',date(2005,1,1),date(2026,10,1),'X','a','b','r','CP 336','Etudiant',13.00,
     type_contrat='STU', is_etudiant=True, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31), **kw_m)
-check("Etudiant CP 336 a 13,00 < 13,021 (bareme etudiant 95 %): alerte",
-      1.0 if 'Étudiant (95%)' in alerte_min(r) and '13,0210' in alerte_min(r) else 0.0, 1.0)
+check("Etudiant CP 336 a 13,00 < 13,0056 (officiel: 2.141,59 par mois, etudiants et alternance): alerte",
+      1.0 if 'Étudiants et formation en alternance' in alerte_min(r) and '13,0056' in alerte_min(r) else 0.0, 1.0)
 r = calculer_fiche_paie('A','B','n','a','BE',date(2005,1,1),date(2026,10,1),'X','a','b','r','CP 336','Etudiant',13.10,
     type_contrat='STU', is_etudiant=True, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31), **kw_m)
 check("Etudiant CP 336 a 13,10: pas d'alerte", 0.0 if alerte_min(r) else 1.0, 1.0)
-r = calculer_fiche_paie('A','B','n','a','BE',date(2005,1,1),date(2026,8,1),'X','a','b','r','CP 140.03','Etudiant',14.00,
+r = calculer_fiche_paie('A','B','n','a','BE',date(2005,1,1),date(2026,8,1),'X','a','b','r','CP 140.03','Personnel roulant — Niveau 1',13.00,
     type_contrat='STU', is_etudiant=True, periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), **kw_m)
-check("Etudiant CP 140.03 a 14,00 < 14,9255 (pas de bareme etudiant: minimum ordinaire, signale)",
-      1.0 if '14,9255' in alerte_min(r) and 'pas de barème étudiant' in alerte_min(r) else 0.0, 1.0)
+check("Etudiant CP 140.03 a 13,00 < 13,4329 (officiel: 90 % du salaire de la fonction, 14,9255)",
+      1.0 if '13,4329' in alerte_min(r) and '90 %' in alerte_min(r) else 0.0, 1.0)
+r = calculer_fiche_paie('A','B','n','a','BE',date(2005,1,1),date(2026,8,1),'X','a','b','r','CP 140.03','Personnel roulant — Niveau 1',14.00,
+    type_contrat='STU', is_etudiant=True, periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), **kw_m)
+check("Etudiant CP 140.03 a 14,00: pas d'alerte", 0.0 if alerte_min(r) else 1.0, 1.0)
+
+print(); print("=" * 70); print("TACHE 4 -- baremes officiels salairesminimums.be: CP 336, 140.03 et 121"); print("=" * 70)
+from baremes_experience import bareme_categories_en_vigueur, minimum_categorie
+v336, v140, v121 = (bareme_categories_en_vigueur(c, date(2026,10,1)) for c in ('CP 336', 'CP 140.03', 'CP 121'))
+check("CP 336 au 01/09/2026: minimum sectoriel, minimum d'entree, etudiants",
+      (v336['date_debut'], v336['categories']['Minimum sectoriel'], v336['categories']["Minimum d'entrée"], v336['etudiants']['mensuel']),
+      (date(2026,9,1), 2254.30, 2321.93, 2141.59))
+check("CP 140.03 au 01/01/2026: 21 categories, deux regimes", (v140['date_debut'], len(v140['categories']), len(v140['categories_repos_payes'])),
+      (date(2026,1,1), 21, 21))
+check("CP 140.03: personnel roulant niveau 1 (38 h: 14,9255 ; repos compensatoire payes: 14,5425)",
+      (v140['categories']['Personnel roulant — Niveau 1'], v140['categories_repos_payes']['Personnel roulant — Niveau 1']), (14.9255, 14.5425))
+check("CP 140.03: garage hors categorie et non roulant classe 8", (v140['categories']['Personnel de garage — Hors catégorie'],
+      v140['categories']['Personnel non roulant — Classe 8']), (23.2605, 18.3915))
+from regles_cp import get_regles_cp
+from cp_data import get_heures_semaine, get_heures_jour
+check("CP 121: 37 h par semaine partout (regles, contrats, 7,4 h par jour)",
+      (get_regles_cp('CP 121')['heures_semaine_defaut'], get_heures_semaine('CP 121'), get_heures_jour('CP 121')), (37, 37, 7.4))
+check("CP 121 au 01/07/2026: 40 categories, regime 37 h", (v121['date_debut'], len(v121['categories']), v121['heures_semaine']), (date(2026,7,1), 40, 37))
+check("CP 121: 1.A 17,1660 ; 2.E 18,9890 ; 4.D laveur de vitres 18 mois 20,5235 ; 10.F 23,6290",
+      tuple(v121['categories'][k] for k in ('1.A. Nettoyage habituel', '2.E. Désinfection', '4.D. Laveur de vitres qualifié (18 mois)',
+                                             "10.F. Centre d'enfouissement — ouvrier hautement qualifié")), (17.166, 18.989, 20.5235, 23.629))
+check("Ancien libelle de contrat reconnu par son code (« Cat 2E — Désinfection »)",
+      minimum_categorie('CP 121', date(2026,10,1), 'Cat 2E — Désinfection')[0]['horaire'], 18.989)
+check("Ancien libelle CP 336 « Professionnel libéral (103%) » = minimum d'entree officiel",
+      minimum_categorie('CP 336', date(2026,10,1), 'Professionnel libéral (103%)')[0]['mensuel'], 2321.93)
+check("Avant la date du bareme officiel: pas de bareme officiel (rien de devine)",
+      (bareme_categories_en_vigueur('CP 121', date(2026,6,30)), bareme_categories_en_vigueur('CP 336', date(2026,8,31))), (None, None))
+r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2026,1,1),'X','a','b','r','CP 121','Cat 2E — Désinfection',18.50,
+    type_contrat='CDI', periode_debut=date(2026,10,1), periode_fin=date(2026,10,31), **dict(kw_m, heures_semaine=37.0))
+check("CP 121 categorie 2.E a 18,50 < 18,9890: alerte avec la source officielle",
+      1.0 if '18,9890' in alerte_min(r) and 'salairesminimums.be' in alerte_min(r) else 0.0, 1.0)
+r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2026,1,1),'X','a','b','r','CP 140.03','Personnel roulant — Niveau 2',15.20,
+    type_contrat='CDI', periode_debut=date(2026,10,1), periode_fin=date(2026,10,31), **kw_m)
+check("CP 140.03 niveau 2 a 15,20 < 15,4490: l'alerte rappelle le taux du regime repos compensatoire payes (15,0525)",
+      1.0 if '15,4490' in alerte_min(r) and '15,0525' in alerte_min(r) else 0.0, 1.0)
 r = calculer_fiche_paie('A','B','n','a','BE',date(1990,1,1),date(2026,1,1),'X','a','b','r','CP 140.03','Personnel roulant — Niveau 2',15.00,
     type_contrat='CDI', periode_debut=date(2026,8,1), periode_fin=date(2026,8,31), **kw_m)
 check("Ouvrier CP 140.03 niveau 2 a 15,00 < 15,4490 (categorie du contrat): alerte", 1.0 if '15,4490' in alerte_min(r) else 0.0, 1.0)
@@ -316,8 +354,9 @@ print(); print("=" * 70); print("TACHE 4 -- CP 200: bareme par classe et annees 
 from baremes_experience import grille_en_vigueur, minimum_experience
 g200 = grille_en_vigueur('CP 200', date(2026,10,1))
 check("Grille CP 200: 27 lignes (0 a 26 ans) en bareme I, 26 en bareme II", (len(g200['bareme_I']), len(g200['bareme_II'])), (27, 26))
-check("Bareme I, 0 an, classes A a D", g200['bareme_I'][0], (2242.81, 2336.25, 2369.31, 2555.73))
-check("Bareme II, 26 ans, classes A a D", g200['bareme_II'][26], (2526.16, 2897.83, 3262.72, 3722.55))
+check("Source officielle, sans mention « a confirmer »", ('salairesminimums.be' in g200['source'], 'confirmer' in g200['source']), (True, False))
+check("Bareme I, 0 an, classes A a D (PDF officiel)", g200['bareme_I'][0], (2242.80, 2336.26, 2369.30, 2555.72))
+check("Bareme II, 26 ans, classes A a D (PDF officiel)", g200['bareme_II'][26], (2526.17, 2897.81, 3262.72, 3722.54))
 check("Pas de grille avant le 01/01/2026 (rien de devine)", grille_en_vigueur('CP 200', date(2025,12,31)), None)
 check("Au-dela de 26 ans d'experience: plafonne a 26 ans", minimum_experience('CP 200', date(2026,10,1), 'Classe D', 40, 0)[0]['mensuel'], 3622.42)
 def fiche200(mensuel, categorie, experience, entree, debut_contrat=None, fin=date(2026,10,31), **kw):
@@ -327,21 +366,21 @@ def fiche200(mensuel, categorie, experience, entree, debut_contrat=None, fin=dat
                     rgpt_actif=False, cheques_repas=False, periode_debut=date(fin.year, fin.month, 1), periode_fin=fin), **kw))
     return alerte_min(r)
 ENTREE = date(2026,9,1)   # premiere annee dans l'entreprise -> bareme I
-check("Classe C, 5 ans, bareme I: 2.563,76 -- salaire 2.500: alerte",
-      1.0 if '2 563,76' in fiche200(2500.0, 'Classe C — Spécialisé', 5, ENTREE) else 0.0, 1.0)
-check("Classe C, 5 ans: salaire 2.563,76: pas d'alerte", 0.0 if fiche200(2563.76, 'Classe C — Spécialisé', 5, ENTREE) else 1.0, 1.0)
-check("Meme salaire, classe A 5 ans (2.276,51): pas d'alerte", 0.0 if fiche200(2300.0, 'Classe A — Sans qualification', 5, ENTREE) else 1.0, 1.0)
-check("Apres un an dans l'entreprise: bareme II (classe A, 1 an: 2.310,30)",
-      1.0 if '2 310,30' in fiche200(2300.0, 'Classe A — Sans qualification', 0, date(2025,9,1)) and 'barème II' in
+check("Classe C, 5 ans, bareme I: 2.563,77 -- salaire 2.500: alerte",
+      1.0 if '2 563,77' in fiche200(2500.0, 'Classe C — Spécialisé', 5, ENTREE) else 0.0, 1.0)
+check("Classe C, 5 ans: salaire 2.563,77: pas d'alerte", 0.0 if fiche200(2563.77, 'Classe C — Spécialisé', 5, ENTREE) else 1.0, 1.0)
+check("Meme salaire, classe A 5 ans (2.276,53): pas d'alerte", 0.0 if fiche200(2300.0, 'Classe A — Sans qualification', 5, ENTREE) else 1.0, 1.0)
+check("Apres un an dans l'entreprise: bareme II (classe A, 1 an: 2.310,29)",
+      1.0 if '2 310,29' in fiche200(2300.0, 'Classe A — Sans qualification', 0, date(2025,9,1)) and 'barème II' in
       fiche200(2300.0, 'Classe A — Sans qualification', 0, date(2025,9,1)) else 0.0, 1.0)
-check("L'experience progresse avec le contrat: 5 ans a la signature le 01/09/2025 -> 6 ans en octobre 2026 (bareme II: 2.681,47)",
-      1.0 if '2 681,47' in fiche200(2600.0, 'Classe C — Spécialisé', 5, date(2025,9,1)) else 0.0, 1.0)
+check("L'experience progresse avec le contrat: 5 ans a la signature le 01/09/2025 -> 6 ans en octobre 2026 (bareme II: 2.681,48)",
+      1.0 if '2 681,48' in fiche200(2600.0, 'Classe C — Spécialisé', 5, date(2025,9,1)) else 0.0, 1.0)
 check("Experience non renseignee: 0 an, signale dans l'alerte",
       1.0 if "années d'expérience non renseignées" in fiche200(2000.0, 'Classe A — Sans qualification', None, ENTREE) else 0.0, 1.0)
 check("Classe non precisee: classe A, signale", 1.0 if 'classe non précisée' in fiche200(2000.0, 'Employe', 0, ENTREE) else 0.0, 1.0)
 r = calculer_fiche_paie('A','B','n','a','BE',date(2007,6,1),date(2026,10,1),'X','a','b','r','CP 200','Etudiant',11.50,
     type_contrat='STU', is_etudiant=True, **kw_m, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))
-check("Etudiant CP 200 de 19 ans a 11,50 < 11,9988 (bareme des etudiants: 1.975,80 / mois): alerte",
+check("Etudiant CP 200 de 19 ans a 11,50 < 11,9988 (bareme des etudiants: 1.975,81 / mois): alerte",
       1.0 if 'Barème des étudiants, 19 ans' in alerte_min(r) and '11,9988' in alerte_min(r) else 0.0, 1.0)
 r = calculer_fiche_paie('A','B','n','a','BE',date(2007,6,1),date(2026,10,1),'X','a','b','r','CP 200','Etudiant',12.00,
     type_contrat='STU', is_etudiant=True, **kw_m, periode_debut=date(2026,10,1), periode_fin=date(2026,10,31))

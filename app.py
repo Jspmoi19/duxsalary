@@ -578,9 +578,12 @@ def nouveau_contrat_dossier(dossier_id):
     cur_cp.close(); conn_cp.close()
     
     cp_data_merged = {}
+    from baremes_experience import bareme_categories_en_vigueur
     for k, v in CP_DATABASE.items():
-        baremes = baremes_bdd.get(k, {cat: {kk: vv for kk, vv in val.items() if kk in ['horaire','mensuel']}
-                    for cat, val in v['baremes'].items() if isinstance(val, dict)})
+        officiel = {cat: {kk: vv for kk, vv in val.items() if kk in ['horaire','mensuel']}
+                    for cat, val in v['baremes'].items() if isinstance(val, dict)}
+        # Bareme officiel charge (salairesminimums.be): il prime sur la page « Barèmes CP »
+        baremes = officiel if bareme_categories_en_vigueur(k, date.today()) else baremes_bdd.get(k, officiel)
         cp_data_merged[k] = {'meta': v['meta'], 'duree_travail': v['duree_travail'], 'baremes': baremes}
     cp_json = jsonlib.dumps(cp_data_merged)
     prefill_travailleur_id = request.args.get('travailleur_id', type=int)

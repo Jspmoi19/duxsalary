@@ -135,8 +135,10 @@ check("Annee sans contingent charge: signale, pas de chiffre devine",
 dossier_e = dict(dossier, adresse='Rue Exemple 1, 1853 Grimbergen', cp_principale='CP 336')
 ctx_e = contexte_formulaire(dossier_e, 120.0, date(2026, 10, 1))
 minimums = json.loads(ctx_e['minimums_json'])
-check("Bareme etudiant de la CP 336 (95 %)", (minimums['CP 336']['horaire'], minimums['CP 336']['categorie']), (13.021, 'Étudiant (95%)'))
-check("CP sans bareme etudiant: minimum ordinaire, signale", 'pas de barème étudiant' in minimums['CP 140.03']['note'])
+check("Bareme etudiant de la CP 336 (officiel: 2.141,59 par mois)", (minimums['CP 336']['horaire'], minimums['CP 336']['categorie']),
+      (13.0056, 'Étudiants et formation en alternance'))
+check("CP 140.03: etudiant a 90 % du salaire de la fonction (officiel)", 'Étudiant : 90 %' in minimums['CP 140.03']['categorie'])
+check("CP sans bareme etudiant (CP 121): minimum ordinaire, signale", 'pas de barème étudiant' in minimums['CP 121']['note'])
 check("CP 200 sans age connu: bareme ordinaire, signale", "âge de l'étudiant inconnu" in minimums['CP 200']['note'])
 check("CP sans bareme date: raison affichee, pas de minimum", 'raison' in minimums['CP 302'] and 'horaire' not in minimums['CP 302'])
 check("Regles de la CP issues de regles_cp.py", any('Chèques-repas' in l for l in json.loads(ctx_e['regles_json'])['CP 140.03']))
@@ -231,9 +233,9 @@ check("Tache 4: categorie choisie dans une liste (plus de saisie libre) et annee
 grilles = json.loads(contexte_regles(dossier_e)['grilles_json'])
 check("Tache 4: grille CP 200 transmise au formulaire (27 lignes d'experience, 4 classes)",
       (sorted(grilles), len(grilles['CP 200']['bareme_I']), grilles['CP 200']['classes'], grilles['CP 200']['bareme_I']['5'][2]),
-      (['CP 200'], 27, ['A', 'B', 'C', 'D'], 2563.76))
+      (['CP 200'], 27, ['A', 'B', 'C', 'D'], 2563.77))
 ctx_19 = json.loads(contexte_formulaire(dossier_e, 0, date(2026, 10, 1), age=19)['minimums_json'])
-check("Contrat etudiant CP 200: bareme des etudiants selon l'age (19 ans, classe A: 1.975,80 EUR/mois)",
+check("Contrat etudiant CP 200: bareme des etudiants selon l'age (19 ans, classe A: 1.975,81 EUR/mois)",
       (ctx_19['CP 200']['horaire'], 'Barème des étudiants, 19 ans' in ctx_19['CP 200']['categorie']), (11.9988, True))
 
 print(); print("=" * 70); print("PDF -- logo et mentions sur les documents"); print("=" * 70)
