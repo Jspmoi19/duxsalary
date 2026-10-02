@@ -2213,8 +2213,12 @@ def generer_lettre_onss_pdf(dossier, fiches, annee, mois, mois_nom):
                               fontSize=size, leading=size+3, alignment=align)
     def p(t, **kw): return Paragraph(str(t or ''), sty(**kw))
 
+    # Le PDF d'une lettre deja emise n'est jamais ecrase: une lettre regeneree recoit un
+    # nouveau nom de fichier (_v2, _v3...), comme les fiches de paie
+    from fiches_remplacees import chemin_pdf_libre
     filename = f"lettre_ONSS_{dossier['nom']}_{mois_nom}_{annee}.pdf"
-    filepath = os.path.join(OUTPUT_DIR, filename)
+    filepath = chemin_pdf_libre(os.path.join(OUTPUT_DIR, filename))
+    filename = os.path.basename(filepath)
 
     doc = SimpleDocTemplate(filepath, pagesize=A4,
         topMargin=2*cm, bottomMargin=2*cm, leftMargin=2*cm, rightMargin=2*cm)
@@ -2309,14 +2313,21 @@ def generer_lettre_onss_pdf(dossier, fiches, annee, mois, mois_nom):
     from psycopg2.extras import RealDictCursor as RDC
     conn2 = get_conn()
     cur2 = conn2.cursor()
+    # Une seule lettre active par dossier et par periode: la nouvelle lettre est toujours
+    # enregistree, les precedentes de la meme periode passent au statut « remplacee »
+    # (lettres_remplacees.py). Aucune mention de paiement: l'outil l'ignore.
     cur2.execute('''INSERT INTO lettres_onss (dossier_id, mois, annee, total_brut, total_onss_personnel, total_onss_patronal, total_onss, pdf_path)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING''',
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id''',
         (dossier['id'], mois, annee,
          round(sum(float(f.get('salaire_brut') or 0) for f in fiches), 2),
          round(sum(float(f.get('onss_personnel') or 0) for f in fiches), 2),
          round(sum(float(f.get('onss_patronal') or 0) for f in fiches), 2),
          round(sum(float(f.get('onss_personnel') or 0) + float(f.get('onss_patronal') or 0) for f in fiches), 2),
          filepath))
+    lettre_id = cur2.fetchone()[0]
+    cur2.execute('''UPDATE lettres_onss SET remplacee_par = %s, remplacee_le = NOW()
+                    WHERE dossier_id = %s AND mois = %s AND annee = %s AND id <> %s AND remplacee_par IS NULL''',
+                 (lettre_id, dossier['id'], mois, annee, lettre_id))
     conn2.commit(); cur2.close(); conn2.close()
     return send_file(filepath, as_attachment=False, download_name=filename, mimetype='application/pdf')
 
@@ -2654,13 +2665,16 @@ def liste_lettres_onss(dossier_id):
     ctx['tenant'] = get_tenant()
     conn = get_conn()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute('SELECT * FROM lettres_onss WHERE dossier_id=%s ORDER BY annee DESC, mois DESC', (dossier_id,))
-    lettres = [dict(r) for r in cur.fetchall()]
+    cur.execute('''SELECT l.*, r.created_at AS remplacante_creee_le FROM lettres_onss l
+                   LEFT JOIN lettres_onss r ON r.id = l.remplacee_par
+                   WHERE l.dossier_id=%s ORDER BY l.annee DESC, l.mois DESC, l.id DESC''', (dossier_id,))
+    brutes = [dict(r) for r in cur.fetchall()]
     cur.close(); conn.close()
-    MOIS_FR = ['','Janvier','Fevrier','Mars','Avril','Mai','Juin','Juillet','Aout','Septembre','Octobre','Novembre','Decembre']
-    for l in lettres:
-        l['mois_nom'] = MOIS_FR[l['mois']]
-    return render_template('liste_lettres_onss.html', dossier=dossier, dossier_actif=dossier, lettres=lettres, **ctx)
+    # Lettre active de chaque periode, puis ses versions remplacees (grisees) ; totaux des lettres actives seulement
+    from lettres_remplacees import pour_historique
+    lettres, totaux = pour_historique(brutes)
+    return render_template('liste_lettres_onss.html', dossier=dossier, dossier_actif=dossier, lettres=lettres,
+                           totaux=totaux, **ctx)
 
 @app.route('/lettre-onss/<int:lettre_id>/download')
 @login_required

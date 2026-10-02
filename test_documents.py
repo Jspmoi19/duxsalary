@@ -316,6 +316,50 @@ check("Fiche du travailleur: « Remplacée par la fiche du 02/10/2026 » affiche
       'Remplacée par la fiche du 02/10/2026' in h and '/download/fiche.pdf' in h and '/download/fiche_v2.pdf' in h)
 check("... l'onglet ne compte que la fiche active", 'Fiches de paie (1)' in h)
 
+print(); print("=" * 70); print("LETTRES ONSS REMPLACEES -- une seule lettre active par dossier et par periode"); print("=" * 70)
+from lettres_remplacees import (plan_doublons as plan_lettres, pour_historique, libelle_remplacement as lib_lettre,
+                                rapport as rapport_lettres)
+def lo(id, mois=7, dossier=7, total=100.0, cree=None, remplacee_par=None, **kw):
+    return dict({'id': id, 'dossier_id': dossier, 'mois': mois, 'annee': 2026, 'total_brut': total * 4, 'total_onss_personnel': total / 4,
+                 'total_onss_patronal': total * 3 / 4, 'total_onss': total, 'created_at': cree, 'remplacee_par': remplacee_par,
+                 'pdf_path': '/x/lettre.pdf'}, **kw)
+lettres_t = [lo(1, cree=datetime(2026, 8, 3), total=155.16), lo(2, cree=datetime(2026, 10, 2), total=155.16 - 39.8),
+             lo(3, mois=8, cree=datetime(2026, 9, 2), total=200.0), lo(4, dossier=8, cree=datetime(2026, 8, 3)),
+             lo(5, mois=9, cree=None), lo(6, mois=9, cree=None)]
+pl = plan_lettres(lettres_t)
+check("Doublons de lettres: juillet (dossier 7) et septembre ; aout et l'autre dossier ne sont pas touches",
+      [(x['cle'], x['gardee']['id'], [l['id'] for l in x['remplacees']]) for x in pl], [((7, 2026, 7), 2, [1]), ((7, 2026, 9), 6, [5])])
+check("La liste ne modifie aucune lettre", [l['remplacee_par'] for l in lettres_t], [None] * 6)
+t_l = rapport_lettres(pl, {7: 'Société Fictive SRL'})
+check("Script sans --appliquer: liste lisible et « RIEN N'A ETE MODIFIE »",
+      all(x in t_l for x in ('Société Fictive SRL — Juillet 2026', 'lettre n° 2', 'GARDÉE', '« remplacée » par la lettre n° 2',
+                             '2 lettre(s) seraient', "RIEN N'A ETE MODIFIE", '--appliquer')))
+check("Aucun doublon: message clair", 'Aucun doublon' in rapport_lettres([]))
+apres = [lo(1, cree=datetime(2026, 8, 3), total=155.16, remplacee_par=2, remplacante_creee_le=datetime(2026, 10, 2)),
+         lo(2, cree=datetime(2026, 10, 2), total=115.36), lo(3, mois=8, cree=datetime(2026, 9, 2), total=200.0)]
+hist, tot_l = pour_historique(apres)
+check("Historique: aout, puis la lettre active de juillet, puis sa version remplacee", [l['id'] for l in hist], [3, 2, 1])
+check("Libelle: « Remplacée par la lettre du 02/10/2026 » ; rien pour une lettre active",
+      (hist[2]['remplacement'], hist[1]['remplacement']), ('Remplacée par la lettre du 02/10/2026', None))
+check("Totaux: lettres actives seulement (115,36 + 200,00 = 315,36, sans les 155,16 de la lettre remplacee)",
+      (tot_l['total_onss'], tot_l['nombre']), (315.36, 2))
+h_l = _env.get_template('liste_lettres_onss.html').render(
+    request=_Req(), marque=_branding.get_branding(), statique=_branding.url_statique, session={'user_id': 1, 'user_nom': 'U'},
+    tenant={}, tous_les_dossiers=[_dos], dossiers_archives=[], dossier=_dos, dossier_actif=_dos, lettres=hist, totaux=tot_l)
+check("Page « Historique ONSS »: lettre remplacee grisee avec son libelle, PDF toujours accessible, total des lettres actives",
+      ('Remplacée par la lettre du 02/10/2026' in h_l, h_l.count('/download" class'), '315.36' in h_l, '2 lettre(s) active(s)' in h_l),
+      (True, 3, True, True))
+check("Aucune mention de paiement sur une lettre remplacee (l'outil ne sait pas si elle a ete payee)",
+      any(m in h_l.lower() for m in ('payée', 'payee', 'déjà payé')), False)
+check("Generation: la nouvelle lettre est toujours enregistree et l'ancienne passe a « remplacee » ; le PDF n'est pas ecrase",
+      ('ON CONFLICT DO NOTHING' in source_app.split('def generer_lettre_onss_pdf')[1].split('\ndef ')[0],
+       'UPDATE lettres_onss SET remplacee_par = %s, remplacee_le = NOW()' in source_app,
+       "chemin_pdf_libre(os.path.join(OUTPUT_DIR, filename))" in source_app.split('def generer_lettre_onss_pdf')[1].split('\ndef ')[0]),
+      (False, True, True))
+_mig = _io.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'migrate_charges.py'), encoding='utf-8').read()
+check("Migration: colonnes des lettres et retrait de l'ancienne contrainte d'unicite",
+      ("'lettres_onss': [" in _mig, "DROP CONSTRAINT" in _mig and "to_regclass('lettres_onss') IS NULL" in _mig), (True, True))
+
 print(); print("=" * 70)
 if ECHECS:
     print(f"❌ {len(ECHECS)} TEST(S) ECHOUE(S): {ECHECS}"); sys.exit(1)

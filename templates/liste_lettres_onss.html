@@ -14,17 +14,27 @@
     <thead><tr><th>Période</th><th>Brut</th><th>ONSS pers.</th><th>ONSS pat.</th><th>Total ONSS</th><th></th></tr></thead>
     <tbody>
     {% for l in lettres %}
-    <tr>
-      <td><strong>{{ l.mois_nom }} {{ l.annee }}</strong></td>
+    <tr {% if l.remplacement %}style="color:#999;background:#fafafa"{% endif %}>
+      <td>{% if l.remplacement %}{{ l.mois_nom }} {{ l.annee }}<br><span class="badge badge-orange" title="Lettre conservée avec son PDF ; seule la lettre active de la période porte les montants à payer">{{ l.remplacement }}</span>{% else %}<strong>{{ l.mois_nom }} {{ l.annee }}</strong>{% endif %}</td>
       <td>{{ "%.2f"|format(l.total_brut or 0) }} €</td>
       <td>{{ "%.2f"|format(l.total_onss_personnel or 0) }} €</td>
       <td>{{ "%.2f"|format(l.total_onss_patronal or 0) }} €</td>
-      <td><strong>{{ "%.2f"|format(l.total_onss or 0) }} €</strong></td>
+      <td>{% if l.remplacement %}{{ "%.2f"|format(l.total_onss or 0) }} €{% else %}<strong>{{ "%.2f"|format(l.total_onss or 0) }} €</strong>{% endif %}</td>
       <td><a href="/lettre-onss/{{ l.id }}/download" class="btn btn-secondary btn-xs">PDF</a></td>
     </tr>
     {% else %}
     <tr class="empty"><td colspan="6">Aucune lettre ONSS générée</td></tr>
     {% endfor %}
+    {% if totaux and totaux.nombre %}
+    <tr style="font-weight:700;background:#f5f7fa">
+      <td>Total — {{ totaux.nombre }} lettre(s) active(s)</td>
+      <td>{{ "%.2f"|format(totaux.total_brut) }} €</td>
+      <td>{{ "%.2f"|format(totaux.total_onss_personnel) }} €</td>
+      <td>{{ "%.2f"|format(totaux.total_onss_patronal) }} €</td>
+      <td>{{ "%.2f"|format(totaux.total_onss) }} €</td>
+      <td></td>
+    </tr>
+    {% endif %}
     </tbody>
   </table>
 </div>

@@ -79,6 +79,12 @@ COLONNES = {
     'contrats': [
         ('annees_experience', 'INTEGER'),
     ],
+    # Lettres ONSS: une seule lettre active par dossier et par periode (lettres_remplacees.py).
+    # NULL = lettre active. created_at: ajoute s'il manquait (les lettres existantes recoivent
+    # la date de la migration).
+    'lettres_onss': [
+        ('remplacee_par', 'INTEGER'), ('remplacee_le', 'TIMESTAMP'), ('created_at', 'TIMESTAMP DEFAULT NOW()'),
+    ],
     'dossiers': [
         ('caisse_vacances', 'VARCHAR(200)'), ('service_medical', 'VARCHAR(200)'), ('assurance_groupe', 'VARCHAR(200)'),
         # Provision ESTIMEE du pecule de vacances des employes (convention comptable,
@@ -122,11 +128,33 @@ TABLES = [
 ]
 
 
+# Lettres ONSS: une ancienne contrainte d'unicite (dossier, mois, annee) empecherait d'enregistrer
+# la nouvelle lettre a cote de l'ancienne (la lettre regeneree n'etait alors pas enregistree:
+# « ON CONFLICT DO NOTHING », d'ou les anciens montants dans l'historique). Les contraintes et
+# index d'unicite autres que la cle primaire sont retires ; l'unicite de la lettre ACTIVE est
+# assuree par l'application (app.py) et par lettres_remplacees.py.
+SQL_LETTRES_UNICITE = """
+DO $$
+DECLARE c record;
+BEGIN
+    IF to_regclass('lettres_onss') IS NULL THEN RETURN; END IF;
+    FOR c IN SELECT conname FROM pg_constraint WHERE conrelid = 'lettres_onss'::regclass AND contype = 'u' LOOP
+        EXECUTE 'ALTER TABLE lettres_onss DROP CONSTRAINT ' || quote_ident(c.conname);
+    END LOOP;
+    FOR c IN SELECT i.relname FROM pg_index x JOIN pg_class i ON i.oid = x.indexrelid
+             WHERE x.indrelid = 'lettres_onss'::regclass AND x.indisunique AND NOT x.indisprimary LOOP
+        EXECUTE 'DROP INDEX ' || quote_ident(c.relname);
+    END LOOP;
+END $$;
+"""
+
+
 def migrate():
     conn = get_conn()
     cur = conn.cursor()
     for sql in TABLES:
         cur.execute(sql)
+    cur.execute(SQL_LETTRES_UNICITE)
     for table, colonnes in COLONNES.items():
         for nom, type_sql in colonnes:
             # IF EXISTS: une table creee par un autre script (ex. cheques_config) peut manquer sur une base neuve
