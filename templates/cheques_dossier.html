@@ -109,7 +109,7 @@
         Inclure les étudiants
       </label>
     </div>
-    <div class="src" style="margin-top:4px">Date de début obligatoire quand les chèques-repas sont activés. Ils ne s'appliquent qu'aux fiches dont la période commence à partir de cette date (et au plus tard à la date de fin) : calcul de la paie, tableau « à commander » et documents. Une obligation sectorielle reste due quelle que soit cette date.</div>
+    <div class="src" style="margin-top:4px">Date de début obligatoire quand les chèques-repas sont activés. Ils sont comptés pour chaque jour presté à partir de cette date et jusqu'à la date de fin incluse, même si le mois a commencé avant : calcul de la paie, tableau « à commander » et documents. Une obligation sectorielle reste due quelle que soit cette date.</div>
     <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px">
       <input type="checkbox" name="repas_octroi_avant_2025" {% if config.octroi_avant_2025 %}checked{% endif %}>
       L'employeur octroyait déjà des chèques-repas avant l'accord sectoriel (règle « augmentation » au lieu de « introduction »)
@@ -131,7 +131,7 @@
         <input type="date" class="form-control" name="eco_date_debut" value="{{ config.eco_date_debut.isoformat() if config.eco_date_debut else '' }}"></div>
       <div><label class="form-label">Jusqu'au (facultatif)</label>
         <input type="date" class="form-control" name="eco_date_fin" value="{{ config.eco_date_fin.isoformat() if config.eco_date_fin else '' }}"></div>
-      <div class="src" style="grid-column:span 2">Date de début obligatoire quand les écochèques sont activés. Seuls les mois qui commencent dans cette période comptent dans le prorata. Les étudiants ne sont pas visés par les écochèques.</div>
+      <div class="src" style="grid-column:span 2">Date de début obligatoire quand les écochèques sont activés. Le prorata compte les jours de cette période : un mois entamé compte pour la fraction de ses jours. Les étudiants ne sont pas visés par les écochèques.</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-top:12px">
       <div><label class="form-label">Émetteur</label><input class="form-control" name="emetteur" value="{{ config.emetteur }}" placeholder="Monizze, Pluxee, Edenred…"></div>

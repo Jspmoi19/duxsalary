@@ -234,7 +234,7 @@ check("Cumul: parent isole + handicap + 1 autre personne + 1 personne 65+ = -322
       round(pp() - pp(parent_isole=True, handicape=True, nb_autres_personnes_charge=1, nb_personnes_charge_dependance=1), 2), 322.0)
 
 print(); print("=" * 70); print("CHEQUES DU DOSSIER -- date de debut, date de fin, etudiants (page « Chèques »)"); print("=" * 70)
-from cheques_regles import cheques_repas_du_mois as _crm, periode_couverte, valider_config, mois_eco_couverts
+from cheques_regles import cheques_repas_du_mois as _crm, jour_couvert, valider_config, mois_eco_couverts
 # Cas reel: dossier en CP 200, cheques-repas de 8,00 EUR (6,91 + 1,09) a partir du 01/10/2026
 EYSEL = {'actif': True, 'valeur': 8.0, 'part_patronale': 6.91, 'part_travailleur': 1.09,
          'date_debut': date(2026,10,1), 'date_fin': None, 'inclure_etudiants': False}
@@ -252,14 +252,53 @@ check("... et inclus quand la case est cochee", cr('etudiant', 10, dict(EYSEL, i
 FIN = dict(EYSEL, date_fin=date(2026,12,31))
 check("Date de fin au 31/12/2026: decembre a des cheques, janvier 2027 n'en a plus",
       (cr('employe', 12, FIN)['nombre'], cr('employe', 1, FIN, annee=2027)['nombre']), (20, 0))
-check("La periode doit COMMENCER a partir de la date: debut le 15/10 -> octobre exclu, novembre inclus",
-      (cr('employe', 10, dict(EYSEL, date_debut=date(2026,10,15)))['nombre'], cr('employe', 11, dict(EYSEL, date_debut=date(2026,10,15)))['nombre']),
-      (0, 20))
+# Date de debut EN COURS DE MOIS: jour par jour (cas reel: debut le 09/07/2026, jours prestes apres le 09/07)
+from datetime import timedelta as _td_cq
+def jours_ouvres(annee, mois, du=1, au=31, heures=3.0):
+    d, js = date(annee, mois, 1), []
+    while d.month == mois:
+        if d.weekday() < 5 and du <= d.day <= au:
+            js.append((d, heures))
+        d += _td_cq(days=1)
+    return js
+BARBER = {'actif': True, 'valeur': 8.0, 'part_patronale': 6.91, 'part_travailleur': 1.09,
+          'date_debut': date(2026,7,9), 'date_fin': None, 'inclure_etudiants': False}
+def cr_j(jours, cfg=BARBER, cp='CP 200', statut='employe', mois=7):
+    return _crm(cp, statut, 2026, mois, len(jours), sum(h for _, h in jours), date(2026,7,1), cfg, jours_detail=jours)
+entre_le_9 = jours_ouvres(2026, 7, du=9)            # 09/07 -> 31/07: 17 jours ouvres
+check("Debut des cheques le 09/07, travailleur entre le 09/07: ses 17 jours prestes de juillet ont tous un cheque",
+      (len(entre_le_9), cr_j(entre_le_9)['nombre']), (17, 17))
+tout_juillet = jours_ouvres(2026, 7)                # 23 jours ouvres, dont 6 avant le 09/07
+c = cr_j(tout_juillet)
+check("Travailleur present tout juillet: 17 cheques (jours du 09/07 au 31/07), pas 23 ni 0", c['nombre'], 17)
+check("... le motif l'explique", '17 jour(s) presté(s) compté(s) sur 23' in c['motif'] and '09/07/2026' in c['motif'])
+check("... montants: 17 x 6,91 = 117,47 employeur, 17 x 1,09 = 18,53 travailleur", (c['total_patronal'], c['total_travailleur']), (117.47, 18.53))
+check("Le jour de la date de debut compte (09/07 inclus)", cr_j([(date(2026,7,8), 3.0), (date(2026,7,9), 3.0)])['nombre'], 1)
+c = cr_j(jours_ouvres(2026, 7, au=8))
+check("Aucun jour preste a partir du 09/07: aucun cheque, avec la raison", (c['nombre'], 'aucun jour presté dans cet intervalle' in c['motif']), (0, True))
+FIN_J = dict(BARBER, date_debut=date(2026,1,1), date_fin=date(2026,7,15))
+check("Date de fin au 15/07 incluse: 11 cheques (du 01/07 au 15/07)", cr_j(tout_juillet, FIN_J)['nombre'], 11)
+check("Mois entierement apres la date de debut: tous les jours, sans detail necessaire",
+      _crm('CP 200', 'employe', 2026, 8, 21, 63.0, date(2026,7,1), BARBER)['nombre'], 21)
+check("Mois entierement avant la date de debut: aucun cheque", _crm('CP 200', 'employe', 2026, 6, 22, 66.0, date(2026,1,1), BARBER)['nombre'], 0)
+try:
+    _crm('CP 200', 'employe', 2026, 7, 23, 69.0, date(2026,7,1), BARBER); leve = False
+except ValueError:
+    leve = True
+check("Date de debut en cours de mois sans le detail des jours: erreur claire plutot qu'un calcul devine", leve, True)
+c121 = _crm('CP 121', 'ouvrier', 2026, 7, 23, 170.2, date(2026,6,1), BARBER, jours_detail=jours_ouvres(2026, 7, heures=7.4))
+check("CP 121: obligation sectorielle -> les 23 jours restent dus (170,2 h / 7,4), malgre le debut au 09/07",
+      (c121['obligatoire'], c121['nombre']), (True, 23))
+ob_j = _crm('CP 140.03', 'ouvrier', 2026, 7, 23, 69.0, date(2025,1,1),
+            dict(BARBER, valeur=None, part_patronale=None, part_travailleur=None), jours_detail=tout_juillet)
+check("Obligation sectorielle (CP 140.03, anciennete acquise): les 23 jours restent dus, malgre le debut au 09/07",
+      (ob_j['obligatoire'], ob_j['nombre']), (True, 23))
+check("Etudiant en juillet, case non cochee: aucun cheque", cr_j(entre_le_9, statut='etudiant')['nombre'], 0)
 check("Configuration ancienne sans date de debut: s'applique comme avant", cr('employe', 7, dict(EYSEL, date_debut=None))['nombre'], 20)
 ob = _crm('CP 140.03', 'ouvrier', 2026, 9, 20, 152.0, date(2025,1,1), dict(EYSEL, valeur=None, part_patronale=None, part_travailleur=None))
 check("Obligation sectorielle (CP 140.03) avant la date de debut du dossier: les cheques restent dus", (ob['obligatoire'], ob['nombre']), (True, 20))
-check("periode_couverte: bornes comprises", [periode_couverte(date(2026,10,1), date(2026,10,1), date(2026,10,1)),
-      periode_couverte(date(2026,9,1), date(2026,10,1)), periode_couverte(date(2026,11,1), None, date(2026,10,31))], [True, False, False])
+check("jour_couvert: bornes comprises", [jour_couvert(date(2026,7,9), date(2026,7,9), date(2026,7,9)),
+      jour_couvert(date(2026,7,8), date(2026,7,9)), jour_couvert(date(2026,11,1), None, date(2026,10,31))], [True, False, False])
 check("Activer les cheques-repas sans date de debut: refuse", valider_config(True, None, None, False, None, None),
       ["Date de début obligatoire pour activer les chèques-repas."])
 check("Activer les ecocheques sans date de debut: refuse", valider_config(False, None, None, True, None, None),
@@ -271,6 +310,14 @@ ctr = [{'type_contrat': 'STU', 'date_debut': date(2026,7,1), 'date_fin': date(20
        {'type_contrat': 'CDI', 'date_debut': date(2026,10,1), 'date_fin': None}]
 check("Ecocheques, periode 06/2026 - 05/2027: 8 mois de CDI (octobre a mai), les mois d'etudiant ne comptent pas",
       mois_eco_couverts(ctr, date(2026,6,1), date(2027,5,31)), 8)
+ctr_b = [{'type_contrat': 'CDI', 'date_debut': date(2026,7,1), 'date_fin': None}]
+check("Ecocheques, annee 2026, debut le 09/07: juillet compte pour 23/31, puis 5 mois entiers = 5,74 mois",
+      mois_eco_couverts(ctr_b, date(2026,1,1), date(2026,12,31), date(2026,7,9)), 5.74)
+check("... avec une fin au 15/12 incluse: 23/31 + 4 + 15/31 = 5,23 mois",
+      mois_eco_couverts(ctr_b, date(2026,1,1), date(2026,12,31), date(2026,7,9), date(2026,12,15)), 5.23)
+from cheques_regles import ecocheques_annuels as _eco
+e = _eco('CP 200', 'employe', 2027, 1.0, 5.74)
+check("... le montant suit le prorata decimal (montant plein x 5,74 / 12)", e['montant'], round(e['montant_plein'] * 5.74 / 12, 2))
 check("... a partir du 01/01/2027: 5 mois ; jusqu'au 31/03/2027: 3 mois",
       (mois_eco_couverts(ctr, date(2026,6,1), date(2027,5,31), date(2027,1,1)),
        mois_eco_couverts(ctr, date(2026,6,1), date(2027,5,31), date(2027,1,1), date(2027,3,31))), (5, 3))

@@ -112,11 +112,13 @@ def jours_ouvrables(annee, mois):
     return sum(1 for j in range(1, n + 1) if date(annee, mois, j).weekday() < 5)
 
 
-def periode_couverte(debut_periode, date_debut=None, date_fin=None):
-    """La configuration du dossier s'applique aux fiches dont la PERIODE COMMENCE a partir de
-    date_debut, et au plus tard a date_fin si elle est renseignee. Sans date de debut
-    (configuration anterieure a ce champ): aucune limite de debut."""
-    return (date_debut is None or debut_periode >= date_debut) and (date_fin is None or debut_periode <= date_fin)
+def jour_couvert(jour, date_debut=None, date_fin=None):
+    """La configuration du dossier s'applique JOUR PAR JOUR: a chaque jour preste a partir de
+    date_debut et jusqu'a date_fin incluse, meme si le mois a commence avant (corrige le
+    02/10/2026: la regle « la periode commence apres la date » excluait tout le mois d'un
+    travailleur entre en cours de mois). Sans date de debut (configuration anterieure a ce
+    champ): aucune limite de debut."""
+    return (date_debut is None or jour >= date_debut) and (date_fin is None or jour <= date_fin)
 
 
 def valider_config(repas_actif, repas_date_debut, repas_date_fin, eco_actif, eco_date_debut, eco_date_fin):
@@ -132,9 +134,12 @@ def valider_config(repas_actif, repas_date_debut, repas_date_fin, eco_actif, eco
 
 
 def mois_eco_couverts(contrats, p_deb, p_fin, date_debut=None, date_fin=None):
-    """Nombre de mois de la periode de reference des ecocheques [p_deb, p_fin] couverts par
-    un contrat non etudiant, en ne gardant que les mois qui commencent dans la periode de
-    validite fixee par le dossier (date_debut / date_fin de la page « Chèques »)."""
+    """Mois de la periode de reference des ecocheques [p_deb, p_fin] couverts par un contrat
+    non etudiant. La periode de validite fixee par le dossier (date_debut / date_fin de la
+    page « Chèques ») joue JOUR PAR JOUR: un mois partiellement dans cette periode compte
+    pour la fraction de ses jours calendrier qui s'y trouvent (ex. debut le 09/07: juillet
+    compte pour 23/31). Retourne un nombre de mois, entier ou decimal (2 decimales)."""
+    import calendar
     mois = set()
     for c in contrats or []:
         if c.get('type_contrat') == 'STU' or not c.get('date_debut'):
@@ -142,34 +147,52 @@ def mois_eco_couverts(contrats, p_deb, p_fin, date_debut=None, date_fin=None):
         d0, d1 = max(c['date_debut'], p_deb), min(c.get('date_fin') or p_fin, p_fin)
         y, m = d0.year, d0.month
         while (y, m) <= (d1.year, d1.month):
-            if periode_couverte(date(y, m, 1), date_debut, date_fin):
-                mois.add((y, m))
+            mois.add((y, m))
             m += 1
             if m > 12:
                 m, y = 1, y + 1
-    return len(mois)
+    total = 0.0
+    for y, m in mois:
+        nb = calendar.monthrange(y, m)[1]
+        total += sum(1 for j in range(1, nb + 1) if jour_couvert(date(y, m, j), date_debut, date_fin)) / nb
+    total = round(total, 2)
+    return int(total) if total == int(total) else total
 
 
 def cheques_repas_du_mois(cp_key, statut, annee, mois, jours_prestes, heures_prestees,
-                           date_anciennete, config):
+                           date_anciennete, config, jours_detail=None):
     """Calcule les cheques-repas d'un travailleur pour un mois.
     config: parametres du dossier (actif, valeur, part_patronale, part_travailleur,
             octroi_avant_2025, date_debut, date_fin, inclure_etudiants). La configuration
-            du dossier ne joue que pour les periodes qui commencent dans [date_debut,
-            date_fin], et pour les etudiants seulement si inclure_etudiants est coche ;
-            hors de ce cadre, seule l'obligation sectorielle s'applique.
+            du dossier joue JOUR PAR JOUR: pour chaque jour preste de date_debut a date_fin
+            incluse, et pour les etudiants seulement si inclure_etudiants est coche ; hors
+            de ce cadre, seule l'obligation sectorielle s'applique.
+    jours_detail: [(date, heures)] des jours prestes du mois -- requis quand la date de
+            debut ou de fin tombe en cours de mois (sinon erreur: pas de calcul devine).
     Retourne un dict avec la regle et le calcul."""
+    import calendar as _cal
     jj = lambda d: d.strftime('%d/%m/%Y')
-    exclusion = None
+    exclusion, fenetre = None, None
     if config.get('actif'):
-        if not periode_couverte(date(annee, mois, 1), config.get('date_debut'), config.get('date_fin')):
-            exclusion = ("Chèques-repas du dossier octroyés "
-                         + (f"à partir du {jj(config['date_debut'])}" if config.get('date_debut') else '')
-                         + (f" jusqu'au {jj(config['date_fin'])}" if config.get('date_fin') else '')
-                         + f" : aucun chèque pour la période de {mois:02d}/{annee}.").replace('octroyés  ', 'octroyés ')
+        dd, df = config.get('date_debut'), config.get('date_fin')
+        intervalle = ((f"à partir du {jj(dd)}" if dd else '') + (' ' if dd and df else '') + (f"jusqu'au {jj(df)}" if df else ''))
+        premier, dernier = date(annee, mois, 1), date(annee, mois, _cal.monthrange(annee, mois)[1])
+        if (dd and dd > dernier) or (df and df < premier):
+            exclusion = f"Chèques-repas du dossier octroyés {intervalle} : aucun chèque pour la période de {mois:02d}/{annee}."
         elif statut == 'etudiant' and not config.get('inclure_etudiants'):
             exclusion = ("Étudiant : non compris dans les chèques-repas du dossier "
                          "(case « inclure les étudiants » non cochée).")
+        elif not (jour_couvert(premier, dd, df) and jour_couvert(dernier, dd, df)):
+            # La date de debut ou de fin tombe dans ce mois: seuls les jours prestes de l'intervalle comptent
+            if jours_detail is None:
+                raise ValueError(f"Chèques-repas : la période du dossier ({intervalle}) commence ou finit en cours de mois "
+                                 f"({mois:02d}/{annee}) — le détail des jours prestés est requis pour les compter.")
+            gardes = [(d, float(h or 0)) for d, h in jours_detail if jour_couvert(d, dd, df)]
+            fenetre = {'jours': len(gardes), 'heures': round(sum(h for _, h in gardes), 2), 'total': len(jours_detail),
+                       'intervalle': intervalle}
+            if not gardes:
+                exclusion = (f"Chèques-repas du dossier octroyés {intervalle} : aucun jour presté dans cet intervalle "
+                             f"en {mois:02d}/{annee}.")
         if exclusion:
             config = dict(config, actif=False)
     fin_mois = date(annee, mois, 28)
@@ -209,6 +232,13 @@ def cheques_repas_du_mois(cp_key, statut, annee, mois, jours_prestes, heures_pre
         return res
     if not res['eligible'] and not config.get('actif'):
         return res
+
+    # Periode du dossier en cours de mois: seuls les jours prestes de l'intervalle comptent
+    # (une obligation sectorielle, elle, reste due pour tous les jours du mois)
+    if fenetre and not res['obligatoire']:
+        jours_prestes, heures_prestees = fenetre['jours'], fenetre['heures']
+        res['motif'] = (f"Chèques-repas du dossier {fenetre['intervalle']} : {fenetre['jours']} jour(s) presté(s) "
+                        f"compté(s) sur {fenetre['total']} en {mois:02d}/{annee}.")
 
     # Nombre de cheques
     if regle and regle['mode'] == 'heures_7_4':
@@ -254,6 +284,7 @@ def ecocheques_annuels(cp_key, statut, annee, fraction_regime, mois_dans_periode
     montant = round(base * mois / 12, 2)
     return {'du': montant > 0, 'regle': regle, 'montant': montant, 'montant_plein': base,
             'mois_paiement': regle['mois_paiement'],
-            'motif': f"{base:.0f} EUR pour une periode complete, x {mois}/12 mois (prorata approche par mois).",
+            'motif': f"{base:.0f} EUR pour une periode complete, x {mois:g}/12 mois (prorata approche par mois).".replace('.', ',', 1)
+                     if isinstance(mois, float) else f"{base:.0f} EUR pour une periode complete, x {mois}/12 mois (prorata approche par mois).",
             'nombre_cheques_10': int(montant // CADRE_LEGAL['eco_valeur_faciale_max']),
             'reste': round(montant % CADRE_LEGAL['eco_valeur_faciale_max'], 2)}

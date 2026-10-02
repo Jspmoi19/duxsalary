@@ -3051,13 +3051,15 @@ def _calcul_cheques_travailleur(cur, t, annee, mois, config):
             statut = get_regles_cp(cp_key).get('type_travailleur_defaut', 'employe')
         except Exception:
             statut = 'employe'
-    cur.execute("""SELECT code_journee, heures FROM prestations WHERE travailleur_id=%s
+    cur.execute("""SELECT code_journee, heures, date_prestation FROM prestations WHERE travailleur_id=%s
                    AND date_prestation BETWEEN %s AND %s""", (t['id'], debut_m, fin_m))
     prest = cur.fetchall()
+    # Detail des jours prestes: la date de debut / de fin des cheques du dossier joue jour par jour
+    jours_detail = [(p['date_prestation'], float(p['heures'] or 0)) for p in prest if p['code_journee'] in ('P', 'S', 'HS', 'PP')]
     jours = sum(1 for p in prest if p['code_journee'] in ('P', 'S', 'HS', 'PP'))
     heures = float(sum(p['heures'] or 0 for p in prest if p['code_journee'] in ('P', 'S', 'HS', 'PP')))
     date_anc = min(c['date_debut'] for c in contrats if c['date_debut'])
-    repas = cheques_repas_du_mois(cp_key, statut, annee, mois, jours, heures, date_anc, config)
+    repas = cheques_repas_du_mois(cp_key, statut, annee, mois, jours, heures, date_anc, config, jours_detail=jours_detail)
 
     # Ecocheques: prochaine echeance et prorata sur la periode de reference
     eco = None
@@ -3069,7 +3071,7 @@ def _calcul_cheques_travailleur(cur, t, annee, mois, config):
             p_deb, p_fin = date(n - 1, 6, 1), date(n, 5, 31)
         else:         # paiement annuel: annee civile N
             p_deb, p_fin = date(n, 1, 1), date(n, 12, 31)
-        # Seuls comptent les mois qui commencent dans la periode de validite fixee par le dossier
+        # Periode de validite fixee par le dossier: jour par jour (un mois partiel compte pour sa fraction)
         from cheques_regles import mois_eco_couverts
         nb_mois_eco = mois_eco_couverts(contrats, p_deb, p_fin, config.get('eco_date_debut'), config.get('eco_date_fin'))
         hs = float(contrat.get('heures_semaine') or 38) or 38.0
@@ -3079,7 +3081,7 @@ def _calcul_cheques_travailleur(cur, t, annee, mois, config):
         eco.update(annee_paiement=n, periode=f"{p_deb:%m/%Y} – {p_fin:%m/%Y}", fraction_regime=round(fraction, 2),
                    mois_couverts=nb_mois_eco)
         if config.get('eco_date_debut') or config.get('eco_date_fin'):
-            eco['motif'] = (eco.get('motif') or '') + " Mois comptés : ceux qui commencent " + (
+            eco['motif'] = (eco.get('motif') or '') + " Jours comptés : " + (
                 f"à partir du {config['eco_date_debut']:%d/%m/%Y}" if config.get('eco_date_debut') else '') + (
                 f" jusqu'au {config['eco_date_fin']:%d/%m/%Y}" if config.get('eco_date_fin') else '') + "." 
     return {'travailleur': t, 'contrat': contrat, 'cp_key': cp_key, 'statut': statut,
