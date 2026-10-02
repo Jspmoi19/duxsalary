@@ -558,8 +558,15 @@ def decompte_depuis_formulaire(form, profil, contrat, contrats, fiches, nb_enfan
         raise ValueError("La date de notification (ou de fin du contrat) est obligatoire.")
     fin_effective = jour('date_fin_effective')
     preste = form.get('preavis_preste') == 'on'
+    # Un contrat ne peut pas prendre fin avant la notification de sa rupture (corrige le 02/10/2026:
+    # une date anterieure, laissee dans le champ, etait acceptee et imprimee sur le decompte)
+    if fin_effective and fin_effective < notification:
+        raise ValueError(f"Le dernier jour du contrat ({_jj(fin_effective)}) est antérieur à la notification du congé "
+                         f"({_jj(notification)}) : corrigez la date, ou videz le champ si le préavis est presté jusqu'à son terme.")
     if not preste and not fin_effective and motif in ('licenciement', 'demission'):
         raise ValueError("Préavis non presté jusqu'à son terme : indiquez le dernier jour du contrat.")
+    if preste and motif in ('licenciement', 'demission'):
+        fin_effective = None      # preavis preste: la fin du contrat est la fin du preavis, pas une date saisie
     statut = 'etudiant' if profil.is_etudiant else ('ouvrier' if profil.is_ouvrier else 'employe')
     paye_au_mois = statut == 'employe'
     horaire = float(contrat.get('salaire_horaire') or 0)
@@ -583,4 +590,45 @@ def decompte_depuis_formulaire(form, profil, contrat, contrats, fiches, nb_enfan
         retenue_travailleur=nombre('retenue_travailleur'), situation_familiale=situation_familiale,
         jours_suspension=int(nombre('jours_suspension')))
     decompte['date_fin'] = fin_effective or ((decompte['preavis'] or {}).get('dates') or {}).get('fin') or notification
-    return decompte, {'hebdo': hebdo, 'explication_hebdo': explication, 'avantages': avantages, 'debut_anciennete': debut_anc}
+    return decompte, {'hebdo': hebdo, 'explication_hebdo': explication, 'avantages': avantages, 'debut_anciennete': debut_anc,
+                      # date coherente a remontrer dans le champ « dernier jour du contrat »
+                      'date_fin': decompte['date_fin']}
+
+
+# Formulaire C4: motif, auteur de la rupture, dernier jour et preavis, deduits du decompte calcule
+C4_MOTIFS = {
+    'licenciement': ("Licenciement par l'employeur", 'Employeur'),
+    'motif_grave': ("Licenciement pour motif grave", 'Employeur'),
+    'demission': ('Démission du travailleur', 'Travailleur'),
+    'commun_accord': ("Rupture d'un commun accord", "D'un commun accord"),
+    'fin_cdd': ('Fin de contrat à durée déterminée', "D'un commun accord"),
+}
+C4_OPTIONS = ['Fin de contrat à durée déterminée', "Rupture d'un commun accord", "Licenciement par l'employeur",
+              'Licenciement pour motif grave', 'Démission du travailleur', 'Fin de contrat étudiant', 'Force majeure']
+
+
+def valeurs_c4(decompte, type_contrat, date_fin_contrat=None):
+    """Valeurs proposees dans le formulaire C4. Avec un decompte calcule: son motif, l'auteur de
+    la rupture, le dernier jour du contrat et le preavis. Sans decompte: seulement ce que le type
+    de contrat permet d'affirmer (un CDI n'a PAS de motif par defaut: il faut le choisir)."""
+    if not decompte:
+        if type_contrat == 'STU':
+            return {'motif_fin': 'Fin de contrat étudiant', 'qui_fin': "D'un commun accord", 'date_fin': date_fin_contrat,
+                    'preavis': 'Non applicable'}
+        if type_contrat == 'CDD' and date_fin_contrat:
+            return {'motif_fin': 'Fin de contrat à durée déterminée', 'qui_fin': "D'un commun accord", 'date_fin': date_fin_contrat,
+                    'preavis': 'Non applicable — CDD'}
+        return {'motif_fin': '', 'qui_fin': '', 'date_fin': date_fin_contrat, 'preavis': ''}
+    motif, qui = C4_MOTIFS[decompte['motif']]
+    p = decompte.get('preavis')
+    if decompte['motif'] == 'motif_grave':
+        preavis = 'Sans préavis (motif grave)'
+    elif not p:
+        preavis = 'Non applicable'
+    elif p.get('dates') and p.get('preste'):
+        preavis = f"{p['semaines']} semaine(s), du {_jj(p['dates']['debut'])} au {_jj(p['dates']['fin'])}, presté"
+    else:
+        ind = decompte.get('indemnite') or {}
+        preavis = (f"{p['semaines']} semaine(s) — non presté ou presté en partie, indemnité de rupture pour "
+                   f"{ind.get('semaines', 0):g} semaine(s)").replace('.', ',')
+    return {'motif_fin': motif, 'qui_fin': qui, 'date_fin': decompte.get('date_fin'), 'preavis': preavis}

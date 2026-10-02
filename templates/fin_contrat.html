@@ -47,7 +47,9 @@
             <option value="{{ cle }}" {% if f.get('mode_notification') == cle %}selected{% endif %}>{{ lib }}</option>{% endfor %}
           </select></div>
         <div class="form-group"><label>Dernier jour du contrat (si le préavis n'est pas presté jusqu'au bout)</label>
-          <input type="date" name="date_fin_effective" class="form-control" value="{{ f.get('date_fin_effective', '') }}"></div>
+          <input type="date" name="date_fin_effective" class="form-control" autocomplete="off"
+                 value="{{ fc.saisie.date_fin.isoformat() if fc.saisie and fc.saisie.date_fin else f.get('date_fin_effective', '') }}">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">À laisser vide si le préavis est presté : la fin du contrat est alors la fin du préavis. Jamais avant la notification.</div></div>
         <div class="form-group"><label>Jours de suspension pendant le préavis (maladie, vacances…)</label>
           <input type="number" min="0" step="1" name="jours_suspension" class="form-control" value="{{ f.get('jours_suspension', '0') }}">
           <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Jours calendrier. Reporte la fin d'un préavis donné par l'employeur.</div></div>
@@ -179,24 +181,30 @@
       </p>
       <form method="POST" data-pdf="Formulaire C4">
         <input type="hidden" name="doc_type" value="c4">
+        {% set c4 = fc.c4 %}
+        {% if fc.decompte %}<div style="font-size:12px;color:#1e7e34;margin-bottom:10px">Valeurs reprises du décompte calculé ci-dessus.</div>
+        {% elif not c4.motif_fin %}<div style="font-size:12px;color:#8a5a00;margin-bottom:10px">Calculez d'abord le décompte de sortie : le C4 sera pré-rempli avec son motif et ses dates.</div>{% endif %}
         <div class="form-group">
           <label>Motif de fin de contrat</label>
-          <select name="motif_fin" class="form-control">
-            <option value="Fin de contrat à durée déterminée">Fin CDD — échéance du terme</option>
-            <option value="Rupture d'un commun accord">Rupture d'un commun accord</option>
-            <option value="Licenciement par l'employeur">Licenciement par l'employeur</option>
-            <option value="Démission du travailleur">Démission du travailleur</option>
-            <option value="Fin de contrat étudiant">Fin de contrat étudiant</option>
-            <option value="Force majeure">Force majeure</option>
+          <select name="motif_fin" class="form-control" required>
+            {% if not c4.motif_fin %}<option value="" selected disabled>— à choisir —</option>{% endif %}
+            {% for option in fc.c4_options %}<option value="{{ option }}" {% if c4.motif_fin == option %}selected{% endif %}>{{ option }}</option>{% endfor %}
           </select>
         </div>
         <div class="form-group">
           <label>Qui a mis fin au contrat</label>
-          <select name="qui_fin" class="form-control">
-            <option value="Employeur">Employeur</option>
-            <option value="Travailleur">Travailleur</option>
-            <option value="D'un commun accord">D'un commun accord</option>
+          <select name="qui_fin" class="form-control" required>
+            {% if not c4.qui_fin %}<option value="" selected disabled>— à choisir —</option>{% endif %}
+            {% for option in ['Employeur', 'Travailleur', "D'un commun accord"] %}<option value="{{ option }}" {% if c4.qui_fin == option %}selected{% endif %}>{{ option }}</option>{% endfor %}
           </select>
+        </div>
+        <div class="form-group">
+          <label>Dernier jour du contrat</label>
+          <input type="date" name="date_fin_c4" class="form-control" autocomplete="off" value="{{ c4.date_fin.isoformat() if c4.date_fin else '' }}" required>
+        </div>
+        <div class="form-group">
+          <label>Préavis</label>
+          <input type="text" name="preavis" class="form-control" value="{{ c4.preavis }}" maxlength="160">
         </div>
         <div class="form-group">
           <label>Salaire de référence brut (€/mois)</label>

@@ -2497,7 +2497,9 @@ def fin_contrat(contrat_id):
     from fin_contrat import propositions, decompte_depuis_formulaire, MOTIFS, AVANTAGES
     from moteur_paie import CP_INDEMNITES
     from profil_travailleur import construire_profil
-    fc = {'erreur': None, 'decompte': None, 'saisie': None, 'propositions': None, 'motifs': MOTIFS, 'avantages': AVANTAGES}
+    from fin_contrat import valeurs_c4, C4_OPTIONS
+    fc = {'erreur': None, 'decompte': None, 'saisie': None, 'propositions': None, 'motifs': MOTIFS, 'avantages': AVANTAGES,
+          'c4': valeurs_c4(None, contrat['type_contrat'], contrat.get('date_fin')), 'c4_options': C4_OPTIONS}
     profil_fc = contrats_fc = fiches_fc = trav_fc = None
     try:
         cur.execute('SELECT * FROM contrats WHERE travailleur_id = %s', (contrat['travailleur_id'],))
@@ -2549,6 +2551,7 @@ def fin_contrat(contrat_id):
                                 'nb_personnes_charge_dependance': int(trav_fc.get('nb_personnes_charge_66') or 0),
                                 'nb_autres_personnes_charge': int(trav_fc.get('nb_autres_personnes_charge') or 0)}})
             fc['decompte'], fc['saisie'] = decompte, saisie
+            fc['c4'] = valeurs_c4(decompte, contrat['type_contrat'], contrat.get('date_fin'))   # C4 pre-rempli depuis le decompte
             if request.form.get('action') == 'pdf':
                 from pdf_fin_contrat import generer_pdf_decompte
                 from fiches_remplacees import chemin_pdf_libre
@@ -2585,6 +2588,14 @@ def fin_contrat(contrat_id):
 
     if request.method == 'POST':
         doc_type = request.form.get('doc_type', 'certificat')
+        # Dernier jour du contrat saisi dans le formulaire C4 (pre-rempli depuis le decompte): il
+        # prime sur la date de fin du contrat enregistre, que les documents utilisaient seule
+        try:
+            fin_c4 = date.fromisoformat(request.form.get('date_fin_c4') or '')
+        except ValueError:
+            fin_c4 = None
+        if fin_c4:
+            contrat = dict(contrat, date_fin=fin_c4)
         travailleur_lng = {'langue': contrat.get('langue', 'fr')}
         dossier_lng = {'region_linguistique': contrat.get('region_linguistique', 'bruxelles_fr')}
         langue_doc = get_langue_document(dossier_lng, travailleur_lng)

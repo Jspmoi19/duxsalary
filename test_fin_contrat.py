@@ -296,6 +296,10 @@ check("... alors que les regles internes citent bien leurs sources", any('annexe
 check("Aucune source dans les lignes du decompte, quel que soit le cas",
       [l['libelle'] for l in complet['lignes'] if any(m in (l['libelle'] + str(l.get('nombre'))).lower() for m in INTERDITS)], [])
 check("Mentions de l'editeur en pied de page", 'Global Smart Services' in texte)
+check("Le decompte PDF n'imprime aucune ligne interne: ni ONSS patronal, ni cout pour l'employeur, ni cotisation 812",
+      [m for m in ('onss patronal', 'patronal', 'coût', 'cout employeur', 'interne', '812', "pour l'employeur (") if m in texte.lower()], [])
+check("... alors que ces montants existent dans le calcul (affiches seulement a l'ecran)",
+      (complet['totaux']['onss_patronal'] > 0, complet['cout_employeur'] > complet['totaux']['brut']), (True, True))
 vide = generer_pdf_decompte(decompte_sortie(EMP, 'demission', 'CDI', date(2025, 1, 1), None, date(2025, 1, 1), date(2026, 10, 9),
                                             'remise', preavis_preste=True, hebdo_base=H_EMP[0]), ctx)
 check("Decompte sans rien a payer: document genere avec la mention correspondante",
@@ -342,6 +346,38 @@ try:
 except ValueError as ex:
     leve = 'dernier jour du contrat' in str(ex)
 check("Preavis non preste sans dernier jour de contrat: erreur claire", leve)
+try:
+    decompte_depuis_formulaire(dict(FORM, date_fin_effective='2026-08-01'), EMP, CONTRAT, [CONTRAT], FICHES); leve = None
+except ValueError as ex:
+    leve = str(ex)
+check("Dernier jour du contrat (01/08/2026) anterieur a la notification (07/10/2026): refuse, avec un message clair",
+      (leve is not None and '01/08/2026' in leve and '07/10/2026' in leve and 'antérieur' in leve), True)
+dec_pp, s_pp = decompte_depuis_formulaire({'motif': 'licenciement', 'date_notification': '2026-10-07', 'mode_notification': 'recommande',
+                                           'preavis_preste': 'on', 'date_fin_effective': '2026-10-20'}, EMP, CONTRAT, [CONTRAT], FICHES)
+check("Preavis preste: une date saisie dans « dernier jour » est ignoree, la fin du contrat est la fin du preavis (27/12/2026)",
+      (dec_pp['date_fin'], s_pp['date_fin'], dec_pp['indemnite']), (date(2026, 12, 27), date(2026, 12, 27), None))
+check("Preavis non preste: le champ est remontre avec la date de la rupture saisie (11/10/2026)", saisie['date_fin'], date(2026, 10, 11))
+from fin_contrat import valeurs_c4, C4_OPTIONS
+c4 = valeurs_c4(dec, 'CDI')
+check("C4 pre-rempli depuis le decompte d'un licenciement de CDI: motif, auteur, dernier jour, preavis",
+      (c4['motif_fin'], c4['qui_fin'], c4['date_fin'], c4['preavis']),
+      ("Licenciement par l'employeur", 'Employeur', date(2026, 10, 11),
+       '11 semaine(s) — non presté ou presté en partie, indemnité de rupture pour 11 semaine(s)'))
+c4p = valeurs_c4(dec_pp, 'CDI')
+check("C4 d'un preavis preste: dates du preavis", (c4p['date_fin'], c4p['preavis']),
+      (date(2026, 12, 27), '11 semaine(s), du 12/10/2026 au 27/12/2026, presté'))
+check("C4 d'une demission: « Démission du travailleur », mis fin par le travailleur",
+      (valeurs_c4(decompte_depuis_formulaire({'motif': 'demission', 'date_notification': '2026-10-09', 'mode_notification': 'remise',
+                  'preavis_preste': 'on'}, EMP, CONTRAT, [CONTRAT], FICHES)[0], 'CDI')['motif_fin'],
+       valeurs_c4({'motif': 'demission', 'preavis': None}, 'CDI')['qui_fin']), ('Démission du travailleur', 'Travailleur'))
+check("C4 d'un motif grave: sans preavis", valeurs_c4({'motif': 'motif_grave', 'preavis': None, 'date_fin': date(2026, 10, 7)}, 'CDI'),
+      {'motif_fin': 'Licenciement pour motif grave', 'qui_fin': 'Employeur', 'date_fin': date(2026, 10, 7), 'preavis': 'Sans préavis (motif grave)'})
+check("Sans decompte, CDI: AUCUN motif par defaut (plus de « Fin CDD » propose pour un CDI)", valeurs_c4(None, 'CDI')['motif_fin'], '')
+check("Sans decompte, CDD arrive a son terme / etudiant: motif evident propose",
+      (valeurs_c4(None, 'CDD', date(2026, 12, 31))['motif_fin'], valeurs_c4(None, 'STU', date(2026, 8, 31))['motif_fin']),
+      ('Fin de contrat à durée déterminée', 'Fin de contrat étudiant'))
+check("Tous les motifs proposes par le decompte existent dans la liste du C4",
+      [m for m, _ in __import__('fin_contrat').C4_MOTIFS.values() if m not in C4_OPTIONS], [])
 dec_p, _ = decompte_depuis_formulaire({'motif': 'demission', 'date_notification': '2026-10-09', 'mode_notification': 'remise',
                                        'preavis_preste': 'on'}, EMP, CONTRAT, [CONTRAT], FICHES)
 check("Demission avec preavis preste: fin du contrat = fin du preavis (15/11/2026)", dec_p['date_fin'], date(2026, 11, 15))
@@ -364,14 +400,28 @@ dossier = {'id': 7, 'nom': 'Société Fictive SRL'}
 commun = dict(request=Requete(), marque=branding.get_branding(), statique=branding.url_statique, session={'user_id': 1, 'user_nom': 'U'},
               tenant={}, tous_les_dossiers=[dossier], dossiers_archives=[], dossier_actif=dossier,
               contrat=dict(CONTRAT, prenom='Camille', nom='Exemple'))
-fc = {'erreur': None, 'decompte': None, 'saisie': None, 'propositions': prop, 'motifs': _M, 'avantages': _A, 'statut': 'employe', 'nb_enfants': 0}
+fc = {'erreur': None, 'decompte': None, 'saisie': None, 'propositions': prop, 'motifs': _M, 'avantages': _A, 'statut': 'employe', 'nb_enfants': 0,
+      'c4': valeurs_c4(None, 'CDI'), 'c4_options': C4_OPTIONS}
 h = env.get_template('fin_contrat.html').render(fc=fc, formulaire={}, **commun)
 check("Page: champ des jours de suspension pendant le preavis", 'name="jours_suspension"' in h)
 check("Page: formulaire du decompte avec les motifs, les 7 avantages pre-remplis et le pecule de sortie",
       all(x in h for x in ('name="motif"', 'name="av_voiture_societe"', 'name="av_prime_fin_annee" class="form-control" value="3000.00"',
                            'name="brut_annee_en_cours" class="form-control" value="27000.00"', 'Certificat de travail', 'Formulaire C4')))
 check("Page avant calcul: pas de bouton PDF", 'value="pdf"' in h, False)
-h = env.get_template('fin_contrat.html').render(fc=dict(fc, decompte=dec, saisie=saisie), formulaire=FORM, **commun)
+bloc_c4 = h.split('data-pdf="Formulaire C4"')[1]
+check("Page avant calcul (CDI): le C4 n'a aucun motif preselectionne et invite a calculer le decompte",
+      ('— à choisir —' in bloc_c4, 'selected>Fin de contrat à durée déterminée' in bloc_c4, "Calculez d'abord le décompte" in bloc_c4),
+      (True, False, True))
+check("Page: le champ « dernier jour du contrat » est vide au depart et le navigateur ne le remplit pas (autocomplete off)",
+      'name="date_fin_effective" class="form-control" autocomplete="off"' in h and 'value=""' in h.split('name="date_fin_effective"')[1][:140])
+h = env.get_template('fin_contrat.html').render(fc=dict(fc, decompte=dec, saisie=saisie, c4=valeurs_c4(dec, 'CDI')), formulaire=FORM, **commun)
+bloc_c4 = h.split('data-pdf="Formulaire C4"')[1]
+check("Page apres calcul: C4 pre-rempli (licenciement, employeur, 11/10/2026, preavis), dernier jour du decompte remontre",
+      ('''<option value="Licenciement par l'employeur" selected>'''.replace("'", '&#39;') in bloc_c4 or
+       'Licenciement par l&#39;employeur" selected' in bloc_c4 or '''Licenciement par l'employeur" selected''' in bloc_c4,
+       '<option value="Employeur" selected>' in bloc_c4, 'name="date_fin_c4" class="form-control" autocomplete="off" value="2026-10-11"' in bloc_c4,
+       'indemnité de rupture pour 11 semaine(s)' in bloc_c4, 'value="2026-10-11"' in h.split('name="date_fin_effective"')[1][:140]),
+      (True, True, True, True, True))
 check("Page apres calcul: preavis, lignes, net a payer, regles et sources (usage interne), bouton PDF",
       all(x in h for x in ('11 semaine(s)', 'Indemnité de rupture', 'NET À PAYER', 'annexe III 2026', 'usage interne', 'value="pdf"')))
 check("Page: la saisie est conservee apres le calcul", 'name="av_voiture_societe" class="form-control" value="1200"' in h and 'value="2026-10-07"' in h)
